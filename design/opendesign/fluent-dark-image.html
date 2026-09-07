@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AI Studio · Fluent 暗色 · 生图</title>
+  <style>
+    :root {
+      --canvas: #0a0a0a;
+      --surface: #141414;
+      --surface-elevated: #1c1c1c;
+      --ink: #fafafa;
+      --ink-secondary: #a1a1aa;
+      --ink-muted: #71717a;
+      --border: #27272a;
+      --primary: #3b82f6;
+      --primary-pressed: #2563eb;
+      --on-primary: #ffffff;
+      --success: #4ade80;
+      --danger: #ef4444;
+      --nav-w: 56px;
+      --params-w: 300px;
+      --font: system-ui, "Segoe UI Variable", "Segoe UI", -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
+      --mono: ui-monospace, "Cascadia Code", "Cascadia Mono", "SF Mono", Consolas, "Microsoft YaHei Mono", monospace;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: var(--font); background: #050505; color: var(--ink);
+      min-height: 100vh; display: grid; place-items: center; padding: 24px;
+    }
+    .window {
+      width: min(1280px, 100%); height: min(820px, 92vh);
+      background: var(--canvas); border: 1px solid var(--border); border-radius: 10px;
+      overflow: hidden; display: flex; flex-direction: column;
+      box-shadow: 0 24px 64px rgba(0, 0, 0, 0.55);
+    }
+    .titlebar {
+      height: 36px; display: flex; align-items: center; justify-content: space-between;
+      padding: 0 12px 0 14px; background: var(--surface); border-bottom: 1px solid var(--border);
+    }
+    .titlebar-left { display: flex; align-items: center; gap: 10px; font-size: 12px; color: var(--ink-secondary); }
+    .app-mark{width:16px;height:16px;border-radius:4px;background:center/contain no-repeat url("assets/logo.png");flex-shrink:0}
+    .win-controls { display: flex; gap: 8px; }
+    .win-dot { width: 12px; height: 12px; border-radius: 50%; border: 1px solid #3f3f46; background: #27272a; }
+    .shell { flex: 1; display: flex; min-height: 0; }
+    .nav {
+      width: var(--nav-w); background: var(--surface); border-right: 1px solid var(--border);
+      display: flex; flex-direction: column; align-items: center; padding: 10px 0; gap: 4px;
+    }
+    a.nav-btn, a.nav-item { text-decoration: none; color: inherit; }
+    .nav-btn {
+      width: 40px; height: 40px; border: 0; border-radius: 8px; background: transparent;
+      color: var(--ink-secondary); display: grid; place-items: center; cursor: pointer; position: relative;
+    }
+    .nav-btn:hover { background: color-mix(in oklch, var(--ink) 8%, transparent); color: var(--ink); }
+    .nav-btn.active { background: color-mix(in oklch, var(--primary) 18%, transparent); color: #93c5fd; }
+    .nav-btn:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+    .nav-btn svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+    .cap {
+      position: absolute; left: calc(100% + 8px); top: 50%; transform: translateY(-50%);
+      font-size: 10px; padding: 2px 6px; border-radius: 4px; background: #27272a; color: #eceff4;
+      white-space: nowrap; opacity: 0; pointer-events: none; border: 1px solid var(--border); z-index: 5;
+    }
+    .nav-btn:hover .cap { opacity: 1; }
+    .nav-spacer { flex: 1; }
+    .badge-id {
+      display: inline-block; font-size: 9px; color: var(--ink-muted); border: 1px dashed #3f3f46;
+      padding: 1px 5px; border-radius: 3px; margin-left: 6px; font-family: var(--mono); vertical-align: middle;
+    }
+    .params {
+      width: var(--params-w); background: var(--surface); border-left: 1px solid var(--border);
+      display: flex; flex-direction: column; min-width: 0; order: 2;
+    }
+    .params-scroll { flex: 1; overflow: auto; padding: 14px 14px 8px; }
+    .params h2 { font-size: 13px; font-weight: 650; color: var(--ink-secondary); margin-bottom: 12px; }
+    .field { margin-bottom: 12px; }
+    label { display: block; font-size: 11px; color: var(--ink-muted); margin-bottom: 6px; font-weight: 550; }
+    .input, .select, .textarea {
+      width: 100%; border-radius: 7px; border: 1px solid var(--border);
+      background: var(--surface-elevated); padding: 0 10px; font: inherit; font-size: 13px; color: var(--ink);
+    }
+    .input, .select { height: 34px; }
+    .textarea { padding: 10px; min-height: 88px; resize: vertical; line-height: 1.45; }
+    .input:focus, .select:focus, .textarea:focus {
+      outline: 2px solid color-mix(in oklch, var(--primary) 55%, transparent);
+      outline-offset: 0; border-color: color-mix(in oklch, var(--primary) 50%, var(--border));
+    }
+    .seg {
+      display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px;
+      padding: 3px; border-radius: 8px; background: var(--canvas); border: 1px solid var(--border);
+    }
+    .seg button {
+      height: 28px; border: 0; border-radius: 6px; background: transparent;
+      color: var(--ink-secondary); font-size: 11px; cursor: pointer;
+    }
+    .seg button:hover { color: var(--ink); background: var(--surface-elevated); }
+    .seg button.active { background: color-mix(in oklch, var(--primary) 20%, transparent); color: #93c5fd; font-weight: 600; }
+    .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+    .chip {
+      height: 28px; padding: 0 10px; border-radius: 6px; border: 1px solid var(--border);
+      background: var(--surface-elevated); color: var(--ink-secondary); font-size: 11px; cursor: pointer;
+    }
+    .chip:hover { border-color: #3f3f46; color: var(--ink); }
+    .chip.active { border-color: color-mix(in oklch, var(--primary) 50%, var(--border)); color: #93c5fd; background: color-mix(in oklch, var(--primary) 14%, transparent); }
+    .ref-box {
+      border: 1px dashed #3f3f46; border-radius: 8px; padding: 12px;
+      background: var(--canvas); text-align: center; color: var(--ink-muted); font-size: 12px;
+    }
+    .ref-box strong { display: block; color: var(--ink-secondary); margin-bottom: 4px; font-weight: 550; }
+    .params-foot {
+      padding: 12px 14px 14px; border-top: 1px solid var(--border);
+      display: flex; flex-direction: column; gap: 8px;
+    }
+    .primary-btn {
+      height: 36px; border: 0; border-radius: 8px; background: var(--primary); color: var(--on-primary);
+      font-size: 13px; font-weight: 650; cursor: pointer;
+    }
+    .primary-btn:hover { background: var(--primary-pressed); }
+    .primary-btn:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+    .primary-btn.stop { background: var(--danger); }
+    .primary-btn.stop:hover { background: color-mix(in oklch, var(--danger) 88%, black); }
+    .assist {
+      height: 30px; border-radius: 7px; border: 1px solid var(--border);
+      background: transparent; color: var(--ink-secondary); font-size: 12px; cursor: pointer;
+    }
+    .assist:hover { background: var(--surface-elevated); color: var(--ink); }
+    .main { flex: 1; display: flex; flex-direction: column; min-width: 0; background: var(--canvas); order: 1; }
+    .commandbar {
+      height: 48px; display: flex; align-items: center; gap: 8px;
+      padding: 0 14px; border-bottom: 1px solid var(--border); background: var(--surface);
+    }
+    .commandbar h1 { font-size: 14px; font-weight: 600; }
+    .combo {
+      display: inline-flex; align-items: center; gap: 8px; height: 30px; padding: 0 10px;
+      border-radius: 6px; border: 1px solid var(--border); background: var(--surface-elevated);
+      font-size: 12px; color: var(--ink-secondary); cursor: pointer;
+    }
+    .combo:hover { border-color: color-mix(in oklch, var(--primary) 45%, var(--border)); color: var(--ink); }
+    .combo .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--success); }
+    .cb-spacer { flex: 1; }
+    .ghost-btn {
+      height: 30px; padding: 0 10px; border-radius: 6px; border: 1px solid transparent;
+      background: transparent; font-size: 12px; color: var(--ink-secondary); cursor: pointer;
+    }
+    .ghost-btn:hover { background: var(--surface-elevated); border-color: var(--border); color: var(--ink); }
+    .timeline {
+      flex: 1; overflow: auto; padding: 18px 20px 24px;
+      display: flex; flex-direction: column; gap: 8px;
+    }
+    .turn {
+      display: flex; flex-direction: column; gap: 12px;
+      padding-bottom: 8px;
+    }
+    .time-split {
+      display: flex; align-items: center; gap: 12px;
+      margin: 10px 0 14px; color: var(--ink-muted); font-size: 11px;
+    }
+    .time-split::before, .time-split::after {
+      content: ""; flex: 1; height: 1px;
+      background: linear-gradient(90deg, transparent, var(--border), transparent);
+    }
+    .time-split span {
+      white-space: nowrap; padding: 3px 10px; border-radius: 999px;
+      border: 1px solid var(--border); background: var(--surface);
+      font-variant-numeric: tabular-nums;
+    }
+    .prompt-bubble {
+      align-self: flex-start; max-width: 720px;
+      background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+      padding: 12px 14px; font-size: 13px; line-height: 1.55; color: var(--ink-secondary);
+    }
+    .prompt-bubble .meta { font-size: 11px; color: var(--ink-muted); margin-bottom: 6px; }
+    .grid {
+      display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px;
+    }
+    @media (max-width: 980px) { .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+    .card {
+      position: relative; border-radius: 10px; overflow: hidden;
+      border: 1px solid var(--border); background: var(--surface-elevated); aspect-ratio: 1 / 1;
+    }
+    .card .art {
+      width: 100%; height: 100%;
+      background:
+        radial-gradient(circle at 30% 28%, color-mix(in oklch, var(--primary) 35%, transparent), transparent 42%),
+        linear-gradient(145deg, #18181b, #0f0f12 60%, #1a2332);
+    }
+    .card.busy .art {
+      background: repeating-linear-gradient(-45deg, #141418, #141418 8px, #18181d 8px, #18181d 16px);
+      animation: shimmer 1.4s linear infinite;
+    }
+    @keyframes shimmer { to { background-position: 32px 0; } }
+    .card .busy-label {
+      position: absolute; inset: 0; display: grid; place-items: center;
+      font-size: 12px; color: #bfdbfe; background: rgba(10,10,10,.45);
+    }
+    .card .tools {
+      position: absolute; left: 8px; right: 8px; bottom: 8px;
+      display: flex; gap: 4px; opacity: 0; transition: opacity .12s;
+    }
+    .card:hover .tools { opacity: 1; }
+    .tool {
+      height: 28px; padding: 0 8px; border-radius: 6px; border: 1px solid #3f3f46;
+      background: rgba(20,20,20,.88); color: var(--ink); font-size: 11px; cursor: pointer;
+    }
+    .tool:hover { border-color: var(--primary); color: #93c5fd; }
+    .status-line {
+      display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--ink-muted);
+    }
+    .pulse {
+      width: 8px; height: 8px; border-radius: 50%; background: var(--primary);
+      animation: pulse 1.2s ease-in-out infinite;
+    }
+    @keyframes pulse { 50% { opacity: .35; transform: scale(.85); } }
+    a.back {
+      position: fixed; left: 18px; bottom: 14px; z-index: 20;
+      font-size: 12px; color: var(--ink-secondary); text-decoration: none;
+      background: var(--surface); border: 1px solid var(--border); padding: 6px 10px; border-radius: 8px;
+    }
+    a.back:hover { color: var(--ink); border-color: color-mix(in oklch, var(--primary) 45%, var(--border)); }
+    .corner-tag {
+      position: fixed; right: 18px; bottom: 14px; z-index: 20;
+      font-size: 10px; font-family: var(--mono); color: var(--ink-muted);
+      background: var(--surface); border: 1px dashed var(--border); padding: 4px 8px; border-radius: 6px;
+    }
+  
+/* thin scrollbars */
+* { scrollbar-width: thin; scrollbar-color: color-mix(in oklch, var(--ink-muted, #71717a) 55%, transparent) transparent; }
+*::-webkit-scrollbar { width: 6px; height: 6px; }
+*::-webkit-scrollbar-button { display: none; width: 0; height: 0; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb {
+  background: color-mix(in oklch, var(--ink-muted, #71717a) 45%, transparent);
+  border-radius: 999px;
+  border: 1px solid transparent;
+  background-clip: padding-box;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in oklch, var(--ink-muted, #71717a) 70%, transparent);
+  background-clip: padding-box;
+}
+*::-webkit-scrollbar-corner { background: transparent; }
+</style>
+</head>
+<body>
+  <div class="window" data-od-id="fluent-dark-image">
+    <div class="titlebar" data-od-id="f-titlebar">
+      <div class="titlebar-left">
+        <div class="app-mark"></div>
+        <span>AI Studio · 生图</span>
+        <span class="badge-id">F-TitleBar · NAV-TITLE</span>
+      </div>
+      <div class="win-controls"><span class="win-dot"></span><span class="win-dot"></span><span class="win-dot"></span></div>
+    </div>
+    <div class="shell">
+      <nav class="nav" data-od-id="f-navview" aria-label="主导航">
+        <a class="nav-btn" href="fluent-dark-chat.html" title="对话"><svg viewBox="0 0 24 24"><path d="M4 6h16v10H8l-4 3V6z"/></svg><span class="cap">对话</span></a>
+        <a class="nav-btn active" href="fluent-dark-image.html" title="生图"><svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="14" rx="2"/><circle cx="9" cy="10" r="1.5"/><path d="M4 16l5-4 4 3 3-2 4 3"/></svg><span class="cap">生图</span></a>
+        <a class="nav-btn" href="fluent-dark-video.html" title="生视频"><svg viewBox="0 0 24 24"><rect x="3" y="6" width="13" height="12" rx="2"/><path d="M16 10l5-3v10l-5-3z"/></svg><span class="cap">生视频</span></a>
+        <div class="nav-spacer"></div>
+        <a class="nav-btn" href="fluent-dark-settings-providers.html" title="设置"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 3v2M12 19v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M3 12h2M19 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg><span class="cap">设置</span></a>
+      </nav>
+
+      <aside class="params" data-od-id="f-image-params">
+        <div class="params-scroll">
+          <h2>参数 <span class="badge-id">F-ImageParams · IMG-PARAMS</span></h2>
+          <div class="field">
+            <label for="model">模型</label>
+            <select class="select" id="model">
+              <option>flux-pro-ultra</option>
+              <option>dall-e-3 兼容</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>数量</label>
+            <div class="seg" data-od-id="img-count">
+              <button type="button">1</button>
+              <button type="button" class="active">2</button>
+              <button type="button">4</button>
+            </div>
+          </div>
+          <div class="field">
+            <label>比例</label>
+            <div class="chips" data-od-id="img-ratio">
+              <button class="chip active" type="button">1:1</button>
+              <button class="chip" type="button">16:9</button>
+              <button class="chip" type="button">9:16</button>
+              <button class="chip" type="button">4:3</button>
+            </div>
+          </div>
+          <div class="field">
+            <label>质量</label>
+            <div class="seg">
+              <button type="button">标准</button>
+              <button type="button" class="active">高清</button>
+              <button type="button">极致</button>
+            </div>
+          </div>
+          <div class="field" data-od-id="f-prompt-box">
+            <label for="prompt">提示词 <span class="badge-id">F-PromptBox</span></label>
+            <textarea class="textarea" id="prompt">近黑 IDE 工作区，冷蓝焦点环，低对比边框，桌面生图参数窗格氛围，无商标</textarea>
+          </div>
+          <div class="field" data-od-id="f-ref-image">
+            <label>参考图 <span class="badge-id">F-RefImage · IMG-REF</span></label>
+            <div class="ref-box">
+              <strong>拖放或选择文件</strong>
+              支持 PNG / JPEG · 可清除
+            </div>
+          </div>
+        </div>
+        <div class="params-foot">
+          <button class="assist" type="button" data-od-id="f-prompt-assist">提示词辅助 · F-PromptAssist</button>
+          <button class="primary-btn stop" type="button" data-od-id="f-gen-primary">停止生成 · F-GenPrimary</button>
+        </div>
+      </aside>
+
+      <section class="main" data-od-id="image-main">
+        <div class="commandbar" data-od-id="f-commandbar">
+          <h1>生图时间线</h1>
+          <button class="combo" type="button">
+            <span class="dot"></span>
+            <span>OpenAI 兼容 · 自建</span>
+          </button>
+          <span class="badge-id">IMG-GENERATE · 忙</span>
+          <div class="cb-spacer"></div>
+          <button class="ghost-btn" type="button">清空本页结果</button>
+        </div>
+        <div class="timeline" data-od-id="f-image-timeline">
+          <div class="status-line">
+            <span class="pulse"></span>
+            正在生成 2 张 · 可停止
+            <span class="badge-id">F-ImageTimeline · 按回合分隔</span>
+          </div>
+
+          <div class="time-split"><span>今天 14:32</span></div>
+          <article class="turn" data-od-id="img-turn-1">
+            <div class="prompt-bubble">
+              <div class="meta">你 · 回合 1 · 14:32</div>
+              近黑 IDE 工作区，冷蓝焦点环，低对比边框，桌面生图参数窗格氛围，无商标
+            </div>
+            <div class="grid">
+              <div class="card busy" data-od-id="img-slot-1">
+                <div class="art"></div>
+                <div class="busy-label">生成中…</div>
+              </div>
+              <div class="card busy" data-od-id="img-slot-2">
+                <div class="art"></div>
+                <div class="busy-label">排队中…</div>
+              </div>
+              <div class="card" data-od-id="img-slot-3">
+                <div class="art"></div>
+                <div class="tools" data-od-id="f-img-actions">
+                  <button class="tool" type="button">预览</button>
+                  <button class="tool" type="button">下载</button>
+                  <button class="tool" type="button">作参考</button>
+                </div>
+              </div>
+            </div>
+          </article>
+
+          <div class="time-split"><span>今天 11:08</span></div>
+          <article class="turn" data-od-id="img-turn-2">
+            <div class="prompt-bubble">
+              <div class="meta">你 · 回合 2 · 11:08</div>
+              暖色卡片浮在奶油纸面，克制陶土描边，工具感空态插画
+            </div>
+            <div class="grid">
+              <div class="card" data-od-id="img-slot-4">
+                <div class="art" style="background:radial-gradient(circle at 70% 40%, rgba(96,165,250,.28), transparent 45%),linear-gradient(160deg,#12151c,#0a0a0a);"></div>
+                <div class="tools">
+                  <button class="tool" type="button">预览</button>
+                  <button class="tool" type="button">另存为</button>
+                  <button class="tool" type="button">作参考</button>
+                </div>
+              </div>
+              <div class="card" data-od-id="img-slot-5">
+                <div class="art" style="background:radial-gradient(circle at 40% 60%, rgba(59,130,246,.22), transparent 40%),linear-gradient(200deg,#16161a,#0c0c0f);"></div>
+                <div class="tools">
+                  <button class="tool" type="button">预览</button>
+                  <button class="tool" type="button">下载</button>
+                </div>
+              </div>
+            </div>
+          </article>
+
+          <div class="time-split"><span>昨天 21:46</span></div>
+          <article class="turn" data-od-id="img-turn-3">
+            <div class="prompt-bubble">
+              <div class="meta">你 · 回合 3 · 昨天 21:46</div>
+              极简侧栏导航剪影，低对比分割线，无商标
+            </div>
+            <div class="grid">
+              <div class="card" data-od-id="img-slot-6">
+                <div class="art" style="background:linear-gradient(125deg,#1c2433 0%,#0a0a0a 55%,#141820 100%);"></div>
+                <div class="tools">
+                  <button class="tool" type="button">预览</button>
+                  <button class="tool" type="button">下载</button>
+                </div>
+              </div>
+            </div>
+          </article>
+        </div>
+      </section>
+    </div>
+  </div>
+  <a class="back" href="index.html">← 总览</a>
+  <div class="corner-tag">Fluent Dark · IMG-PARAMS / IMG-TIMELINE</div>
+</body>
+</html>

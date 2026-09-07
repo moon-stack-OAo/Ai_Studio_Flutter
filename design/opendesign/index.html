@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AI Studio — 原型总览</title>
+  <style>
+    :root {
+      --canvas: #faf9f5; --surface: #ffffff; --ink: #141413; --muted: #6c6a64;
+      --border: #e7e6e1; --primary: #d97757; --dark-canvas: #0a0a0a;
+      --dark-surface: #141414; --dark-ink: #fafafa; --dark-muted: #a1a1aa;
+      --dark-border: #27272a; --blue: #3b82f6;
+      --font-fluent: system-ui, "Segoe UI Variable", "Segoe UI", -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
+      --font-material: Roboto, "Noto Sans SC", system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+      --font: var(--font-fluent);
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: var(--font); background: var(--canvas); color: var(--ink); min-height: 100vh; line-height: 1.5; }
+    section.stack-fluent { font-family: var(--font-fluent); }
+    section.stack-material { font-family: var(--font-material); }
+    .wrap { max-width: 1100px; margin: 0 auto; padding: 48px 24px 80px; }
+    .eyebrow { font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin-bottom: 10px; }
+    h1 { font-size: 32px; font-weight: 650; letter-spacing: -0.03em; margin-bottom: 10px; }
+    .lead { color: var(--muted); max-width: 70ch; font-size: 15px; }
+    .meta { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
+    .chip { font-size: 12px; padding: 5px 10px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface); color: var(--muted); }
+    .chip.accent { color: var(--primary); border-color: color-mix(in oklch, var(--primary) 40%, var(--border)); background: color-mix(in oklch, var(--primary) 8%, white); }
+    section { margin-top: 40px; }
+    .sec-h { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; margin-bottom: 14px; padding-bottom: 10px; border-bottom: 1px solid var(--border); }
+    .sec-h h2 { font-size: 18px; font-weight: 600; }
+    .sec-h span { font-size: 13px; color: var(--muted); }
+    .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+    @media (max-width: 720px) { .grid { grid-template-columns: 1fr; } }
+    a.card {
+      display: block; text-decoration: none; color: inherit; background: var(--surface);
+      border: 1px solid var(--border); border-radius: 14px; padding: 18px; transition: .15s;
+    }
+    a.card:hover { border-color: color-mix(in oklch, var(--primary) 45%, var(--border)); transform: translateY(-1px); box-shadow: 0 8px 24px color-mix(in oklch, var(--ink) 6%, transparent); }
+    a.card.dark { background: var(--dark-surface); border-color: var(--dark-border); color: var(--dark-ink); }
+    a.card.dark:hover { border-color: color-mix(in oklch, var(--blue) 50%, var(--dark-border)); box-shadow: 0 8px 24px rgba(0,0,0,.35); }
+    a.card.dark .sub { color: var(--dark-muted); }
+    a.card.dark .tag { background: #1c1c1c; border-color: var(--dark-border); color: #c8c8c8; }
+    a.card.dark .tag.sys { color: #93c5fd; border-color: #1e3a5f; background: #0f1b2d; }
+    .row { display: flex; justify-content: space-between; gap: 12px; }
+    .title { font-size: 15px; font-weight: 600; }
+    .sub { margin-top: 6px; font-size: 13px; color: var(--muted); }
+    .tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 14px; }
+    .tag { font-size: 11px; padding: 3px 8px; border-radius: 6px; border: 1px solid var(--border); background: #f5f0e8; color: #5c4f42; }
+    .tag.sys { background: color-mix(in oklch, var(--primary) 10%, white); color: #a34b1f; }
+    .arrow { font-size: 18px; color: var(--muted); }
+    a.card.dark .arrow { color: var(--dark-muted); }
+    .note { margin-top: 28px; padding: 14px 16px; border-radius: 12px; border: 1px dashed var(--border); background: #fffaf3; font-size: 13px; color: var(--muted); }
+    footer { margin-top: 40px; padding-top: 18px; border-top: 1px solid var(--border); font-size: 12px; color: var(--muted); }
+  
+/* thin scrollbars */
+* { scrollbar-width: thin; scrollbar-color: color-mix(in oklch, var(--ink-muted, #71717a) 55%, transparent) transparent; }
+*::-webkit-scrollbar { width: 6px; height: 6px; }
+*::-webkit-scrollbar-button { display: none; width: 0; height: 0; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb {
+  background: color-mix(in oklch, var(--ink-muted, #71717a) 45%, transparent);
+  border-radius: 999px;
+  border: 1px solid transparent;
+  background-clip: padding-box;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in oklch, var(--ink-muted, #71717a) 70%, transparent);
+  background-clip: padding-box;
+}
+*::-webkit-scrollbar-corner { background: transparent; }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div class="eyebrow">AI Studio · Flutter 原型</div>
+      <h1>完整页面矩阵 · 同主题可联动</h1>
+      <p class="lead">侧栏 / 底栏已串联同主题页面。Material 设置为「提供商 / 对话 / 外观 / 日志 / 关于」五 Tab。亮色仿 Claude · 暗色仿 Cursor · Fluent ∪ Material 独立。</p>
+      <div class="meta">
+        <span class="chip accent">不上架 · 直链更新</span>
+        <span class="chip">Fluent × 4 功能 × 亮暗</span>
+        <span class="chip">Material × 4 功能 × 亮暗</span>
+        <span class="chip">设置五 Tab</span>
+      </div>
+    </header>
+
+    <section class="stack-fluent">
+      <div class="sec-h"><h2>Fluent · 亮色</h2><span>侧栏可切换</span></div>
+      <div class="grid">
+        <a class="card" href="fluent-light-chat.html"><div class="row"><div><div class="title">对话</div><div class="sub">流式 · Composer 停止</div></div><span class="arrow">→</span></div><div class="tags"><span class="tag sys">Light</span><span class="tag">F-NavView</span></div></a>
+        <a class="card" href="fluent-light-image.html"><div class="row"><div><div class="title">生图</div><div class="sub">参数窗格 · 时间线</div></div><span class="arrow">→</span></div><div class="tags"><span class="tag sys">Light</span><span class="tag">F-ImageParams</span></div></a>
+        <a class="card" href="fluent-light-video.html"><div class="row"><div><div class="title">生视频</div><div class="sub">任务队列 · 进度</div></div><span class="arrow">→</span></div><div class="tags"><span class="tag sys">Light</span><span class="tag">F-VideoQueue</span></div></a>
+        <a class="card" href="fluent-light-settings-providers.html"><div class="row"><div><div class="title">设置 · 提供商</div><div class="sub">测试连接 · 拉模型</div></div><span class="arrow">→</span></div><div class="tags"><span class="tag sys">Light</span><span class="tag">F-ProviderForm</span></div></a>
+      </div>
+    </section>
+
+    <section class="stack-fluent">
+      <div class="sec-h"><h2>Fluent · 暗色</h2><span>侧栏可切换</span></div>
+      <div class="grid">
+        <a class="card dark" href="fluent-dark-chat.html"><div class="row"><div><div class="title">对话</div><div class="sub">Cursor 近黑 IDE</div></div><span class="arrow">→</span></div><div class="tags"><span class="tag sys">Dark</span><span class="tag">F-Composer</span></div></a>
+        <a class="card dark" href="fluent-dark-image.html"><div class="row"><div><div class="title">生图</div><div class="sub">冷蓝强调</div></div><span class="arrow">→</span></div><div class="tags"><span class="tag sys">Dark</span><span class="tag">F-ImageTimeline</span></div></a>
+        <a class="card dark" href="fluent-dark-video.html"><div class="row"><div><div class="title">生视频</div><div class="sub">队列 / 播放</div></div><span class="arrow">→</span></div><div class="tags"><span class="tag sys">Dark</span><span class="tag">F-VideoPrimary</span></div></a>
+        <a class="card dark" href="fluent-dark-settings-providers.html"><div class="row"><div><div class="title">设置 · 提供商</div><div class="sub">暗色设置</div></div><span class="arrow">→</span></div><div class="tags"><span class="tag sys">Dark</span><span class="tag">SET-PROVIDERS</span></div></a>
+      </div>
+    </section>
+
+    <section class="stack-material">
+      <div class="sec-h"><h2>Material · 亮色</h2><span>底栏四入口联动</span></div>
+      <div class="grid">
+        <a class="card" href="material-light-chat.html"><div class="row"><div><div class="title">对话</div><div class="sub">顶栏可进会话列表</div></div><span class="arrow">→</span></div><div class="tags"><span class="tag sys">Light</span><span class="tag">M-NavBar</span></div></a>
+        <a class="card" href="material-light-image.html"><div class="row"><div><div class="title">生图</div><div class="sub">参数 + 时间线</div></div><span class="arrow">→</span></div><div class="tags"><span class="tag sys">Light</span><span class="tag">M-ImageParams</span></div></a>
+        <a class="card" href="material-light-video.html"><div class="row"><div><div class="title">生视频</div><div class="sub">任务队列</div></div><span class="arrow">→</span></div><div class="tags"><span class="tag sys">Light</span><span class="tag">M-VideoQueue</span></div></a>
+        <a class="card" href="material-light-settings.html"><div class="row"><div><div class="title">设置 · 五 Tab</div><div class="sub">提供商 / 对话 / 外观 / 日志 / 关于</div></div><span class="arrow">→</span></div><div class="tags"><span class="tag sys">Light</span><span class="tag">M-Settings</span></div></a>
+        <a class="card" href="material-light-sessions.html"><div class="row"><div><div class="title">会话列表层</div><div class="sub">从对话顶栏进入</div></div><span class="arrow">→</span></div><div class="tags"><span class="tag sys">Light</span><span class="tag">M-SessionList</span></div></a>
+      </div>
+    </section>
+
+    <section class="stack-material">
+      <div class="sec-h"><h2>Material · 暗色</h2><span>底栏四入口联动</span></div>
+      <div class="grid">
+        <a class="card dark" href="material-dark-chat.html"><div class="row"><div><div class="title">对话</div><div class="sub">流式 · 触控操作</div></div><span class="arrow">→</span></div><div class="tags"><span class="tag sys">Dark</span><span class="tag">M-Composer</span></div></a>
+        <a class="card dark" href="material-dark-image.html"><div class="row"><div><div class="title">生图</div><div class="sub">参数 + 时间线</div></div><span class="arrow">→</span></div><div class="tags"><span class="tag sys">Dark</span><span class="tag">M-GenPrimary</span></div></a>
+        <a class="card dark" href="material-dark-video.html"><div class="row"><div><div class="title">生视频</div><div class="sub">进度 / 播放</div></div><span class="arrow">→</span></div><div class="tags"><span class="tag sys">Dark</span><span class="tag">M-VideoPlayer</span></div></a>
+        <a class="card dark" href="material-dark-settings.html"><div class="row"><div><div class="title">设置 · 五 Tab</div><div class="sub">提供商 / 对话 / 外观 / 日志 / 关于</div></div><span class="arrow">→</span></div><div class="tags"><span class="tag sys">Dark</span><span class="tag">五 Tab</span></div></a>
+        <a class="card dark" href="material-dark-sessions.html"><div class="row"><div><div class="title">会话列表层</div><div class="sub">暗色 · 全屏层 / 长按</div></div><span class="arrow">→</span></div><div class="tags"><span class="tag sys">Dark</span><span class="tag">M-SessionList</span></div></a>
+      </div>
+    </section>
+
+    <section class="stack-fluent">
+      <div class="sec-h"><h2>Fluent · 设置分类页</h2><span>对齐现网：关闭行为在关于 · 含日志</span></div>
+      <div class="grid">
+        <a class="card" href="fluent-light-settings-providers.html"><div class="row"><div><div class="title">亮色 · 提供商</div><div class="sub">列表 + 表单</div></div><span class="arrow">→</span></div></a>
+        <a class="card" href="fluent-light-settings-chat.html"><div class="row"><div><div class="title">亮色 · 对话默认</div><div class="sub">温度 / Tokens</div></div><span class="arrow">→</span></div></a>
+        <a class="card" href="fluent-light-settings-appearance.html"><div class="row"><div><div class="title">亮色 · 外观</div><div class="sub">主题 / 密度</div></div><span class="arrow">→</span></div></a>
+        <a class="card" href="fluent-light-settings-logs.html"><div class="row"><div><div class="title">亮色 · 日志</div><div class="sub">筛选 / 复制 / 清空</div></div><span class="arrow">→</span></div></a>
+        <a class="card" href="fluent-light-settings-about.html"><div class="row"><div><div class="title">亮色 · 关于</div><div class="sub">更新 + 关闭行为</div></div><span class="arrow">→</span></div></a>
+        <a class="card dark" href="fluent-dark-settings-providers.html"><div class="row"><div><div class="title">暗色 · 提供商</div><div class="sub">列表 + 表单</div></div><span class="arrow">→</span></div></a>
+        <a class="card dark" href="fluent-dark-settings-chat.html"><div class="row"><div><div class="title">暗色 · 对话默认</div><div class="sub">温度 / Tokens</div></div><span class="arrow">→</span></div></a>
+        <a class="card dark" href="fluent-dark-settings-appearance.html"><div class="row"><div><div class="title">暗色 · 外观</div><div class="sub">主题 / 密度</div></div><span class="arrow">→</span></div></a>
+        <a class="card dark" href="fluent-dark-settings-logs.html"><div class="row"><div><div class="title">暗色 · 日志</div><div class="sub">筛选 / 复制 / 清空</div></div><span class="arrow">→</span></div></a>
+        <a class="card dark" href="fluent-dark-settings-about.html"><div class="row"><div><div class="title">暗色 · 关于</div><div class="sub">更新 + 关闭行为</div></div><span class="arrow">→</span></div></a>
+      </div>
+    </section>
+    <div class="note">
+      联动规则：Fluent 侧栏 / Material 底栏只跳转<strong>同主题</strong>页面；设置页内 Tab 为页内切换（无需跳转）。生视频 Fluent 页由生图稿派生，细节可再抛光。
+    </div>
+    <footer>对照 DESIGN.md §5 / §10 · 项目 id：ai-studio-flutter-proto · 副本：Ai_Studio_Flutter/design/opendesign/</footer>
+  </div>
+</body>
+</html>

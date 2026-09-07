@@ -1,0 +1,11 @@
+name: ai_studio_flutter_workspace
+publish_to: none
+environment:
+  sdk: ^3.12.0
+
+workspace:
+  - apps/desktop_fluent
+  - apps/mobile_material
+  - packages/core
+  - packages/design_fluent
+  - packages/design_material

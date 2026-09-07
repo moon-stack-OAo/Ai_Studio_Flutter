@@ -1,0 +1,29 @@
+name: core
+description: AI Studio shared business logic (providers, storage, adapters).
+version: 0.0.1
+publish_to: none
+
+environment:
+  sdk: ^3.12.2
+  flutter: ">=1.17.0"
+
+resolution: workspace
+
+dependencies:
+  flutter:
+    sdk: flutter
+  shared_preferences: ^2.5.3
+  http: ^1.4.0
+  meta: ^1.16.0
+  path_provider: ^2.1.6
+  crypto: ^3.0.7
+  cryptography: ^2.9.0
+  flutter_secure_storage: ^11.0.0
+  image: ^4.9.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:

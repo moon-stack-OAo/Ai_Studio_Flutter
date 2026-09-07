@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>AI Studio · Material · 生视频</title>
+<style>
+:root {       --canvas: #0a0a0a; --surface: #141414; --elev: #1c1c1c; --ink: #fafafa;
+      --ink2: #a1a1aa; --muted: #71717a; --border: #27272a; --primary: #3b82f6;
+      --pressed: #2563eb; --on: #fff; --accent-nav: #93c5fd; --page-bg: #050505;
+  --font: Roboto, "Noto Sans SC", system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+  --mono: ui-monospace, "Roboto Mono", "Noto Sans Mono", "SF Mono", Consolas, monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:var(--font);background:var(--page-bg);color:var(--ink);min-height:100vh;display:grid;place-items:center;padding:24px 16px}
+.phone{width:min(390px,100%);height:min(844px,92vh);background:var(--canvas);border-radius:36px;border:1px solid var(--border);overflow:hidden;display:flex;flex-direction:column;position:relative;box-shadow:0 28px 64px rgba(0,0,0,.25)}
+.status{height:44px;padding:12px 22px 0;display:flex;justify-content:space-between;align-items:center;font-size:12px;font-weight:600;background:var(--surface)}
+.topbar{height:56px;display:flex;align-items:center;gap:6px;padding:0 10px;background:var(--surface);border-bottom:1px solid var(--border)}
+.topbar h1{font-size:17px;font-weight:650;letter-spacing:0}
+.sub{font-size:11px;color:var(--muted)}
+.icon-btn{width:48px;height:48px;border:0;border-radius:24px;background:transparent;color:var(--ink2);display:grid;place-items:center;text-decoration:none}
+.icon-btn svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.main{flex:1;overflow:auto;padding:12px;display:flex;flex-direction:column;gap:12px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:12px}
+.label{font-size:11px;color:var(--muted);font-weight:650;letter-spacing:.06em;text-transform:uppercase;margin-bottom:8px}
+.field{margin-bottom:10px}
+.field label{display:block;font-size:12px;color:var(--ink2);margin-bottom:5px}
+.input,.select,.textarea{width:100%;border:1px solid var(--border);border-radius:10px;background:var(--elev);color:var(--ink);font:inherit;font-size:14px;padding:10px 12px}
+.textarea{min-height:88px;resize:vertical}
+.btn{height:48px;border:0;border-radius:12px;background:var(--primary);color:var(--on);font-weight:650;font-size:14px;cursor:pointer;width:100%}
+.btn.stop{background:#b42318}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.thumb{aspect-ratio:1;border-radius:12px;background:var(--elev);border:1px solid var(--border);display:grid;place-items:center;color:var(--muted);font-size:12px}
+.job{padding:12px;border:1px solid var(--border);border-radius:12px;background:var(--surface);margin-bottom:8px}
+.bar{height:6px;border-radius:99px;background:var(--elev);overflow:hidden;margin-top:8px}
+.bar>i{display:block;height:100%;width:62%;background:var(--primary)}
+.meta{font-size:12px;color:var(--muted);margin-top:6px}
+.badge{display:inline-block;font-size:9px;font-family:var(--mono);border:1px dashed var(--border);padding:1px 5px;border-radius:3px;color:var(--muted);margin-left:4px}
+.navbar{height:64px;display:grid;grid-template-columns:repeat(4,1fr);background:var(--surface);border-top:1px solid var(--border);padding-bottom:8px}
+a.nav-item{text-decoration:none;color:inherit}
+.nav-item{border:0;background:transparent;color:var(--muted);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font-size:11px;min-height:48px}
+.nav-item svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.nav-item.active{color:var(--accent-nav)}
+.home{position:absolute;left:50%;bottom:6px;transform:translateX(-50%);width:120px;height:4px;border-radius:4px;background:var(--ink);opacity:.2}
+a.back{position:fixed;left:18px;bottom:14px;z-index:20;font-size:12px;color:var(--ink2);text-decoration:none;background:var(--surface);border:1px solid var(--border);padding:6px 10px;border-radius:8px}
+.corner{position:fixed;right:18px;bottom:14px;z-index:20;font-size:10px;font-family:var(--mono);color:var(--muted);background:var(--surface);border:1px dashed var(--border);padding:4px 8px;border-radius:6px}
+
+/* thin scrollbars */
+* { scrollbar-width: thin; scrollbar-color: color-mix(in oklch, var(--ink-muted, #71717a) 55%, transparent) transparent; }
+*::-webkit-scrollbar { width: 6px; height: 6px; }
+*::-webkit-scrollbar-button { display: none; width: 0; height: 0; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb {
+  background: color-mix(in oklch, var(--ink-muted, #71717a) 45%, transparent);
+  border-radius: 999px;
+  border: 1px solid transparent;
+  background-clip: padding-box;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in oklch, var(--ink-muted, #71717a) 70%, transparent);
+  background-clip: padding-box;
+}
+*::-webkit-scrollbar-corner { background: transparent; }
+</style>
+</head>
+<body>
+<div class="phone" data-od-id="material-dark-video.html">
+  <div class="status"><span>9:41</span><span>▌▌▌ · 100%</span></div>
+  <header class="topbar">
+    <a class="icon-btn" href="material-dark-sessions.html" aria-label="会话列表"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></svg></a>
+    <div style="flex:1;min-width:0">
+      <h1>生视频</h1>
+      <div class="sub">Material · dark <span class="badge">M-VideoParams</span></div>
+    </div>
+  </header>
+  <div class="main">
+    <div class="card" data-od-id="m-video-params">
+  <div class="label">参数 · M-VideoParams</div>
+  <div class="field"><label>模型</label><select class="select"><option>sora-compat</option><option>grok-video</option></select></div>
+  <div class="grid">
+    <div class="field"><label>时长</label><select class="select"><option>5s</option><option>10s</option></select></div>
+    <div class="field"><label>比例</label><select class="select"><option>16:9</option><option>9:16</option></select></div>
+  </div>
+  <div class="field"><label>提示词</label><textarea class="textarea">近黑 IDE 桌面，冷蓝焦点，镜头缓慢推进，无商标</textarea></div>
+  <button class="btn" type="button">创建任务 · M-VideoPrimary</button>
+</div>
+<div class="card" data-od-id="m-video-queue">
+  <div class="label">任务队列 · M-VideoQueue</div>
+  <div class="job">
+    <div style="font-weight:600;font-size:14px">镜头推进 · running</div>
+    <div class="bar"><i></i></div>
+    <div class="meta">62% · 可取消 · VID-QUEUE</div>
+  </div>
+  <div class="job">
+    <div style="font-weight:600;font-size:14px">完成片 · succeeded</div>
+    <div class="meta">点击播放 · M-VideoPlayer · 可下载/相册</div>
+  </div>
+</div>
+  </div>
+  <nav class="navbar" aria-label="主导航">
+    <a class="nav-item" href="material-dark-chat.html"><svg viewBox="0 0 24 24"><path d="M4 6h16v10H8l-4 3V6z"/></svg>对话</a>
+    <a class="nav-item" href="material-dark-image.html"><svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="14" rx="2"/><circle cx="9" cy="10" r="1.5"/><path d="M4 16l5-4 4 3 3-2 4 3"/></svg>生图</a>
+    <a class="nav-item active" href="material-dark-video.html"><svg viewBox="0 0 24 24"><rect x="3" y="6" width="13" height="12" rx="2"/><path d="M16 10l5-3v10l-5-3z"/></svg>生视频</a>
+    <a class="nav-item" href="material-dark-settings.html"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 3v2M12 19v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M3 12h2M19 12h2"/></svg>设置</a>
+  </nav>
+  <div class="home"></div>
+</div>
+<a class="back" href="index.html">← 总览</a>
+<a class="back" style="left:110px" href="material-light-video.html">浅色</a>
+<div class="corner">Material dark · video</div>
+</body></html>

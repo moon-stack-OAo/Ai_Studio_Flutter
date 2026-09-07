@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>AI Studio · Fluent 亮色 · 生视频</title>
+<style>
+:root {       --canvas: #faf9f5; --surface: #ffffff; --elev: #efeeeb; --ink: #141413;
+      --ink2: #3d3d3a; --muted: #6c6a64; --border: #e7e6e1; --primary: #d97757;
+      --pressed: #a9583e; --on: #fff; --success: #3f6f4e; --danger: #b42318;
+      --accent: #a9583e; --page-bg: #d8d4cb; --mark: linear-gradient(135deg, #d97757, #e8a07a);
+  --nav-w:56px; --params-w:300px;
+  --font: system-ui, "Segoe UI Variable", "Segoe UI", -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
+  --mono: ui-monospace, "Cascadia Code", "Cascadia Mono", "SF Mono", Consolas, "Microsoft YaHei Mono", monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:var(--font);background:var(--page-bg);color:var(--ink);min-height:100vh;display:grid;place-items:center;padding:24px}
+.window{width:min(1280px,100%);height:min(820px,92vh);background:var(--canvas);border:1px solid var(--border);border-radius:10px;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 24px 64px rgba(0,0,0,.35)}
+.titlebar{height:36px;display:flex;align-items:center;justify-content:space-between;padding:0 12px 0 14px;background:var(--surface);border-bottom:1px solid var(--border)}
+.titlebar-left{display:flex;align-items:center;gap:10px;font-size:12px;color:var(--ink2)}
+.app-mark{width:16px;height:16px;border-radius:4px;background:center/contain no-repeat url("assets/logo.png");flex-shrink:0}
+.win-dot{width:12px;height:12px;border-radius:50%;border:1px solid var(--border);background:var(--elev);display:inline-block;margin-left:6px}
+.shell{flex:1;display:flex;min-height:0}
+.nav{width:var(--nav-w);background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;align-items:center;padding:10px 0;gap:4px}
+a.nav-btn{text-decoration:none;color:inherit;width:40px;height:40px;border-radius:8px;display:grid;place-items:center;position:relative}
+.nav-btn:hover{background:color-mix(in oklch,var(--ink) 8%,transparent)}
+.nav-btn.active{background:color-mix(in oklch,var(--primary) 18%,transparent);color:var(--accent)}
+.nav-btn svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.nav-spacer{flex:1}
+.badge{display:inline-block;font-size:9px;font-family:var(--mono);border:1px dashed var(--border);padding:1px 5px;border-radius:3px;color:var(--muted);margin-left:6px;vertical-align:middle}
+.params{width:var(--params-w);background:var(--surface);border-left:1px solid var(--border);display:flex;flex-direction:column;order:2}
+.params-scroll{flex:1;overflow:auto;padding:14px}
+.params h2{font-size:13px;font-weight:650;color:var(--ink2);margin-bottom:12px}
+.field{margin-bottom:12px}
+label{display:block;font-size:11px;color:var(--muted);margin-bottom:6px;font-weight:550}
+.input,.select,.textarea{width:100%;border-radius:7px;border:1px solid var(--border);background:var(--elev);padding:0 10px;font:inherit;font-size:13px;color:var(--ink)}
+.input,.select{height:34px}
+.textarea{padding:10px;min-height:88px;resize:vertical;line-height:1.45}
+.seg{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;padding:3px;border-radius:8px;background:var(--canvas);border:1px solid var(--border)}
+.seg button{height:28px;border:0;border-radius:6px;background:transparent;color:var(--ink2);font-size:11px;cursor:pointer}
+.seg button.active{background:color-mix(in oklch,var(--primary) 20%,transparent);color:var(--accent);font-weight:600}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{height:28px;padding:0 10px;border-radius:6px;border:1px solid var(--border);background:var(--elev);color:var(--ink2);font-size:11px;cursor:pointer}
+.chip.active{border-color:color-mix(in oklch,var(--primary) 50%,var(--border));color:var(--accent);background:color-mix(in oklch,var(--primary) 14%,transparent)}
+.ref-box{border:1px dashed var(--border);border-radius:8px;padding:12px;background:var(--canvas);text-align:center;color:var(--muted);font-size:12px}
+.params-foot{padding:12px 14px;border-top:1px solid var(--border);display:flex;flex-direction:column;gap:8px}
+.primary-btn{height:36px;border:0;border-radius:8px;background:var(--primary);color:var(--on);font-size:13px;font-weight:650;cursor:pointer}
+.primary-btn.stop{background:var(--danger)}
+.assist{height:30px;border-radius:7px;border:1px solid var(--border);background:transparent;color:var(--ink2);font-size:12px;cursor:pointer}
+.main{flex:1;display:flex;flex-direction:column;min-width:0;background:var(--canvas);order:1}
+.commandbar{height:48px;display:flex;align-items:center;gap:8px;padding:0 14px;border-bottom:1px solid var(--border);background:var(--surface)}
+.commandbar h1{font-size:14px;font-weight:600}
+.combo{display:inline-flex;align-items:center;gap:8px;height:30px;padding:0 10px;border-radius:6px;border:1px solid var(--border);background:var(--elev);font-size:12px;color:var(--ink2)}
+.dot{width:6px;height:6px;border-radius:50%;background:var(--success)}
+.cb-spacer{flex:1}
+.ghost-btn{height:30px;padding:0 10px;border-radius:6px;border:1px solid transparent;background:transparent;font-size:12px;color:var(--ink2);cursor:pointer}
+.ghost-btn:hover{background:var(--elev);border-color:var(--border)}
+.content{flex:1;overflow:auto;padding:16px 18px 22px;display:grid;grid-template-columns:minmax(0,1.1fr) minmax(280px,.9fr);gap:16px}
+@media (max-width:980px){.content{grid-template-columns:1fr}}
+.panel{background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden;display:flex;flex-direction:column;min-height:0}
+.panel-h{padding:12px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:8px}
+.panel-h h2{font-size:13px;font-weight:650}
+.queue{padding:10px;display:flex;flex-direction:column;gap:8px;overflow:auto}
+.job{border:1px solid var(--border);border-radius:10px;padding:12px;background:var(--elev)}
+.job.running{border-color:color-mix(in oklch,var(--primary) 45%,var(--border));box-shadow:0 0 0 3px color-mix(in oklch,var(--primary) 12%,transparent)}
+.job-top{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}
+.job-title{font-size:13px;font-weight:600}
+.job-meta{font-size:11px;color:var(--muted);margin-top:4px}
+.pill{font-size:10px;padding:3px 8px;border-radius:999px;border:1px solid var(--border);color:var(--ink2);white-space:nowrap}
+.pill.run{color:var(--accent);border-color:color-mix(in oklch,var(--primary) 40%,var(--border));background:color-mix(in oklch,var(--primary) 12%,transparent)}
+.pill.ok{color:var(--success);border-color:color-mix(in oklch,var(--success) 35%,var(--border));background:color-mix(in oklch,var(--success) 10%,transparent)}
+.pill.fail{color:var(--danger);border-color:color-mix(in oklch,var(--danger) 35%,var(--border))}
+.bar{height:6px;border-radius:99px;background:var(--canvas);overflow:hidden;margin-top:10px}
+.bar>i{display:block;height:100%;background:var(--primary);border-radius:99px}
+.job-actions{display:flex;gap:6px;margin-top:10px;flex-wrap:wrap}
+.tool{height:28px;padding:0 8px;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--ink);font-size:11px;cursor:pointer}
+.tool:hover{border-color:var(--primary);color:var(--accent)}
+.player-wrap{padding:12px;display:flex;flex-direction:column;gap:10px;flex:1}
+.stage{position:relative;aspect-ratio:16/9;border-radius:10px;overflow:hidden;border:1px solid var(--border);background:linear-gradient(160deg,#0f1115,#1a2230 55%,#12151c)}
+.stage .poster{position:absolute;inset:0;background:
+  radial-gradient(circle at 30% 35%, color-mix(in oklch,var(--primary) 30%,transparent), transparent 42%),
+  linear-gradient(145deg,#161b24,#0b0d10)}
+.play{
+  position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
+  width:56px;height:56px;border-radius:50%;border:0;cursor:pointer;
+  background:color-mix(in oklch,var(--primary) 88%,black);color:#fff;
+  display:grid;place-items:center;box-shadow:0 8px 24px rgba(0,0,0,.35)
+}
+.play svg{width:22px;height:22px;margin-left:2px}
+.transport{display:flex;align-items:center;gap:8px}
+.scrub{flex:1;height:6px;border-radius:99px;background:var(--elev);position:relative;overflow:hidden}
+.scrub>i{position:absolute;left:0;top:0;bottom:0;width:38%;background:var(--primary)}
+.time{font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums;min-width:78px}
+
+.time-split{display:flex;align-items:center;gap:10px;margin:6px 2px 4px;color:var(--muted);font-size:11px}
+.time-split::before,.time-split::after{content:"";flex:1;height:1px;background:linear-gradient(90deg,transparent,var(--border),transparent)}
+.time-split span{white-space:nowrap;padding:2px 8px;border-radius:999px;border:1px solid var(--border);background:var(--surface);font-variant-numeric:tabular-nums}
+.turn-block{display:flex;flex-direction:column;gap:8px;padding-bottom:4px}
+.prompt-mini{font-size:12px;color:var(--ink2);background:var(--canvas);border:1px solid var(--border);border-radius:8px;padding:8px 10px;line-height:1.45}
+.prompt-mini .m{font-size:10px;color:var(--muted);margin-bottom:4px}
+.hint{font-size:11px;color:var(--muted);line-height:1.5}
+a.back{position:fixed;left:18px;bottom:14px;z-index:20;font-size:12px;color:var(--ink2);text-decoration:none;background:var(--surface);border:1px solid var(--border);padding:6px 10px;border-radius:8px}
+.corner{position:fixed;right:18px;bottom:14px;z-index:20;font-size:10px;font-family:var(--mono);color:var(--muted);background:var(--surface);border:1px dashed var(--border);padding:4px 8px;border-radius:6px}
+
+/* thin scrollbars */
+* { scrollbar-width: thin; scrollbar-color: color-mix(in oklch, var(--ink-muted, #71717a) 55%, transparent) transparent; }
+*::-webkit-scrollbar { width: 6px; height: 6px; }
+*::-webkit-scrollbar-button { display: none; width: 0; height: 0; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb {
+  background: color-mix(in oklch, var(--ink-muted, #71717a) 45%, transparent);
+  border-radius: 999px;
+  border: 1px solid transparent;
+  background-clip: padding-box;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in oklch, var(--ink-muted, #71717a) 70%, transparent);
+  background-clip: padding-box;
+}
+*::-webkit-scrollbar-corner { background: transparent; }
+</style>
+</head>
+<body>
+<div class="window" data-od-id="fluent-light-video">
+  <div class="titlebar">
+    <div class="titlebar-left"><div class="app-mark"></div><span>AI Studio · 生视频</span><span class="badge">F-TitleBar · F-NavView · NAV-ROOT</span></div>
+    <div><span class="win-dot"></span><span class="win-dot"></span><span class="win-dot"></span></div>
+  </div>
+  <div class="shell">
+    <nav class="nav" aria-label="主导航">
+      <a class="nav-btn" href="fluent-light-chat.html" title="对话"><svg viewBox="0 0 24 24"><path d="M4 6h16v10H8l-4 3V6z"/></svg></a>
+      <a class="nav-btn" href="fluent-light-image.html" title="生图"><svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="14" rx="2"/><circle cx="9" cy="10" r="1.5"/><path d="M4 16l5-4 4 3 3-2 4 3"/></svg></a>
+      <a class="nav-btn active" href="fluent-light-video.html" title="生视频" aria-current="page"><svg viewBox="0 0 24 24"><rect x="3" y="6" width="13" height="12" rx="2"/><path d="M16 10l5-3v10l-5-3z"/></svg></a>
+      <div class="nav-spacer"></div>
+      <a class="nav-btn" href="fluent-light-settings-providers.html" title="设置"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 3v2M12 19v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M3 12h2M19 12h2"/></svg></a>
+    </nav>
+
+    <aside class="params">
+      <div class="params-scroll">
+        <h2>参数 <span class="badge">F-VideoParams · VID-PARAMS</span></h2>
+        <div class="field"><label>模型</label><select class="select"><option>sora-compat</option><option>grok-video</option></select></div>
+        <div class="field"><label>时长</label>
+          <div class="seg"><button type="button">5s</button><button type="button" class="active">10s</button><button type="button">20s</button></div>
+        </div>
+        <div class="field"><label>比例</label>
+          <div class="chips"><button class="chip active" type="button">16:9</button><button class="chip" type="button">9:16</button><button class="chip" type="button">1:1</button></div>
+        </div>
+        <div class="field"><label>提示词 <span class="badge">F-PromptBox</span></label>
+          <textarea class="textarea">暖奶油纸面工作区，镜头平移展示工具侧栏，克制陶土强调，无商标</textarea>
+        </div>
+        <div class="field"><label>参考图（可选） <span class="badge">VID-PROMPT-REF</span></label>
+          <div class="ref-box"><strong>拖放首帧 / 参考图</strong>PNG / JPEG · 可清除</div>
+        </div>
+      </div>
+      <div class="params-foot">
+        <button class="assist" type="button">提示词辅助 · F-PromptAssist</button>
+        <button class="primary-btn" type="button">创建任务 · F-VideoPrimary</button>
+      </div>
+    </aside>
+
+    <section class="main">
+      <div class="commandbar">
+        <h1>生视频工作区</h1>
+        <div class="combo"><span class="dot"></span>OpenAI 兼容 · 自建</div>
+        <span class="badge">VID-GENERATE</span>
+        <div class="cb-spacer"></div>
+        <button class="ghost-btn" type="button">恢复未完成 · VID-RESUME</button>
+      </div>
+      <div class="content">
+        <div class="panel" data-od-id="f-video-queue">
+          <div class="panel-h">
+            <h2>任务队列 <span class="badge">F-VideoQueue · VID-QUEUE</span></h2>
+            <span class="hint">按回合时间分隔 · 每段含提示词 + 任务</span>
+          </div>
+          <div class="queue">
+            <div class="time-split"><span>今天 14:40</span></div>
+            <div class="turn-block" data-od-id="vid-turn-1">
+              <div class="prompt-mini"><div class="m">你 · 回合 1 · 创建任务</div>近黑 IDE 桌面，冷蓝焦点，镜头缓慢推进穿过代码窗格，无商标</div>
+              <div class="job running">
+                <div class="job-top">
+                  <div>
+                    <div class="job-title">镜头推进 · 代码窗格</div>
+                    <div class="job-meta">提交于 刚刚 · 轮询中</div>
+                  </div>
+                  <span class="pill run">running 62%</span>
+                </div>
+                <div class="bar"><i style="width:62%"></i></div>
+                <div class="job-actions">
+                  <button class="tool" type="button">取消</button>
+                  <button class="tool" type="button">详情</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="time-split"><span>今天 12:15</span></div>
+            <div class="turn-block" data-od-id="vid-turn-2">
+              <div class="prompt-mini"><div class="m">你 · 回合 2</div>纸面工作区平移，展示侧栏与内容区节奏</div>
+              <div class="job">
+                <div class="job-top">
+                  <div>
+                    <div class="job-title">纸面工作区平移</div>
+                    <div class="job-meta">完成 · 可播放 / 下载</div>
+                  </div>
+                  <span class="pill ok">succeeded</span>
+                </div>
+                <div class="job-actions">
+                  <button class="tool" type="button">在右侧播放</button>
+                  <button class="tool" type="button">下载</button>
+                  <button class="tool" type="button">重试参数</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="time-split"><span>昨天 19:02</span></div>
+            <div class="turn-block" data-od-id="vid-turn-3">
+              <div class="prompt-mini"><div class="m">你 · 回合 3</div>失败示例提示词 · 用于演示错误态</div>
+              <div class="job">
+                <div class="job-top">
+                  <div>
+                    <div class="job-title">失败示例 · 上游超时</div>
+                    <div class="job-meta">可行动：检查 Base URL / 重试</div>
+                  </div>
+                  <span class="pill fail">failed</span>
+                </div>
+                <div class="job-actions">
+                  <button class="tool" type="button">重试</button>
+                  <button class="tool" type="button">放弃</button>
+                  <button class="tool" type="button">复制错误</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel" data-od-id="f-video-player">
+          <div class="panel-h">
+            <h2>播放器 <span class="badge">F-VideoPlayer · VID-PLAYER</span></h2>
+            <span class="hint">16:9 舞台 · 非图片网格</span>
+          </div>
+          <div class="player-wrap">
+            <div class="stage">
+              <div class="poster"></div>
+              <button class="play" type="button" aria-label="播放"><svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M8 5v14l11-7z"/></svg></button>
+            </div>
+            <div class="transport">
+              <button class="tool" type="button">❚❚</button>
+              <div class="scrub"><i></i></div>
+              <span class="time">00:03 / 00:10</span>
+            </div>
+            <div class="job-actions">
+              <button class="tool" type="button">下载 MP4</button>
+              <button class="tool" type="button">另存为…</button>
+              <button class="tool" type="button">用此提示重跑</button>
+            </div>
+            <p class="hint">杀进程后可经 VID-RESUME 恢复未完成任务；进度态与生图「缩略图时间线」信息架构不同。</p>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+</div>
+<a class="back" href="index.html">← 总览</a>
+<a class="back" style="left:110px" href="fluent-light-image.html">对照生图</a>
+<div class="corner">Fluent Light · VID-QUEUE / VID-PLAYER</div>
+<script>
+document.querySelectorAll('.seg button,.chip').forEach((btn)=>{
+  btn.addEventListener('click',()=>{
+    btn.parentElement.querySelectorAll('button').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+  });
+});
+</script>
+</body></html>
