@@ -34,7 +34,7 @@
 - **双端能力**：触及对话 / 生图 / 生视频 / 设置 / 更新等共享能力时，评估桌面与移动是否都要改；仅一端需要时说明原因。
 - **下沉判断**：两端都会用的逻辑进 `core`；仅一端的 UI/平台代码留在对应 `apps/*` 或 `design_*`。
 - **风格**：跟随邻近文件既有写法；不擅自引入未在 workspace 使用的依赖；不主动写大段文档（除非用户要求）。
-- **测试**：改 `packages/core` 尽量补/跑 `dart test packages/core`；改 UI 行为时在对应 app 跑 `flutter test`（或说明无法跑的原因）。
+- **测试**：改 `packages/core` / `design_*` 尽量补/跑 `flutter test`（Flutter 包不能用 `dart test`）；改 UI 行为时在对应 app 跑 `flutter test`（或说明无法跑的原因）。
 - **安全**：不把密钥写入日志、备份默认或仓库文件；出站 URL 走 `url_safety`；更新验签失败必须阻断（见 `SECURITY.md`）。
 - **文档同步**：用户可见能力或分期状态变化时，按需更新 `CHANGELOG.md` / `DESIGN.md`；`docs/architecture.md` 可能滞后，勿把它当唯一真相。
 
@@ -113,7 +113,9 @@ flutter pub get
 cd apps/desktop_fluent && flutter run -d windows
 cd apps/desktop_fluent && flutter run -d macos
 cd apps/mobile_material && flutter run
-dart test packages/core
+cd packages/core && flutter test
+cd packages/design_fluent && flutter test
+cd packages/design_material && flutter test
 cd apps/desktop_fluent && flutter test
 cd apps/mobile_material && flutter test
 ```

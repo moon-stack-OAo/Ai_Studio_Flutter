@@ -1,18 +1,9 @@
-# 手动 / 主分支推送：构建 Windows 安装包与 Android APK（上传 artifact，不发 Release）
+# 手动预览构建：Windows 安装包 + Android APK（上传 artifact，不发 Release）
+# 正式分发走 release.yml（推送 v* tag）；日常校验走 ci.yml。
 name: build
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - main
-    paths:
-      - 'apps/**'
-      - 'packages/**'
-      - 'packaging/**'
-      - 'pubspec.yaml'
-      - 'pubspec.lock'
-      - '.github/workflows/build.yml'
 
 concurrency:
   group: build-${{ github.workflow }}-${{ github.ref }}

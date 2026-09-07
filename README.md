@@ -79,8 +79,10 @@ cd apps/desktop_fluent && flutter run -d macos
 # 移动
 cd apps/mobile_material && flutter run
 
-# 测试
-dart test packages/core
+# 测试（Flutter 包请用 flutter test）
+cd packages/core && flutter test
+cd packages/design_fluent && flutter test
+cd packages/design_material && flutter test
 cd apps/desktop_fluent && flutter test
 cd apps/mobile_material && flutter test
 ```
@@ -100,8 +102,8 @@ Windows 使用 `flutter_secure_storage` 时需 VS Build Tools 的 **C++ ATL**（
 | Workflow                        | 触发                 | 作用                                                                  |
 |---------------------------------|--------------------|---------------------------------------------------------------------|
 | `.github/workflows/ci.yml`      | PR / push 主分支      | `dart analyze` + 各包 / 应用测试                                          |
-| `.github/workflows/build.yml`   | 手动 / `main` 相关路径变更 | Windows Inno 安装包 + Android APK（artifact）                            |
-| `.github/workflows/release.yml` | 推送 `v*` tag        | draft Release → 双端产物 + `latest.json` / `android-latest.json` → 正式发布 |
+| `.github/workflows/build.yml`   | 手动 `workflow_dispatch` | Windows Inno 安装包 + Android APK（artifact，预览用） |
+| `.github/workflows/release.yml` | 推送 `v*` tag            | 独立构建 → draft Release → 双端产物 + 清单 → 正式发布 |
 
 发版前配置 Secrets：`TAURI_SIGNING_PRIVATE_KEY`（必填）、`TAURI_SIGNING_PRIVATE_KEY_PASSWORD`；可选 `ANDROID_KEY_*`。清单与签名脚本在 `.github/scripts/`。
 

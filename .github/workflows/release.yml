@@ -211,10 +211,13 @@ jobs:
           if 'signingConfigs.create("release")' in text:
               print('signing already patched')
               raise SystemExit(0)
+          # AGP Kotlin DSL 中 `java` 是扩展名，不能写 java.util.Properties
+          if 'import java.util.Properties' not in text:
+              text = 'import java.util.Properties\n\n' + text
           needle = 'android {\n'
           inject = '''android {
               val keystorePropertiesFile = rootProject.file("key.properties")
-              val keystoreProperties = java.util.Properties()
+              val keystoreProperties = Properties()
               if (keystorePropertiesFile.exists()) {
                   keystoreProperties.load(keystorePropertiesFile.inputStream())
               }

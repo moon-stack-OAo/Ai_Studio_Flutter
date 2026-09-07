@@ -43,13 +43,14 @@ jobs:
           dart analyze apps/desktop_fluent
           dart analyze apps/mobile_material
 
+      # packages/* 为 Flutter 包（依赖 flutter_test），须用 flutter test，不能用 dart test
       - name: Test core
-        run: dart test packages/core
+        run: cd packages/core && flutter test
 
       - name: Test design packages
         run: |
-          dart test packages/design_fluent
-          dart test packages/design_material
+          cd packages/design_fluent && flutter test
+          cd ../../packages/design_material && flutter test
 
       - name: Test apps (widget)
         run: |
