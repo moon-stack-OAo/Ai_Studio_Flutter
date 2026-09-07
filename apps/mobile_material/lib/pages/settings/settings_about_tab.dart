@@ -195,7 +195,7 @@ class _SettingsAboutTabState extends State<SettingsAboutTab> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text(
-                  '将从本仓 Releases 下载 APK，校验 sha256 后调起系统安装器。'
+                  '将下载 APK 并校验完整性后调起系统安装器。'
                   '请确认已允许「安装未知应用」。',
                 ),
                 if (notes.isNotEmpty) ...[
@@ -646,13 +646,13 @@ class _SettingsAboutTabState extends State<SettingsAboutTab> {
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  '版本 $_versionLabel · Material · Android / iOS',
+                  '版本 $_versionLabel · Android / iOS',
                   style: TextStyle(fontSize: 13, color: tokens.inkSecondary),
                 ),
                 const SizedBox(height: 6),
                 Text(
                   _isAndroid
-                      ? '更新通道：本仓 Releases · android-latest.json（sha256 校验）'
+                      ? '更新通道：GitHub Releases（完整性校验）'
                       : _isIos
                           ? '更新通道：非 App Store · 请通过内测渠道获取新版本'
                           : '分发：不上架 · 直链 / 侧载清单',

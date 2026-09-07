@@ -65,6 +65,8 @@
 
 - 默认更新清单 URL 指向本仓 `moon-stack-OAo/Ai_Studio_Flutter` Releases
 - 安装后显示名统一为 **AI Studio**（Windows 资源信息、macOS `PRODUCT_NAME`、Android `label`、iOS `CFBundleDisplayName`）；exe / `applicationId` / Dart 包名未改
+- Windows Inno 安装向导支持 **English / 简体中文**；CI / release 钉 Inno Setup **6.5.0**
+- 关于页文案产品化（弱化「本仓 / latest.json / minisign / sha256」等术语；桌面注明中英安装向导）
 
 ### Security
 

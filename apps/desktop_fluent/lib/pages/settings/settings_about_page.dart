@@ -207,7 +207,7 @@ class _SettingsAboutPageState extends State<SettingsAboutPage> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Text(
-                '将从本仓 Releases 下载 Windows 安装包并拉起安装器。',
+                '将下载 Windows 安装包并校验签名后启动安装器。',
               ),
               if (check.notes.trim().isNotEmpty) ...[
                 const SizedBox(height: 12),
@@ -223,7 +223,7 @@ class _SettingsAboutPageState extends State<SettingsAboutPage> {
               ],
               const SizedBox(height: 10),
               Text(
-                '下载后将校验 minisign 签名；失败则阻断安装。安装器启动后应用将退出。',
+                '将校验安装包签名；失败则阻断安装。安装器启动后应用将退出。',
                 style: TextStyle(
                   fontSize: 11,
                   color: FluentTheme.of(dialogCtx)
@@ -635,7 +635,7 @@ class _SettingsAboutPageState extends State<SettingsAboutPage> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  '版本 $_versionLabel · Fluent 桌面',
+                  '版本 $_versionLabel · Windows / macOS',
                   style: TextStyle(
                     fontSize: 13,
                     color: tokens.inkSecondary,
@@ -646,7 +646,7 @@ class _SettingsAboutPageState extends State<SettingsAboutPage> {
                 Text(
                   updater == null || !updater.isConfigured
                       ? '更新通道：未配置更新源'
-                      : '更新通道：本仓 Releases · latest.json（minisign 校验）',
+                      : '更新通道：GitHub Releases（签名校验）',
                   style: TextStyle(
                     fontSize: 12,
                     color: tokens.inkMuted,
@@ -655,7 +655,7 @@ class _SettingsAboutPageState extends State<SettingsAboutPage> {
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  '不上架应用商店；安装包为 Inno Setup（AI.Studio_*_x64-setup.exe）。',
+                  '不上架应用商店；Windows 安装包支持中英向导（AI.Studio_*_x64-setup.exe）。',
                   style: TextStyle(
                     fontSize: 11,
                     color: tokens.inkMuted,
@@ -707,7 +707,7 @@ class _SettingsAboutPageState extends State<SettingsAboutPage> {
                 ],
                 const SizedBox(height: 8),
                 Text(
-                  '开源许可 · 即将推出',
+                  '开源许可暂未开放',
                   style: TextStyle(
                     fontSize: 11,
                     color: tokens.inkMuted,
