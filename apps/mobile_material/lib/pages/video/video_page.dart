@@ -264,7 +264,7 @@ class _VideoPageState extends State<VideoPage> {
         if (res.bodyBytes.isEmpty) {
           return GallerySaveResult.failure('视频数据为空');
         }
-        return _gallerySaver.saveVideoBytes(res.bodyBytes);
+        return await _gallerySaver.saveVideoBytes(res.bodyBytes);
       } catch (e) {
         return GallerySaveResult.failure('下载视频失败：$e');
       }

@@ -31,7 +31,7 @@ class GallerySaver {
   Future<bool> ensureAccess() async {
     try {
       if (await Gal.hasAccess()) return true;
-      return Gal.requestAccess();
+      return await Gal.requestAccess();
     } on GalException catch (_) {
       return false;
     } catch (_) {
@@ -100,7 +100,7 @@ class GallerySaver {
         '$safe-${DateTime.now().millisecondsSinceEpoch}.mp4',
       );
       await tmp.writeAsBytes(bytes, flush: true);
-      return saveVideoFile(tmp.path);
+      return await saveVideoFile(tmp.path);
     } catch (e) {
       return GallerySaveResult.failure(_friendly(e));
     } finally {

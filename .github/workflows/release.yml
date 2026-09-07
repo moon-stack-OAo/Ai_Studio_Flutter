@@ -196,13 +196,14 @@ jobs:
           fi
           echo "$ANDROID_KEY_BASE64" | base64 -d > "${RUNNER_TEMP}/keystore.jks"
           test -s "${RUNNER_TEMP}/keystore.jks"
-          # 勿缩进 heredoc 正文，否则 Properties 键名会带空格导致签名失败
-          cat > apps/mobile_material/android/key.properties <<EOF
-storePassword=${ANDROID_KEY_PASSWORD}
-keyPassword=${ANDROID_KEY_PASSWORD}
-keyAlias=${ANDROID_KEY_ALIAS}
-storeFile=${RUNNER_TEMP}/keystore.jks
-EOF
+          # 用 echo 写 properties，避免 YAML run 块内顶格 heredoc 破坏工作流解析，
+          # 也避免缩进 heredoc 导致 Properties 键名带空格。
+          {
+            echo "storePassword=${ANDROID_KEY_PASSWORD}"
+            echo "keyPassword=${ANDROID_KEY_PASSWORD}"
+            echo "keyAlias=${ANDROID_KEY_ALIAS}"
+            echo "storeFile=${RUNNER_TEMP}/keystore.jks"
+          } > apps/mobile_material/android/key.properties
           python3 - <<'PY'
           from pathlib import Path
           p = Path('apps/mobile_material/android/app/build.gradle.kts')
