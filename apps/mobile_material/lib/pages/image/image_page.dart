@@ -8,6 +8,9 @@ import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 
 import '../../platform/gallery_saver.dart';
+import '../../platform/share_helper.dart';
+import '../../shell/back_host.dart';
+import '../../widgets/empty_illustrations.dart';
 import '../../widgets/material_empty_states.dart';
 import '../../widgets/media_model_picker_sheet.dart';
 import '../../widgets/prompt_assist_sheet.dart';
@@ -123,7 +126,7 @@ class _ImagePageState extends State<ImagePage> {
 
   Future<void> _openSessions() async {
     await Navigator.of(context).push<void>(
-      MaterialPageRoute(
+      materialFadeSlideRoute(
         builder: (context) {
           return ListenableBuilder(
             listenable: Listenable.merge([
@@ -147,6 +150,7 @@ class _ImagePageState extends State<ImagePage> {
   }
 
   final GallerySaver _gallerySaver = const GallerySaver();
+  final ShareHelper _shareHelper = const ShareHelper();
 
   Future<void> _openLightbox(ImageItem item, int index, ImageRef ref) async {
     await ImageLightbox.show(
@@ -154,6 +158,7 @@ class _ImagePageState extends State<ImagePage> {
       ref: ref,
       loadBytes: () => widget.sessionRepository.readImageBytes(ref),
       onSaveAlbum: () => _onSaveAlbum(item, index, ref),
+      onShare: () => _onShare(item, index, ref),
       onUseAsReference: () => _onUseAsReference(item, index, ref),
     );
   }
@@ -198,6 +203,41 @@ class _ImagePageState extends State<ImagePage> {
         SnackBar(content: Text(result.errorMessage ?? '保存到相册失败')),
       );
     }
+  }
+
+  Future<void> _onShare(ImageItem item, int index, ImageRef ref) async {
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.hideCurrentSnackBar();
+
+    final path = await _resolveLocalImagePath(ref);
+    if (!mounted) return;
+    if (path == null || path.isEmpty) {
+      messenger.showSnackBar(
+        const SnackBar(content: Text('没有可分享的本地文件')),
+      );
+      return;
+    }
+
+    final result = await _shareHelper.shareLocalFile(
+      path,
+      mimeType: 'image/png',
+    );
+    if (!mounted) return;
+    if (!result.ok) {
+      messenger.showSnackBar(
+        SnackBar(content: Text(result.errorMessage ?? '分享失败')),
+      );
+    }
+  }
+
+  Future<String?> _resolveLocalImagePath(ImageRef ref) async {
+    if (ref.type == ImageRefType.file) {
+      final path = ref.src.trim();
+      if (path.isEmpty) return null;
+      final file = File(path);
+      if (await file.exists()) return path;
+    }
+    return null;
   }
 
   Future<GallerySaveResult> _saveImageRefToGallery(ImageRef ref) async {
@@ -271,10 +311,11 @@ class _ImagePageState extends State<ImagePage> {
         if (!ready) {
           return MaterialFeatureEmpty(
             appBarTitle: '生图',
-            title: '开始生图',
-            message: '尚未配置生图模型。前往设置添加 API Key 并选择生图模型，即可开始文生图。',
-            actionLabel: '配置提供商',
+            title: '尚未配置生图模型',
+            message: '前往设置添加 API Key 并选择生图模型后，即可开始文生图。',
+            actionLabel: '去设置',
             onAction: widget.onOpenProviders,
+            illustration: const MaterialEmptyIllustration.noProvider(),
           );
         }
 
@@ -318,32 +359,37 @@ class _ImagePageState extends State<ImagePage> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               if (generating)
-                Material(
-                  color: tokens.surface,
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-                    child: Row(
-                      children: [
-                        SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: tokens.primary,
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Text(
-                            '正在生成 ${_controller.n} 张 · 可停止',
-                            style: TextStyle(
-                              fontSize: 13,
-                              color: tokens.inkSecondary,
-                              fontFamily: tokens.fontFamily,
+                Semantics(
+                  liveRegion: true,
+                  container: true,
+                  label: '正在生成 ${_controller.n} 张 · 可停止',
+                  child: Material(
+                    color: tokens.surface,
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                      child: Row(
+                        children: [
+                          SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: tokens.primary,
                             ),
                           ),
-                        ),
-                      ],
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              '正在生成 ${_controller.n} 张 · 可停止',
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: tokens.inkSecondary,
+                                fontFamily: tokens.fontFamily,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
@@ -403,6 +449,7 @@ class _ImagePageState extends State<ImagePage> {
                         loadBytes: widget.sessionRepository.readImageBytes,
                         onPreview: _openLightbox,
                         onSaveAlbum: _onSaveAlbum,
+                        onShare: _onShare,
                         onUseAsReference: _onUseAsReference,
                       ),
                     ),
@@ -423,6 +470,7 @@ class _TimelineSliver extends StatelessWidget {
     required this.loadBytes,
     required this.onPreview,
     required this.onSaveAlbum,
+    this.onShare,
     this.onUseAsReference,
   });
 
@@ -430,26 +478,18 @@ class _TimelineSliver extends StatelessWidget {
   final Future<Uint8List?> Function(ImageRef ref) loadBytes;
   final void Function(ImageItem item, int index, ImageRef ref) onPreview;
   final void Function(ImageItem item, int index, ImageRef ref) onSaveAlbum;
+  final void Function(ImageItem item, int index, ImageRef ref)? onShare;
   final void Function(ImageItem item, int index, ImageRef ref)?
       onUseAsReference;
 
   @override
   Widget build(BuildContext context) {
-    final tokens = materialTokensOf(context);
     if (items.isEmpty) {
-      return SliverToBoxAdapter(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 32),
-          child: Center(
-            child: Text(
-              '输入提示词开始生图',
-              style: TextStyle(
-                fontSize: 13,
-                color: tokens.inkMuted,
-                fontFamily: tokens.fontFamily,
-              ),
-            ),
-          ),
+      return const SliverToBoxAdapter(
+        child: MaterialContentEmpty(
+          hint: '还没有生成结果',
+          subtitle: '在上方填写提示词后生成。',
+          illustration: MaterialEmptyIllustration.noImages(),
         ),
       );
     }
@@ -468,6 +508,7 @@ class _TimelineSliver extends StatelessWidget {
               loadBytes: loadBytes,
               onPreview: onPreview,
               onSaveAlbum: onSaveAlbum,
+              onShare: onShare,
               onUseAsReference: onUseAsReference,
             ),
           );
@@ -512,70 +553,94 @@ class _ImageSessionListPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final tokens = materialTokensOf(context);
-    return Scaffold(
-      backgroundColor: tokens.canvas,
-      appBar: AppBar(
-        title: const Text('生图会话'),
-        actions: [
-          IconButton(
-            tooltip: '新建',
-            icon: const Icon(Icons.add),
-            onPressed: () {
-              onCreate();
-              Navigator.of(context).maybePop();
-            },
-          ),
-        ],
-      ),
-      body: sessions.isEmpty
-          ? MaterialSessionListEmpty(
-              onCreate: () {
+    return BackHost(
+      child: Scaffold(
+        backgroundColor: tokens.canvas,
+        appBar: AppBar(
+          title: const Text('生图会话'),
+          leading: BackHost.leadingButton(context),
+          actions: [
+            IconButton(
+              tooltip: '新建',
+              icon: const Icon(Icons.add),
+              onPressed: () {
                 onCreate();
-                Navigator.of(context).maybePop();
-              },
-            )
-          : ListView.separated(
-              itemCount: sessions.length,
-              separatorBuilder: (_, _) => Divider(
-                height: 1,
-                color: tokens.border,
-              ),
-              itemBuilder: (context, index) {
-                final s = sessions[index];
-                final active = s.id == activeId;
-                final busy = s.id == busySessionId;
-                return ListTile(
-                  selected: active,
-                  leading: busy
-                      ? SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: tokens.primary,
-                          ),
-                        )
-                      : Icon(
-                          Icons.image_outlined,
-                          color: active ? tokens.primary : tokens.inkMuted,
-                        ),
-                  title: Text(
-                    s.title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  subtitle: Text('${s.items.length} 条结果'),
-                  trailing: IconButton(
-                    icon: const Icon(Icons.delete_outline),
-                    onPressed: () => _confirmDelete(context, s),
-                  ),
-                  onTap: () {
-                    onSelect(s.id);
-                    Navigator.of(context).maybePop();
-                  },
-                );
+                BackHost.pop(context);
               },
             ),
+          ],
+        ),
+        body: sessions.isEmpty
+            ? MaterialSessionListEmpty(
+                message: '还没有生图会话，新建一条开始。',
+                onCreate: () {
+                  onCreate();
+                  BackHost.pop(context);
+                },
+                illustration: const MaterialEmptyIllustration.noSessions(),
+              )
+            : ListView.separated(
+                itemCount: sessions.length,
+                separatorBuilder: (_, _) => Divider(
+                  height: 1,
+                  color: tokens.border,
+                ),
+                itemBuilder: (context, index) {
+                  final s = sessions[index];
+                  final active = s.id == activeId;
+                  final busy = s.id == busySessionId;
+                  final status = busy ? '生成中' : '本地会话';
+                  final label = active
+                      ? '${s.title}，$status，已选中'
+                      : '${s.title}，$status';
+                  return Row(
+                    children: [
+                      Expanded(
+                        child: Semantics(
+                          button: true,
+                          selected: active,
+                          label: label,
+                          excludeSemantics: true,
+                          child: ListTile(
+                            selected: active,
+                            leading: busy
+                                ? SizedBox(
+                                    width: 20,
+                                    height: 20,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: tokens.primary,
+                                    ),
+                                  )
+                                : Icon(
+                                    Icons.image_outlined,
+                                    color: active
+                                        ? tokens.primary
+                                        : tokens.inkMuted,
+                                  ),
+                            title: Text(
+                              s.title,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            subtitle: Text('${s.items.length} 条结果'),
+                            onTap: () {
+                              onSelect(s.id);
+                              BackHost.pop(context);
+                            },
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        tooltip: '删除会话',
+                        icon: const Icon(Icons.delete_outline),
+                        onPressed: () => _confirmDelete(context, s),
+                      ),
+                    ],
+                  );
+                },
+              ),
+      ),
     );
   }
 }

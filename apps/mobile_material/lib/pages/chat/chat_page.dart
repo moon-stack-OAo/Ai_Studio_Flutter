@@ -2,6 +2,7 @@ import 'package:core/core.dart';
 import 'package:design_material/design_material.dart';
 import 'package:flutter/material.dart';
 
+import '../../widgets/empty_illustrations.dart';
 import '../../widgets/material_empty_states.dart';
 import 'chat_controller.dart';
 import 'session_list_page.dart';
@@ -81,7 +82,7 @@ class _ChatPageState extends State<ChatPage> {
 
   Future<void> _openSessions() async {
     await Navigator.of(context).push<void>(
-      MaterialPageRoute(
+      materialFadeSlideRoute(
         builder: (context) {
           return ListenableBuilder(
             listenable: Listenable.merge([
@@ -136,10 +137,11 @@ class _ChatPageState extends State<ChatPage> {
         if (!ready) {
           return MaterialFeatureEmpty(
             appBarTitle: '对话',
-            title: '开始对话',
-            message: '尚未配置提供商。前往设置添加 API Key，即可开始流式对话。',
-            actionLabel: '添加提供商',
+            title: '尚未配置提供商',
+            message: '前往设置添加 API Key 后，即可开始流式对话。',
+            actionLabel: '去设置',
             onAction: widget.onOpenProviders,
+            illustration: const MaterialEmptyIllustration.noProvider(),
           );
         }
 
@@ -170,57 +172,72 @@ class _ChatPageState extends State<ChatPage> {
                 Padding(
                   padding: const EdgeInsets.only(right: 4),
                   child: Center(
-                    child: InkWell(
-                      borderRadius: BorderRadius.circular(999),
-                      onTap: _openModelPicker,
-                      child: Container(
-                        constraints: const BoxConstraints(maxWidth: 148),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 5,
-                        ),
-                        decoration: BoxDecoration(
-                          color: tokens.surfaceMuted,
-                          borderRadius: BorderRadius.circular(999),
-                          border: Border.all(color: tokens.border),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Flexible(
-                              child: Text(
-                                modelLabel.isEmpty ? '选择模型' : modelLabel,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: tokens.inkSecondary,
-                                  fontFamily: tokens.fontFamily,
+                    child: Semantics(
+                      button: true,
+                      label: modelLabel.isEmpty
+                          ? '选择模型'
+                          : '当前模型 $modelLabel，点按更换',
+                      excludeSemantics: true,
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(999),
+                        onTap: _openModelPicker,
+                        child: Container(
+                          constraints: const BoxConstraints(
+                            maxWidth: 148,
+                            minHeight: 36,
+                          ),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 5,
+                          ),
+                          decoration: BoxDecoration(
+                            color: tokens.surfaceMuted,
+                            borderRadius: BorderRadius.circular(999),
+                            border: Border.all(color: tokens.border),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Flexible(
+                                child: Text(
+                                  modelLabel.isEmpty ? '选择模型' : modelLabel,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: tokens.inkSecondary,
+                                    fontFamily: tokens.fontFamily,
+                                  ),
                                 ),
                               ),
-                            ),
-                            const SizedBox(width: 2),
-                            Icon(
-                              Icons.expand_more,
-                              size: 16,
-                              color: tokens.inkMuted,
-                            ),
-                          ],
+                              const SizedBox(width: 2),
+                              Icon(
+                                Icons.expand_more,
+                                size: 16,
+                                color: tokens.inkMuted,
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                     ),
                   ),
                 ),
               if (session != null)
-                IconButton(
-                  tooltip: hasOverrides ? '会话参数（已覆盖）' : '会话参数',
-                  onPressed: () => _openOverrides(session),
-                  icon: Badge(
-                    isLabelVisible: hasOverrides,
-                    smallSize: 8,
-                    child: Icon(
-                      Icons.tune,
-                      color: hasOverrides ? tokens.primary : null,
+                Semantics(
+                  button: true,
+                  label: hasOverrides ? '会话参数，已覆盖默认值' : '会话参数',
+                  excludeSemantics: true,
+                  child: IconButton(
+                    tooltip: hasOverrides ? '会话参数（已覆盖）' : '会话参数',
+                    onPressed: () => _openOverrides(session),
+                    icon: Badge(
+                      isLabelVisible: hasOverrides,
+                      smallSize: 8,
+                      child: Icon(
+                        Icons.tune,
+                        color: hasOverrides ? tokens.primary : null,
+                      ),
                     ),
                   ),
                 ),
@@ -234,7 +251,7 @@ class _ChatPageState extends State<ChatPage> {
                   messages: messages,
                   recallEnabled: !streamingHere,
                   onRecallUser: (id) => _controller.recallUserMessage(id),
-                  emptyHint: '输入消息开始对话',
+                  emptyHint: '还没有消息',
                   emptySubtitle: '在下方输入第一条消息，或打开会话列表新建。',
                 ),
               ),

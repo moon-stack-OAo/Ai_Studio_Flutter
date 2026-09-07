@@ -3,6 +3,7 @@ import 'package:design_material/design_material.dart';
 import 'package:flutter/material.dart';
 
 import '../../app/theme_controller.dart';
+import '../../update/mobile_update_controller.dart';
 import 'settings_about_tab.dart';
 import 'settings_appearance_tab.dart';
 import 'settings_chat_defaults_tab.dart';
@@ -21,6 +22,7 @@ class SettingsPage extends StatefulWidget {
     required this.dataBackupService,
     required this.generation,
     this.initialTabIndex = 0,
+    this.updateController,
   });
 
   final ThemeController themeController;
@@ -31,6 +33,7 @@ class SettingsPage extends StatefulWidget {
   final DataBackupService dataBackupService;
   final GenerationRuntime generation;
   final int initialTabIndex;
+  final MobileUpdateController? updateController;
 
   @override
   State<SettingsPage> createState() => _SettingsPageState();
@@ -113,6 +116,7 @@ class _SettingsPageState extends State<SettingsPage>
             dataBackupService: widget.dataBackupService,
             themeController: widget.themeController,
             generation: widget.generation,
+            updateController: widget.updateController,
           ),
         ],
       ),

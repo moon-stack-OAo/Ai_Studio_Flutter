@@ -3,6 +3,7 @@ import 'package:design_material/design_material.dart';
 import 'package:flutter/material.dart';
 
 import '../../../widgets/collapsible_prompt.dart';
+import '../../../widgets/empty_illustrations.dart';
 import '../../../widgets/material_empty_states.dart';
 
 /// M-VideoQueue：按回合时间分隔 — 提示词 + 任务卡 + 进度。
@@ -18,7 +19,8 @@ class VideoQueue extends StatelessWidget {
     this.onReload,
     this.isReloading,
     this.onSaveAlbum,
-    this.emptyHint = '输入提示词创建视频任务',
+    this.onShare,
+    this.emptyHint = '还没有视频任务',
     this.emptySubtitle = '在上方填写提示词后创建任务。',
   });
 
@@ -31,6 +33,7 @@ class VideoQueue extends StatelessWidget {
   final void Function(VideoItem item)? onReload;
   final bool Function(VideoItem item)? isReloading;
   final void Function(VideoItem item)? onSaveAlbum;
+  final void Function(VideoItem item)? onShare;
   final String emptyHint;
   final String? emptySubtitle;
 
@@ -40,6 +43,7 @@ class VideoQueue extends StatelessWidget {
       return MaterialContentEmpty(
         hint: emptyHint,
         subtitle: emptySubtitle,
+        illustration: const MaterialEmptyIllustration.noVideos(),
       );
     }
 
@@ -62,6 +66,7 @@ class VideoQueue extends StatelessWidget {
               onReload: onReload,
               isReloading: isReloading,
               onSaveAlbum: onSaveAlbum,
+              onShare: onShare,
             ),
           ),
       ],
@@ -81,6 +86,7 @@ class _TurnCard extends StatelessWidget {
     this.onReload,
     this.isReloading,
     this.onSaveAlbum,
+    this.onShare,
   });
 
   final VideoItem item;
@@ -93,6 +99,7 @@ class _TurnCard extends StatelessWidget {
   final void Function(VideoItem item)? onReload;
   final bool Function(VideoItem item)? isReloading;
   final void Function(VideoItem item)? onSaveAlbum;
+  final void Function(VideoItem item)? onShare;
 
   bool get _canPlay {
     if (onPlay == null) return false;
@@ -370,6 +377,10 @@ class _TurnCard extends StatelessWidget {
           TextButton(
             onPressed: onSaveAlbum == null ? null : () => onSaveAlbum!(item),
             child: const Text('存相册'),
+          ),
+          TextButton(
+            onPressed: onShare == null ? null : () => onShare!(item),
+            child: const Text('分享'),
           ),
         ];
       case VideoItemStatus.error:

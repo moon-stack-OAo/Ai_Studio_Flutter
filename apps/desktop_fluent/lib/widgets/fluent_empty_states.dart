@@ -9,12 +9,14 @@ class FluentFeatureEmpty extends StatelessWidget {
     required this.message,
     required this.actionLabel,
     this.onAction,
+    this.illustration,
   });
 
   final String title;
   final String message;
   final String actionLabel;
   final VoidCallback? onAction;
+  final Widget? illustration;
 
   @override
   Widget build(BuildContext context) {
@@ -26,40 +28,47 @@ class FluentFeatureEmpty extends StatelessWidget {
           constraints: const BoxConstraints(maxWidth: 420),
           child: Padding(
             padding: const EdgeInsets.all(32),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  title,
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w600,
-                    color: tokens.ink,
-                    fontFamily: tokens.fontFamily,
+            child: _FluentEmptyAppear(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (illustration != null) ...[
+                    illustration!,
+                    const SizedBox(height: 16),
+                  ],
+                  Text(
+                    title,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w600,
+                      color: tokens.ink,
+                      fontFamily: tokens.fontFamily,
+                    ),
                   ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  message,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 13,
-                    height: 1.5,
-                    color: tokens.inkMuted,
-                    fontFamily: tokens.fontFamily,
+                  const SizedBox(height: 8),
+                  Text(
+                    message,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 13,
+                      height: 1.5,
+                      color: tokens.inkMuted,
+                      fontFamily: tokens.fontFamily,
+                    ),
                   ),
-                ),
-                const SizedBox(height: 20),
-                Semantics(
-                  button: true,
-                  label: actionLabel,
-                  excludeSemantics: true,
-                  child: FilledButton(
-                    onPressed: onAction,
-                    child: Text(actionLabel),
+                  const SizedBox(height: 20),
+                  Semantics(
+                    button: true,
+                    label: actionLabel,
+                    excludeSemantics: true,
+                    child: FilledButton(
+                      onPressed: onAction,
+                      child: Text(actionLabel),
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),
@@ -73,11 +82,17 @@ class FluentSessionListEmpty extends StatelessWidget {
   const FluentSessionListEmpty({
     super.key,
     required this.onCreate,
-    this.message = '还没有会话，新建一条开始使用。',
+    this.title = '暂无会话',
+    this.message = '还没有会话，新建一条开始。',
+    this.actionLabel = '新建会话',
+    this.illustration,
   });
 
   final VoidCallback onCreate;
+  final String title;
   final String message;
+  final String actionLabel;
+  final Widget? illustration;
 
   @override
   Widget build(BuildContext context) {
@@ -85,40 +100,47 @@ class FluentSessionListEmpty extends StatelessWidget {
     return Center(
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              '暂无会话',
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                color: tokens.ink,
-                fontFamily: tokens.fontFamily,
+        child: _FluentEmptyAppear(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (illustration != null) ...[
+                illustration!,
+                const SizedBox(height: 10),
+              ],
+              Text(
+                title,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: tokens.ink,
+                  fontFamily: tokens.fontFamily,
+                ),
               ),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              message,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 12,
-                height: 1.4,
-                color: tokens.inkMuted,
-                fontFamily: tokens.fontFamily,
+              const SizedBox(height: 6),
+              Text(
+                message,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 12,
+                  height: 1.4,
+                  color: tokens.inkMuted,
+                  fontFamily: tokens.fontFamily,
+                ),
               ),
-            ),
-            const SizedBox(height: 12),
-            Semantics(
-              button: true,
-              label: '新建会话',
-              excludeSemantics: true,
-              child: Button(
-                onPressed: onCreate,
-                child: const Text('新建会话'),
+              const SizedBox(height: 12),
+              Semantics(
+                button: true,
+                label: actionLabel,
+                excludeSemantics: true,
+                child: Button(
+                  onPressed: onCreate,
+                  child: Text(actionLabel),
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -131,10 +153,12 @@ class FluentContentEmpty extends StatelessWidget {
     super.key,
     required this.hint,
     this.subtitle,
+    this.illustration,
   });
 
   final String hint;
   final String? subtitle;
+  final Widget? illustration;
 
   @override
   Widget build(BuildContext context) {
@@ -142,33 +166,39 @@ class FluentContentEmpty extends StatelessWidget {
     return Center(
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              hint,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w500,
-                color: tokens.inkSecondary,
-                fontFamily: tokens.fontFamily,
-              ),
-            ),
-            if (subtitle != null && subtitle!.isNotEmpty) ...[
-              const SizedBox(height: 6),
+        child: _FluentEmptyAppear(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (illustration != null) ...[
+                illustration!,
+                const SizedBox(height: 10),
+              ],
               Text(
-                subtitle!,
+                hint,
                 textAlign: TextAlign.center,
                 style: TextStyle(
-                  fontSize: 12,
-                  height: 1.4,
-                  color: tokens.inkMuted,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                  color: tokens.inkSecondary,
                   fontFamily: tokens.fontFamily,
                 ),
               ),
+              if (subtitle != null && subtitle!.isNotEmpty) ...[
+                const SizedBox(height: 6),
+                Text(
+                  subtitle!,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 12,
+                    height: 1.4,
+                    color: tokens.inkMuted,
+                    fontFamily: tokens.fontFamily,
+                  ),
+                ),
+              ],
             ],
-          ],
+          ),
         ),
       ),
     );
@@ -180,9 +210,11 @@ class FluentProvidersListEmpty extends StatelessWidget {
   const FluentProvidersListEmpty({
     super.key,
     this.onAdd,
+    this.illustration,
   });
 
   final VoidCallback? onAdd;
+  final Widget? illustration;
 
   @override
   Widget build(BuildContext context) {
@@ -190,39 +222,78 @@ class FluentProvidersListEmpty extends StatelessWidget {
     return Center(
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              '暂无提供商',
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                color: tokens.ink,
-                fontFamily: tokens.fontFamily,
+        child: _FluentEmptyAppear(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (illustration != null) ...[
+                illustration!,
+                const SizedBox(height: 10),
+              ],
+              Text(
+                '暂无提供商',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: tokens.ink,
+                  fontFamily: tokens.fontFamily,
+                ),
               ),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              '添加 OpenAI / xAI 或兼容源后即可对话与生成。',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 12,
-                height: 1.4,
-                color: tokens.inkMuted,
-                fontFamily: tokens.fontFamily,
+              const SizedBox(height: 6),
+              Text(
+                '添加 OpenAI / xAI 或兼容源后即可对话与生成。',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 12,
+                  height: 1.4,
+                  color: tokens.inkMuted,
+                  fontFamily: tokens.fontFamily,
+                ),
               ),
-            ),
-            if (onAdd != null) ...[
-              const SizedBox(height: 12),
-              Button(
-                onPressed: onAdd,
-                child: const Text('添加'),
-              ),
+              if (onAdd != null) ...[
+                const SizedBox(height: 12),
+                Button(
+                  onPressed: onAdd,
+                  child: const Text('添加'),
+                ),
+              ],
             ],
-          ],
+          ),
         ),
       ),
+    );
+  }
+}
+
+class _FluentEmptyAppear extends StatefulWidget {
+  const _FluentEmptyAppear({required this.child});
+
+  final Widget child;
+
+  @override
+  State<_FluentEmptyAppear> createState() => _FluentEmptyAppearState();
+}
+
+class _FluentEmptyAppearState extends State<_FluentEmptyAppear> {
+  double _opacity = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      setState(() => _opacity = 1);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedOpacity(
+      opacity: _opacity,
+      duration: FluentMotion.listAppear,
+      curve: FluentMotion.standard,
+      child: widget.child,
     );
   }
 }

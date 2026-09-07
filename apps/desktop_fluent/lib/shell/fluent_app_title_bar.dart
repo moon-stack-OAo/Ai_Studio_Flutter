@@ -152,37 +152,69 @@ class _FluentAppTitleBarState extends State<FluentAppTitleBar>
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        WindowCaptionButton.minimize(
-          brightness: brightness,
-          onPressed: () async {
-            final minimized = await windowManager.isMinimized();
-            if (minimized) {
-              await windowManager.restore();
-            } else {
-              await windowManager.minimize();
-            }
-          },
+        Tooltip(
+          message: '最小化',
+          child: Semantics(
+            button: true,
+            label: '最小化',
+            excludeSemantics: true,
+            child: WindowCaptionButton.minimize(
+              brightness: brightness,
+              onPressed: () async {
+                final minimized = await windowManager.isMinimized();
+                if (minimized) {
+                  await windowManager.restore();
+                } else {
+                  await windowManager.minimize();
+                }
+              },
+            ),
+          ),
         ),
         if (_maximized)
-          WindowCaptionButton.unmaximize(
-            brightness: brightness,
-            onPressed: () => windowManager.unmaximize(),
+          Tooltip(
+            message: '还原',
+            child: Semantics(
+              button: true,
+              label: '还原窗口',
+              excludeSemantics: true,
+              child: WindowCaptionButton.unmaximize(
+                brightness: brightness,
+                onPressed: () => windowManager.unmaximize(),
+              ),
+            ),
           )
         else
-          WindowCaptionButton.maximize(
-            brightness: brightness,
-            onPressed: () => windowManager.maximize(),
+          Tooltip(
+            message: '最大化',
+            child: Semantics(
+              button: true,
+              label: '最大化',
+              excludeSemantics: true,
+              child: WindowCaptionButton.maximize(
+                brightness: brightness,
+                onPressed: () => windowManager.maximize(),
+              ),
+            ),
           ),
-        WindowCaptionButton.close(
-          brightness: brightness,
-          onPressed: () {
-            final close = widget.onClose;
-            if (close != null) {
-              close();
-            } else {
-              windowManager.close();
-            }
-          },
+        Tooltip(
+          message: '关闭',
+          child: Semantics(
+            button: true,
+            label: '关闭窗口',
+            excludeSemantics: true,
+            child: WindowCaptionButton.close(
+              brightness: brightness,
+              onPressed: () {
+                final close = widget.onClose;
+                if (close != null) {
+                  close();
+                } else {
+                  windowManager.close();
+                }
+              },
+            ),
+          ),
         ),
       ],
     );

@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:core/core.dart';
+import 'package:design_fluent/design_fluent.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter/services.dart';
 
@@ -53,12 +54,13 @@ class ImageLightbox extends StatefulWidget {
                 }
               });
 
+    final tokens = fluentTokensOf(context);
     await showGeneralDialog<void>(
       context: context,
       barrierDismissible: true,
       barrierLabel: '关闭预览',
-      barrierColor: const Color(0xB8000000),
-      transitionDuration: const Duration(milliseconds: 180),
+      barrierColor: tokens.scrim,
+      transitionDuration: FluentMotion.lightbox,
       pageBuilder: (ctx, animation, secondary) {
         return ImageLightbox(
           refs: list,
@@ -71,7 +73,10 @@ class ImageLightbox extends StatefulWidget {
       },
       transitionBuilder: (ctx, animation, secondary, child) {
         return FadeTransition(
-          opacity: CurvedAnimation(parent: animation, curve: Curves.easeOut),
+          opacity: CurvedAnimation(
+            parent: animation,
+            curve: FluentMotion.standard,
+          ),
           child: child,
         );
       },
@@ -209,12 +214,16 @@ class _ImageLightboxState extends State<ImageLightbox> {
                   child: const Text('另存为'),
                 ),
               ),
-            Semantics(
-              button: true,
-              label: '关闭预览',
-              child: IconButton(
-                icon: const Icon(FluentIcons.clear),
-                onPressed: widget.onClose,
+            Tooltip(
+              message: '关闭预览',
+              child: Semantics(
+                button: true,
+                label: '关闭预览',
+                excludeSemantics: true,
+                child: IconButton(
+                  icon: const Icon(FluentIcons.clear),
+                  onPressed: widget.onClose,
+                ),
               ),
             ),
           ],

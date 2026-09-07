@@ -23,9 +23,17 @@ Future<void> showFluentPromptAssist(
         title: Row(
           children: [
             const Expanded(child: Text('提示词辅助')),
-            IconButton(
-              icon: const Icon(FluentIcons.chrome_close, size: 12),
-              onPressed: () => Navigator.of(ctx).pop(),
+            Tooltip(
+              message: '关闭',
+              child: Semantics(
+                button: true,
+                label: '关闭',
+                excludeSemantics: true,
+                child: IconButton(
+                  icon: const Icon(FluentIcons.chrome_close, size: 12),
+                  onPressed: () => Navigator.of(ctx).pop(),
+                ),
+              ),
             ),
           ],
         ),

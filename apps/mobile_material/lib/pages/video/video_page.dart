@@ -6,6 +6,9 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
 import '../../platform/gallery_saver.dart';
+import '../../platform/share_helper.dart';
+import '../../shell/back_host.dart';
+import '../../widgets/empty_illustrations.dart';
 import '../../widgets/material_empty_states.dart';
 import '../../widgets/media_model_picker_sheet.dart';
 import '../../widgets/prompt_assist_sheet.dart';
@@ -141,7 +144,7 @@ class _VideoPageState extends State<VideoPage> {
 
   Future<void> _openSessions() async {
     await Navigator.of(context).push<void>(
-      MaterialPageRoute(
+      materialFadeSlideRoute(
         builder: (context) {
           return ListenableBuilder(
             listenable: Listenable.merge([
@@ -165,6 +168,7 @@ class _VideoPageState extends State<VideoPage> {
   }
 
   final GallerySaver _gallerySaver = const GallerySaver();
+  final ShareHelper _shareHelper = const ShareHelper();
 
   Future<void> _pickVideoModel() async {
     final ready =
@@ -193,6 +197,46 @@ class _VideoPageState extends State<VideoPage> {
         SnackBar(content: Text(result.errorMessage ?? '保存到相册失败')),
       );
     }
+  }
+
+  Future<void> _onShare(VideoItem item) async {
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.hideCurrentSnackBar();
+
+    final path = await _resolveLocalVideoPath(item);
+    if (!mounted) return;
+    if (path == null || path.isEmpty) {
+      messenger.showSnackBar(
+        const SnackBar(content: Text('没有可分享的本地文件')),
+      );
+      return;
+    }
+
+    final result = await _shareHelper.shareLocalFile(
+      path,
+      mimeType: 'video/mp4',
+    );
+    if (!mounted) return;
+    if (!result.ok) {
+      messenger.showSnackBar(
+        SnackBar(content: Text(result.errorMessage ?? '分享失败')),
+      );
+    }
+  }
+
+  Future<String?> _resolveLocalVideoPath(VideoItem item) async {
+    final local = item.localPath?.trim();
+    if (local == null || local.isEmpty) return null;
+    if (local.startsWith('http') ||
+        local.startsWith('memory://') ||
+        local.startsWith('data:')) {
+      return null;
+    }
+    final path =
+        local.startsWith('file:') ? Uri.parse(local).toFilePath() : local;
+    final f = File(path);
+    if (await f.exists()) return path;
+    return null;
   }
 
   Future<GallerySaveResult> _saveVideoToGallery(VideoItem item) async {
@@ -256,10 +300,11 @@ class _VideoPageState extends State<VideoPage> {
         if (!ready) {
           return MaterialFeatureEmpty(
             appBarTitle: '生视频',
-            title: '开始生视频',
-            message: '尚未配置视频模型。前往设置添加 API Key 并选择视频模型，即可创建文生视频任务。',
-            actionLabel: '配置提供商',
+            title: '尚未配置视频模型',
+            message: '前往设置添加 API Key 并选择视频模型后，即可创建文生视频任务。',
+            actionLabel: '去设置',
             onAction: widget.onOpenProviders,
+            illustration: const MaterialEmptyIllustration.noProvider(),
           );
         }
 
@@ -309,32 +354,37 @@ class _VideoPageState extends State<VideoPage> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               if (generating)
-                Material(
-                  color: tokens.surface,
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-                    child: Row(
-                      children: [
-                        SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: tokens.primary,
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Text(
-                            '任务进行中 · 可取消',
-                            style: TextStyle(
-                              fontSize: 13,
-                              color: tokens.inkSecondary,
-                              fontFamily: tokens.fontFamily,
+                Semantics(
+                  liveRegion: true,
+                  container: true,
+                  label: '任务进行中 · 可取消',
+                  child: Material(
+                    color: tokens.surface,
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                      child: Row(
+                        children: [
+                          SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: tokens.primary,
                             ),
                           ),
-                        ),
-                      ],
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              '任务进行中 · 可取消',
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: tokens.inkSecondary,
+                                fontFamily: tokens.fontFamily,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
@@ -398,10 +448,11 @@ class _VideoPageState extends State<VideoPage> {
                           items: items,
                           onPlay: (item) {
                             Navigator.of(context).push<void>(
-                              MaterialPageRoute(
+                              materialFadeSlideRoute(
                                 builder: (_) => VideoPlayerPage(
                                   item: item,
                                   onSaveAlbum: _onSaveAlbum,
+                                  onShare: _onShare,
                                   onOpenSystem: _controller.openVideo,
                                 ),
                               ),
@@ -442,6 +493,7 @@ class _VideoPageState extends State<VideoPage> {
                             );
                           },
                           onSaveAlbum: _onSaveAlbum,
+                          onShare: _onShare,
                         ),
                       ),
                     ),
@@ -490,70 +542,94 @@ class _VideoSessionListPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final tokens = materialTokensOf(context);
-    return Scaffold(
-      backgroundColor: tokens.canvas,
-      appBar: AppBar(
-        title: const Text('生视频会话'),
-        actions: [
-          IconButton(
-            tooltip: '新建',
-            icon: const Icon(Icons.add),
-            onPressed: () {
-              onCreate();
-              Navigator.of(context).maybePop();
-            },
-          ),
-        ],
-      ),
-      body: sessions.isEmpty
-          ? MaterialSessionListEmpty(
-              onCreate: () {
+    return BackHost(
+      child: Scaffold(
+        backgroundColor: tokens.canvas,
+        appBar: AppBar(
+          title: const Text('生视频会话'),
+          leading: BackHost.leadingButton(context),
+          actions: [
+            IconButton(
+              tooltip: '新建',
+              icon: const Icon(Icons.add),
+              onPressed: () {
                 onCreate();
-                Navigator.of(context).maybePop();
-              },
-            )
-          : ListView.separated(
-              itemCount: sessions.length,
-              separatorBuilder: (_, _) => Divider(
-                height: 1,
-                color: tokens.border,
-              ),
-              itemBuilder: (context, index) {
-                final s = sessions[index];
-                final active = s.id == activeId;
-                final busy = s.id == busySessionId;
-                return ListTile(
-                  selected: active,
-                  leading: busy
-                      ? SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: tokens.primary,
-                          ),
-                        )
-                      : Icon(
-                          Icons.videocam_outlined,
-                          color: active ? tokens.primary : tokens.inkMuted,
-                        ),
-                  title: Text(
-                    s.title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  subtitle: Text('${s.items.length} 条结果'),
-                  trailing: IconButton(
-                    icon: const Icon(Icons.delete_outline),
-                    onPressed: () => _confirmDelete(context, s),
-                  ),
-                  onTap: () {
-                    onSelect(s.id);
-                    Navigator.of(context).maybePop();
-                  },
-                );
+                BackHost.pop(context);
               },
             ),
+          ],
+        ),
+        body: sessions.isEmpty
+            ? MaterialSessionListEmpty(
+                message: '还没有生视频会话，新建一条开始。',
+                onCreate: () {
+                  onCreate();
+                  BackHost.pop(context);
+                },
+                illustration: const MaterialEmptyIllustration.noSessions(),
+              )
+            : ListView.separated(
+                itemCount: sessions.length,
+                separatorBuilder: (_, _) => Divider(
+                  height: 1,
+                  color: tokens.border,
+                ),
+                itemBuilder: (context, index) {
+                  final s = sessions[index];
+                  final active = s.id == activeId;
+                  final busy = s.id == busySessionId;
+                  final status = busy ? '生成中' : '本地会话';
+                  final label = active
+                      ? '${s.title}，$status，已选中'
+                      : '${s.title}，$status';
+                  return Row(
+                    children: [
+                      Expanded(
+                        child: Semantics(
+                          button: true,
+                          selected: active,
+                          label: label,
+                          excludeSemantics: true,
+                          child: ListTile(
+                            selected: active,
+                            leading: busy
+                                ? SizedBox(
+                                    width: 20,
+                                    height: 20,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: tokens.primary,
+                                    ),
+                                  )
+                                : Icon(
+                                    Icons.videocam_outlined,
+                                    color: active
+                                        ? tokens.primary
+                                        : tokens.inkMuted,
+                                  ),
+                            title: Text(
+                              s.title,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            subtitle: Text('${s.items.length} 条结果'),
+                            onTap: () {
+                              onSelect(s.id);
+                              BackHost.pop(context);
+                            },
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        tooltip: '删除会话',
+                        icon: const Icon(Icons.delete_outline),
+                        onPressed: () => _confirmDelete(context, s),
+                      ),
+                    ],
+                  );
+                },
+              ),
+      ),
     );
   }
 }

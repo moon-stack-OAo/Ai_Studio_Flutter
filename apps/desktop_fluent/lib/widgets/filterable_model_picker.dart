@@ -2,7 +2,7 @@ import 'package:core/core.dart';
 import 'package:design_fluent/design_fluent.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 
-/// 对齐原型 / 现网 filterable+tag：
+/// 可搜索下拉（输入过滤模型列表）：
 /// - 点击或聚焦输入框 → 展开下方列表
 /// - 边输入边过滤
 /// - 可选手动输入不在列表中的模型名
@@ -174,15 +174,24 @@ class _FilterableModelPickerState extends State<FilterableModelPicker> {
                   }
                 }
               : null,
-          suffix: IconButton(
-            icon: Icon(
-              showList ? FluentIcons.chevron_up : FluentIcons.chevron_down,
-              size: 10,
-              color: widget.options.isEmpty
-                  ? tokens.inkMuted.withValues(alpha: 0.45)
-                  : tokens.inkMuted,
+          suffix: Tooltip(
+            message: showList ? '收起模型列表' : '展开模型列表',
+            child: Semantics(
+              button: true,
+              enabled: widget.enabled,
+              label: showList ? '收起模型列表' : '展开模型列表',
+              excludeSemantics: true,
+              child: IconButton(
+                icon: Icon(
+                  showList ? FluentIcons.chevron_up : FluentIcons.chevron_down,
+                  size: 10,
+                  color: widget.options.isEmpty
+                      ? tokens.inkMuted.withValues(alpha: 0.45)
+                      : tokens.inkMuted,
+                ),
+                onPressed: widget.enabled ? _toggle : null,
+              ),
             ),
-            onPressed: widget.enabled ? _toggle : null,
           ),
         ),
         if (showList) ...[
@@ -326,35 +335,45 @@ class _ModelTag extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final tokens = fluentTokensOf(context);
-    // Windows：小 IconButton + 动态 tag 易触发 Overlay/AXTree 异常；仅局部排除。
-    return ExcludeSemantics(
-      child: Container(
-        padding: const EdgeInsetsDirectional.only(start: 8, end: 2),
-        decoration: BoxDecoration(
-          color: tokens.surfaceMuted,
-          borderRadius: BorderRadius.circular(999),
-          border: Border.all(color: tokens.border),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 11,
-                color: tokens.inkSecondary,
-              ).withMonoFont(tokens),
-            ),
-            if (onClear != null)
-              IconButton(
-                icon: Icon(
-                  FluentIcons.chrome_close,
-                  size: 8,
-                  color: tokens.inkMuted,
+    // Windows：小 IconButton + 动态 tag 易炸 AXTree；外层合并语义，内部排除。
+    return Semantics(
+      button: onClear != null,
+      label: onClear != null ? '当前模型 $label，点按清除' : '当前模型 $label',
+      excludeSemantics: true,
+      child: GestureDetector(
+        onTap: onClear,
+        child: Container(
+          padding: const EdgeInsetsDirectional.only(start: 8, end: 2),
+          decoration: BoxDecoration(
+            color: tokens.surfaceMuted,
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(color: tokens.border),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Flexible(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: tokens.inkSecondary,
+                  ).withMonoFont(tokens),
                 ),
-                onPressed: onClear,
               ),
-          ],
+              if (onClear != null)
+                Padding(
+                  padding: const EdgeInsets.all(6),
+                  child: Icon(
+                    FluentIcons.chrome_close,
+                    size: 8,
+                    color: tokens.inkMuted,
+                  ),
+                ),
+            ],
+          ),
         ),
       ),
     );

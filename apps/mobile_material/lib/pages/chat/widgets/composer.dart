@@ -47,14 +47,24 @@ class _ComposerState extends State<Composer> {
   @override
   Widget build(BuildContext context) {
     final tokens = materialTokensOf(context);
+    final density =
+        UiDensity.fromVisualDensity(Theme.of(context).visualDensity);
     final canType = widget.enabled && !widget.streaming;
     final isDark = tokens.brightness == Brightness.dark;
     final imeVisible = MediaQuery.viewInsetsOf(context).bottom > 0;
     final bottomSafe = MediaQuery.paddingOf(context).bottom;
-    final padBottom = 8.0 + (imeVisible ? 0.0 : bottomSafe * 0.15);
+    final basePad = density.composerPadding;
+    final padBottom =
+        (density == UiDensity.comfortable ? 10.0 : 8.0) +
+        (imeVisible ? 0.0 : bottomSafe * 0.15);
 
     return Container(
-      padding: EdgeInsets.fromLTRB(12, 8, 12, padBottom),
+      padding: EdgeInsets.fromLTRB(
+        basePad.left,
+        basePad.top,
+        basePad.right,
+        padBottom,
+      ),
       decoration: BoxDecoration(
         color: tokens.surface,
         border: Border(top: BorderSide(color: tokens.border)),
@@ -85,11 +95,15 @@ class _ComposerState extends State<Composer> {
                   Expanded(
                     child: Text(
                       '流式输出中 · 点停止可中断',
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         fontSize: 12,
-                        color: isDark
-                            ? const Color(0xFFBFDBFE)
-                            : tokens.inkSecondary,
+                        color: Color.lerp(
+                          tokens.primary,
+                          tokens.ink,
+                          isDark ? 0.35 : 0.55,
+                        ),
                         fontFamily: tokens.fontFamily,
                       ),
                     ),
@@ -102,43 +116,45 @@ class _ComposerState extends State<Composer> {
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Expanded(
-                child: TextField(
-                  controller: _controller,
-                  focusNode: _focus,
-                  enabled: canType,
-                  minLines: 1,
-                  maxLines: 5,
-                  textInputAction: TextInputAction.newline,
-                  decoration: InputDecoration(
-                    hintText: widget.streaming ? '生成中…' : '输入消息…',
-                    filled: true,
-                    fillColor: isDark ? tokens.surfaceElevated : tokens.canvas,
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 14,
-                      vertical: 12,
+                child: Semantics(
+                  textField: true,
+                  label: '消息输入',
+                  child: TextField(
+                    controller: _controller,
+                    focusNode: _focus,
+                    enabled: canType,
+                    minLines: 1,
+                    maxLines: density == UiDensity.comfortable ? 6 : 5,
+                    textInputAction: TextInputAction.newline,
+                    decoration: InputDecoration(
+                      hintText: widget.streaming ? '生成中…' : '输入消息…',
+                      filled: true,
+                      fillColor:
+                          isDark ? tokens.surfaceElevated : tokens.canvas,
+                      contentPadding: density.composerFieldPadding,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        borderSide: BorderSide(color: tokens.border),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        borderSide: BorderSide(color: tokens.border),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        borderSide: BorderSide(color: tokens.primary),
+                      ),
+                      disabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        borderSide: BorderSide(color: tokens.border),
+                      ),
                     ),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(16),
-                      borderSide: BorderSide(color: tokens.border),
+                    style: TextStyle(
+                      fontFamily: tokens.fontFamily,
+                      fontSize: 14,
+                      height: 1.45,
+                      color: tokens.ink,
                     ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(16),
-                      borderSide: BorderSide(color: tokens.border),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(16),
-                      borderSide: BorderSide(color: tokens.primary),
-                    ),
-                    disabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(16),
-                      borderSide: BorderSide(color: tokens.border),
-                    ),
-                  ),
-                  style: TextStyle(
-                    fontFamily: tokens.fontFamily,
-                    fontSize: 14,
-                    height: 1.45,
-                    color: tokens.ink,
                   ),
                 ),
               ),
@@ -157,7 +173,7 @@ class _ComposerState extends State<Composer> {
                             onPressed: widget.onStop,
                             style: FilledButton.styleFrom(
                               backgroundColor: tokens.danger,
-                              foregroundColor: Colors.white,
+                              foregroundColor: tokens.onPrimary,
                               padding: EdgeInsets.zero,
                               minimumSize: const Size(48, 48),
                               shape: RoundedRectangleBorder(

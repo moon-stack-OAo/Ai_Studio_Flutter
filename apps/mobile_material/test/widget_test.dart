@@ -4,8 +4,12 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mobile_material/app/theme_controller.dart';
 import 'package:mobile_material/main.dart';
 import 'package:mobile_material/pages/chat/session_list_page.dart';
+import 'package:mobile_material/pages/image/widgets/image_composer.dart';
 import 'package:mobile_material/pages/settings/settings_providers_tab.dart';
+import 'package:mobile_material/shell/update_banner.dart';
 import 'package:package_info_plus/package_info_plus.dart';
+
+void _noop() {}
 Future<void> _pumpApp(
   WidgetTester tester, {
   ProviderRepository? providers,
@@ -75,6 +79,7 @@ Future<void> _pumpApp(
       appLogRepository: appLogs,
       dataBackupService: dataBackup,
       generation: GenerationRuntime(),
+      startupUpdateCheckDelay: Duration.zero,
     ),
   );
   await tester.pumpAndSettle();
@@ -103,8 +108,8 @@ void main() {
   testWidgets('unconfigured provider shows chat empty CTA', (tester) async {
     await _pumpApp(tester);
 
-    expect(find.text('开始对话'), findsOneWidget);
-    expect(find.text('添加提供商'), findsOneWidget);
+    expect(find.text('尚未配置提供商'), findsOneWidget);
+    expect(find.text('去设置'), findsOneWidget);
   });
 
   testWidgets('configured provider shows composer', (tester) async {
@@ -136,9 +141,9 @@ void main() {
 
     await _pumpApp(tester, providers: providers, sessions: sessions);
 
-    expect(find.text('开始对话'), findsNothing);
-    expect(find.text('添加提供商'), findsNothing);
-    expect(find.text('输入消息开始对话'), findsOneWidget);
+    expect(find.text('尚未配置提供商'), findsNothing);
+    expect(find.text('去设置'), findsNothing);
+    expect(find.text('还没有消息'), findsOneWidget);
     expect(find.text('在下方输入第一条消息，或打开会话列表新建。'), findsOneWidget);
     expect(find.byIcon(Icons.send_rounded), findsOneWidget);
     expect(find.textContaining('gpt-test'), findsWidgets);
@@ -190,8 +195,8 @@ void main() {
     await tester.tap(find.text('生图'));
     await tester.pumpAndSettle();
 
-    expect(find.text('开始生图'), findsOneWidget);
-    expect(find.text('配置提供商'), findsOneWidget);
+    expect(find.text('尚未配置生图模型'), findsOneWidget);
+    expect(find.text('去设置'), findsOneWidget);
   });
 
   testWidgets('configured image provider shows params composer',
@@ -223,7 +228,7 @@ void main() {
     await tester.tap(find.text('生图'));
     await tester.pumpAndSettle();
 
-    expect(find.text('开始生图'), findsNothing);
+    expect(find.text('尚未配置生图模型'), findsNothing);
     expect(find.text('参数'), findsOneWidget);
     expect(find.text('生成'), findsOneWidget);
     expect(find.text('从相册选择参考图'), findsOneWidget);
@@ -236,8 +241,8 @@ void main() {
     await tester.tap(find.text('生视频'));
     await tester.pumpAndSettle();
 
-    expect(find.text('开始生视频'), findsOneWidget);
-    expect(find.text('配置提供商'), findsOneWidget);
+    expect(find.text('尚未配置视频模型'), findsOneWidget);
+    expect(find.text('去设置'), findsOneWidget);
   });
 
   testWidgets('configured video provider shows params composer',
@@ -269,7 +274,7 @@ void main() {
     await tester.tap(find.text('生视频'));
     await tester.pumpAndSettle();
 
-    expect(find.text('开始生视频'), findsNothing);
+    expect(find.text('尚未配置视频模型'), findsNothing);
     expect(find.text('参数'), findsOneWidget);
     expect(find.text('创建任务'), findsOneWidget);
     expect(find.textContaining('sora-2'), findsWidgets);
@@ -322,6 +327,44 @@ void main() {
     expect(find.byType(ListTile), findsWidgets);
   });
 
+  testWidgets('session list items expose semantics labels', (tester) async {
+    final providers = ProviderRepository(
+      storage: MemoryProviderStorage(
+        ProviderStoreSnapshot(
+          providers: [
+            ProviderConfig(
+              id: 'p1',
+              name: 'Local',
+              type: ProviderType.openaiCompatible,
+              baseUrl: 'https://api.example.com/v1',
+              apiKey: 'sk-test-key',
+              chatModel: 'gpt-test',
+              enabled: true,
+            ),
+          ],
+          activeProviderId: 'p1',
+        ),
+      ),
+      connectionTester: StubProviderConnectionTester(),
+    );
+    await providers.load();
+
+    final sessions = ChatSessionRepository(
+      storage: MemoryChatSessionStorage(),
+    );
+    await sessions.load();
+    final created = await sessions.createSession(title: '无障碍会话');
+    await sessions.setActive(created.id);
+
+    await _pumpApp(tester, providers: providers, sessions: sessions);
+
+    await tester.tap(find.byTooltip('会话列表'));
+    await tester.pumpAndSettle();
+
+    expect(find.byTooltip('新建会话'), findsOneWidget);
+    expect(find.bySemanticsLabel(RegExp(r'无障碍会话')), findsWidgets);
+  });
+
   testWidgets('composer send button exposes tooltip', (tester) async {
     final providers = ProviderRepository(
       storage: MemoryProviderStorage(
@@ -353,20 +396,72 @@ void main() {
 
     expect(find.byIcon(Icons.send_rounded), findsOneWidget);
     expect(find.byTooltip('发送'), findsOneWidget);
+    expect(find.bySemanticsLabel('消息输入'), findsWidgets);
+  });
+
+  testWidgets('image composer primary button exposes semantics', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: ImageComposer(
+            prompt: '',
+            onPromptChanged: (_) {},
+            n: 1,
+            onNChanged: (_) {},
+            size: '1024x1024',
+            onSizeChanged: (_) {},
+            aspectRatio: '1:1',
+            onAspectRatioChanged: (_) {},
+            useAspectRatio: false,
+            sizeOptions: const ['1024x1024'],
+            aspectOptions: const ['1:1'],
+            modelLabel: 'test-model',
+            enabled: true,
+            generating: false,
+            onGenerate: () {},
+            onStop: () {},
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.bySemanticsLabel('生成图片'), findsWidgets);
+    expect(find.byTooltip('收起参数'), findsOneWidget);
+  });
+
+  testWidgets('update banner is a live region', (tester) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: UpdateBanner(
+            version: '9.9.9',
+            onGoUpdate: _noop,
+            onLater: _noop,
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(
+      find.bySemanticsLabel(RegExp(r'发现新版本 9\.9\.9')),
+      findsWidgets,
+    );
   });
 
   testWidgets('section switch keeps chat state via IndexedStack', (tester) async {
     await _pumpApp(tester);
 
-    expect(find.text('开始对话'), findsOneWidget);
+    expect(find.text('尚未配置提供商'), findsOneWidget);
     await tester.tap(find.text('生图'));
     await tester.pump(const Duration(milliseconds: 200));
     await tester.pumpAndSettle();
-    expect(find.text('开始生图'), findsOneWidget);
+    expect(find.text('尚未配置生图模型'), findsOneWidget);
 
     await tester.tap(find.text('对话'));
     await tester.pump(const Duration(milliseconds: 200));
     await tester.pumpAndSettle();
-    expect(find.text('开始对话'), findsOneWidget);
+    expect(find.text('尚未配置提供商'), findsOneWidget);
   });
 }

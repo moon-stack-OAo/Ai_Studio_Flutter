@@ -29,7 +29,7 @@ packages/design_material/
   - Windows 需 VS「C++ ATL」；详见 `SECURITY.md`
 - 连通性：`ProviderConnectionTester`（默认 `OpenAiCompatibleConnectionTester`：GET `/models`，失败回退最小 chat）
 - SSE（B）接入：`providerRepository.activeChatCredentials` → `baseUrl` + `apiKey` + `chatModel`
-- 三模型选择：`classifyModelId` / `modelOptionsByKind`（对齐现网 filterable+tag）；UI=`FilterableModelPicker`
+- 三模型选择：`classifyModelId` / `modelOptionsByKind`（可搜索下拉）；UI=`FilterableModelPicker`
 
 ## 桌面窗口（Fluent · 方案 B）
 
@@ -41,4 +41,4 @@ packages/design_material/
 
 - 模块依赖图、包边界细则
 - SSE / 提供商 adapter 约定（B）
-- 桌面 / Android 更新清单协议对齐现网说明
+- 桌面 / Android 更新清单协议（`latest.json` / `android-latest.json`）说明

@@ -5,17 +5,21 @@ import 'package:design_material/design_material.dart';
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
 
+import '../../../shell/back_host.dart';
+
 /// M-VideoPlayer：全屏播放页，pop 即 dispose。
 class VideoPlayerPage extends StatefulWidget {
   const VideoPlayerPage({
     super.key,
     required this.item,
     this.onSaveAlbum,
+    this.onShare,
     this.onOpenSystem,
   });
 
   final VideoItem item;
   final void Function(VideoItem item)? onSaveAlbum;
+  final void Function(VideoItem item)? onShare;
   final Future<bool> Function(VideoItem item)? onOpenSystem;
 
   @override
@@ -93,46 +97,56 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
   @override
   Widget build(BuildContext context) {
     final tokens = materialTokensOf(context);
-    return Scaffold(
-      backgroundColor: Colors.black,
-      appBar: AppBar(
+    return BackHost(
+      child: Scaffold(
         backgroundColor: Colors.black,
-        foregroundColor: Colors.white,
-        title: const Text('播放'),
-        actions: [
-          if (widget.onSaveAlbum != null)
-            IconButton(
-              tooltip: '存相册',
-              icon: const Icon(Icons.save_alt),
-              onPressed: () => widget.onSaveAlbum!(widget.item),
-            ),
-          if (widget.onOpenSystem != null)
-            IconButton(
-              tooltip: '系统打开',
-              icon: const Icon(Icons.open_in_new),
-              onPressed: () => widget.onOpenSystem!(widget.item),
-            ),
-        ],
-      ),
-      body: Center(
-        child: _error != null
-            ? Padding(
-                padding: const EdgeInsets.all(24),
-                child: Text(
-                  _error!,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: tokens.danger,
-                    fontFamily: tokens.fontFamily,
+        appBar: AppBar(
+          backgroundColor: Colors.black,
+          foregroundColor: Colors.white,
+          title: const Text('播放'),
+          leading: BackHost.leadingButton(context),
+          actions: [
+            if (widget.onSaveAlbum != null)
+              IconButton(
+                tooltip: '存相册',
+                icon: const Icon(Icons.save_alt),
+                onPressed: () => widget.onSaveAlbum!(widget.item),
+              ),
+            if (widget.onShare != null)
+              IconButton(
+                tooltip: '分享',
+                icon: const Icon(Icons.share_outlined),
+                onPressed: () => widget.onShare!(widget.item),
+              ),
+            if (widget.onOpenSystem != null)
+              IconButton(
+                tooltip: '系统打开',
+                icon: const Icon(Icons.open_in_new),
+                onPressed: () => widget.onOpenSystem!(widget.item),
+              ),
+          ],
+        ),
+        body: Center(
+          child: _error != null
+              ? Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Text(
+                    _error!,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: tokens.danger,
+                      fontFamily: tokens.fontFamily,
+                    ),
                   ),
-                ),
-              )
-            : !_ready || _controller == null
-                ? const CircularProgressIndicator(color: Colors.white)
-                : _PlayerStage(
-                    controller: _controller!,
-                    fallbackAspectRatio: _parseAspect(widget.item.aspectRatio),
-                  ),
+                )
+              : !_ready || _controller == null
+                  ? const CircularProgressIndicator(color: Colors.white)
+                  : _PlayerStage(
+                      controller: _controller!,
+                      fallbackAspectRatio:
+                          _parseAspect(widget.item.aspectRatio),
+                    ),
+        ),
       ),
     );
   }

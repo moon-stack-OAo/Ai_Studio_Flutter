@@ -164,21 +164,29 @@ class _VideoPlayerBodyState extends State<_VideoPlayerBody> {
         const SizedBox(height: 12),
         Row(
           children: [
-            IconButton(
-              icon: Icon(
-                ctrl.value.isPlaying
-                    ? FluentIcons.pause
-                    : FluentIcons.play,
+            Tooltip(
+              message: ctrl.value.isPlaying ? '暂停' : '播放',
+              child: Semantics(
+                button: true,
+                label: ctrl.value.isPlaying ? '暂停' : '播放',
+                excludeSemantics: true,
+                child: IconButton(
+                  icon: Icon(
+                    ctrl.value.isPlaying
+                        ? FluentIcons.pause
+                        : FluentIcons.play,
+                  ),
+                  onPressed: () {
+                    setState(() {
+                      if (ctrl.value.isPlaying) {
+                        ctrl.pause();
+                      } else {
+                        ctrl.play();
+                      }
+                    });
+                  },
+                ),
               ),
-              onPressed: () {
-                setState(() {
-                  if (ctrl.value.isPlaying) {
-                    ctrl.pause();
-                  } else {
-                    ctrl.play();
-                  }
-                });
-              },
             ),
             Expanded(
               child: VideoProgressIndicator(

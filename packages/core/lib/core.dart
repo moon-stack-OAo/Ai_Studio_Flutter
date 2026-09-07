@@ -46,6 +46,7 @@ export 'src/settings/data_backup.dart';
 export 'src/settings/data_backup_service.dart';
 export 'src/update/android_update_client.dart';
 export 'src/update/sha256_util.dart';
+export 'src/update/update_banner_prefs.dart';
 export 'src/update/update_client.dart';
 export 'src/update/update_installer.dart';
 export 'src/update/update_models.dart';

@@ -6,6 +6,7 @@ import 'package:design_fluent/design_fluent.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 
 import '../../../widgets/collapsible_prompt.dart';
+import '../../../widgets/empty_illustrations.dart';
 import '../../../widgets/fluent_empty_states.dart';
 
 /// F-ImageTimeline：time-split + prompt bubble + 自适应结果网格。
@@ -17,7 +18,7 @@ class ImageTimeline extends StatefulWidget {
     required this.onPreview,
     required this.onSave,
     this.onUseAsReference,
-    this.emptyHint = '输入提示词开始生图',
+    this.emptyHint = '还没有生成结果',
     this.emptySubtitle = '在右侧参数区填写提示词后生成。',
   });
 
@@ -42,6 +43,7 @@ class _ImageTimelineState extends State<ImageTimeline> {
       return FluentContentEmpty(
         hint: widget.emptyHint,
         subtitle: widget.emptySubtitle,
+        illustration: const FluentEmptyIllustration.noImages(),
       );
     }
 
@@ -256,6 +258,7 @@ class _TurnCard extends StatelessWidget {
                 final ref = item.images[index];
                 return _HoverCard(
                   ref: ref,
+                  index: index,
                   tokens: tokens,
                   size: cellSize,
                   loadBytes: loadBytes,
@@ -356,6 +359,7 @@ class _BusyCard extends StatelessWidget {
 class _HoverCard extends StatefulWidget {
   const _HoverCard({
     required this.ref,
+    required this.index,
     required this.tokens,
     required this.size,
     required this.loadBytes,
@@ -365,6 +369,7 @@ class _HoverCard extends StatefulWidget {
   });
 
   final ImageRef ref;
+  final int index;
   final FluentTokens tokens;
   final double size;
   final Future<Uint8List?> Function(ImageRef ref) loadBytes;
@@ -378,71 +383,98 @@ class _HoverCard extends StatefulWidget {
 
 class _HoverCardState extends State<_HoverCard> {
   bool _hover = false;
+  bool _focused = false;
+
+  bool get _showTools => _hover || _focused;
 
   @override
   Widget build(BuildContext context) {
     final tokens = widget.tokens;
-    return MouseRegion(
-      onEnter: (_) => setState(() => _hover = true),
-      onExit: (_) => setState(() => _hover = false),
-      child: GestureDetector(
-        onTap: widget.onPreview,
-        child: SizedBox(
-          width: widget.size,
-          height: widget.size,
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              ClipRRect(
-                borderRadius: BorderRadius.circular(10),
-                child: Container(
-                  color: tokens.surfaceMuted,
-                  foregroundDecoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: tokens.border),
-                  ),
-                  child: _ThumbImage(
-                    ref: widget.ref,
-                    loadBytes: widget.loadBytes,
-                  ),
-                ),
-              ),
-              Positioned(
-                left: 8,
-                right: 8,
-                bottom: 8,
-                child: AnimatedOpacity(
-                  opacity: _hover ? 1 : 0,
-                  duration: const Duration(milliseconds: 120),
-                  child: IgnorePointer(
-                    ignoring: !_hover,
-                    child: Row(
-                      children: [
-                        _ToolBtn(
-                          label: '预览',
-                          tokens: tokens,
-                          onPressed: widget.onPreview,
-                        ),
-                        const SizedBox(width: 4),
-                        _ToolBtn(
-                          label: '另存为',
-                          tokens: tokens,
-                          onPressed: widget.onSave,
-                        ),
-                        if (widget.onUseAsReference != null) ...[
-                          const SizedBox(width: 4),
-                          _ToolBtn(
-                            label: '作参考',
-                            tokens: tokens,
-                            onPressed: widget.onUseAsReference!,
+    final n = widget.index + 1;
+    return FocusableActionDetector(
+      onShowFocusHighlight: (v) => setState(() => _focused = v),
+      actions: <Type, Action<Intent>>{
+        ActivateIntent: CallbackAction<ActivateIntent>(
+          onInvoke: (_) {
+            widget.onPreview();
+            return null;
+          },
+        ),
+      },
+      child: MouseRegion(
+        onEnter: (_) => setState(() => _hover = true),
+        onExit: (_) => setState(() => _hover = false),
+        child: Semantics(
+          button: true,
+          label: '预览第$n张',
+          child: GestureDetector(
+            onTap: widget.onPreview,
+            child: SizedBox(
+              width: widget.size,
+              height: widget.size,
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  ExcludeSemantics(
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(10),
+                      child: Container(
+                        color: tokens.surfaceMuted,
+                        foregroundDecoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                            color: _focused ? tokens.primary : tokens.border,
+                            width: _focused ? 1.5 : 1,
                           ),
-                        ],
-                      ],
+                        ),
+                        child: _ThumbImage(
+                          ref: widget.ref,
+                          loadBytes: widget.loadBytes,
+                        ),
+                      ),
                     ),
                   ),
-                ),
+                  Positioned(
+                    left: 8,
+                    right: 8,
+                    bottom: 8,
+                    child: AnimatedOpacity(
+                      opacity: _showTools ? 1 : 0,
+                      duration: const Duration(milliseconds: 120),
+                      child: IgnorePointer(
+                        ignoring: !_showTools,
+                        child: Row(
+                          children: [
+                            _ToolBtn(
+                              label: '预览',
+                              semanticLabel: '预览第$n张',
+                              tokens: tokens,
+                              onPressed: widget.onPreview,
+                            ),
+                            const SizedBox(width: 4),
+                            _ToolBtn(
+                              label: '另存为',
+                              semanticLabel: '另存第$n张',
+                              tokens: tokens,
+                              onPressed: widget.onSave,
+                            ),
+                            if (widget.onUseAsReference != null) ...[
+                              const SizedBox(width: 4),
+                              _ToolBtn(
+                                label: '作参考',
+                                semanticLabel: '第$n张设为参考',
+                                tokens: tokens,
+                                onPressed: widget.onUseAsReference!,
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
         ),
       ),
@@ -455,36 +487,50 @@ class _ToolBtn extends StatelessWidget {
     required this.label,
     required this.tokens,
     required this.onPressed,
+    this.semanticLabel,
   });
 
   final String label;
+  final String? semanticLabel;
   final FluentTokens tokens;
   final VoidCallback onPressed;
 
   @override
   Widget build(BuildContext context) {
     return Flexible(
-      child: GestureDetector(
-        onTap: onPressed,
-        child: Container(
-          height: 28,
-          padding: const EdgeInsets.symmetric(horizontal: 8),
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: tokens.surface.withValues(alpha: 0.92),
-            borderRadius: BorderRadius.circular(6),
-            border: Border.all(color: tokens.border),
-          ),
-          child: Text(
-            label,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              fontSize: 11,
-              color: tokens.ink,
-              fontFamily: tokens.fontFamily,
-            ),
-          ),
+      child: Semantics(
+        button: true,
+        label: semanticLabel ?? label,
+        excludeSemantics: true,
+        child: HoverButton(
+          onPressed: onPressed,
+          cursor: SystemMouseCursors.click,
+          builder: (context, states) {
+            final focused = states.isFocused;
+            return Container(
+              height: 28,
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: tokens.surface.withValues(alpha: 0.92),
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(
+                  color: focused ? tokens.primary : tokens.border,
+                  width: focused ? 1.5 : 1,
+                ),
+              ),
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 11,
+                  color: tokens.ink,
+                  fontFamily: tokens.fontFamily,
+                ),
+              ),
+            );
+          },
         ),
       ),
     );

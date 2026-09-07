@@ -327,10 +327,14 @@ class _Toolbar extends StatelessWidget {
         ),
         SizedBox(
           width: 240,
-          child: TextBox(
-            controller: searchCtrl,
-            placeholder: '搜索消息…',
-            onChanged: onSearchChanged,
+          child: Semantics(
+            label: '搜索日志',
+            textField: true,
+            child: TextBox(
+              controller: searchCtrl,
+              placeholder: '搜索消息…',
+              onChanged: onSearchChanged,
+            ),
           ),
         ),
         Button(

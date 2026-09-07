@@ -2,9 +2,9 @@ import 'dart:io' show Platform;
 
 import 'package:flutter/foundation.dart' show kIsWeb;
 
-/// 当前运行时对应的 Tauri / 清单平台键候选（按优先级）。
+/// 当前运行时对应的桌面更新清单平台键候选（按优先级）。
 ///
-/// 现网 `latest.json` 使用 `windows-x86_64`、`windows-x86_64-nsis`、`windows-x86_64-msi`。
+/// 约定键：`windows-x86_64`、`windows-x86_64-nsis`、`windows-x86_64-msi` 等。
 List<String> desktopUpdatePlatformCandidates({
   bool? isWindows,
   bool? isMacOS,
@@ -57,7 +57,7 @@ List<String> desktopUpdatePlatformCandidates({
 
 /// Android 侧载清单平台键候选（按优先级）。
 ///
-/// 对齐现网 `pickAndroidPlatform`：`aarch64-linux-android` → `arm64-v8a` → …
+/// 默认：`aarch64-linux-android` → `arm64-v8a` → …
 List<String> androidUpdatePlatformCandidates({
   String? abiHint,
 }) {

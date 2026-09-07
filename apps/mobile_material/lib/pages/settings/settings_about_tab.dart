@@ -195,7 +195,7 @@ class _SettingsAboutTabState extends State<SettingsAboutTab> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text(
-                  '将下载 APK 并校验完整性后调起系统安装器。'
+                  '将从本仓 Releases 下载 APK，校验 sha256 后调起系统安装器。'
                   '请确认已允许「安装未知应用」。',
                 ),
                 if (notes.isNotEmpty) ...[
@@ -651,13 +651,24 @@ class _SettingsAboutTabState extends State<SettingsAboutTab> {
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  '分发：不上架 · 侧载 / 内测清单自动更新',
+                  _isAndroid
+                      ? '更新通道：本仓 Releases · android-latest.json（sha256 校验）'
+                      : _isIos
+                          ? '更新通道：非 App Store · 请通过内测渠道获取新版本'
+                          : '分发：不上架 · 直链 / 侧载清单',
                   style: TextStyle(fontSize: 12, color: tokens.inkMuted),
                 ),
+                if (_isAndroid) ...[
+                  const SizedBox(height: 6),
+                  Text(
+                    '不上架应用商店；安装包为 AI.Studio_*.apk，需允许「安装未知应用」。',
+                    style: TextStyle(fontSize: 12, color: tokens.inkMuted),
+                  ),
+                ],
                 if (_isIos) ...[
                   const SizedBox(height: 6),
                   Text(
-                    'iOS 以非 App Store 渠道分发（企业签 / TestFlight 等），'
+                    'iOS 以企业签 / TestFlight 等非 Store 渠道分发，'
                     '不提供商店内购更新。${MobileUpdateController.iosNonStoreMessage}',
                     style: TextStyle(fontSize: 12, color: tokens.inkMuted),
                   ),

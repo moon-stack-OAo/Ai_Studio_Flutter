@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:core/core.dart';
 import 'package:design_material/design_material.dart';
 import 'package:flutter/material.dart';
@@ -7,7 +9,9 @@ import '../pages/chat/chat_page.dart';
 import '../pages/image/image_page.dart';
 import '../pages/settings/settings_page.dart';
 import '../pages/video/video_page.dart';
+import '../update/mobile_update_controller.dart';
 import 'app_section.dart';
+import 'update_banner.dart';
 
 /// Material 壳：Scaffold + 四入口 NavigationBar；IME 可见时隐藏底栏。
 class AppShell extends StatefulWidget {
@@ -26,6 +30,9 @@ class AppShell extends StatefulWidget {
     this.chatClient,
     this.imageClient,
     this.videoClient,
+    this.updateController,
+    this.updateBannerPrefs,
+    this.startupUpdateCheckDelay = const Duration(milliseconds: 800),
   });
 
   final ThemeController themeController;
@@ -41,6 +48,9 @@ class AppShell extends StatefulWidget {
   final OpenAiCompatibleChatClient? chatClient;
   final OpenAiCompatibleImageClient? imageClient;
   final OpenAiCompatibleVideoClient? videoClient;
+  final MobileUpdateController? updateController;
+  final UpdateBannerPrefs? updateBannerPrefs;
+  final Duration startupUpdateCheckDelay;
 
   @override
   State<AppShell> createState() => _AppShellState();
@@ -50,6 +60,13 @@ class _AppShellState extends State<AppShell> {
   AppSection _section = AppSection.chat;
   int _settingsTabIndex = 0;
   double _paneOpacity = 1;
+  late final UpdateBannerPrefs _bannerPrefs;
+  late final MobileUpdateController _updater;
+  late final bool _ownsUpdater;
+  String? _bannerVersion;
+  String? _bannerSubtitle;
+  bool _startupCheckStarted = false;
+  Timer? _startupCheckTimer;
 
   static const _sections = <AppSection>[
     AppSection.chat,
@@ -57,6 +74,24 @@ class _AppShellState extends State<AppShell> {
     AppSection.video,
     AppSection.settings,
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    _bannerPrefs = widget.updateBannerPrefs ?? UpdateBannerPrefs();
+    _ownsUpdater = widget.updateController == null;
+    _updater = widget.updateController ?? MobileUpdateController();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _scheduleStartupUpdateCheck();
+    });
+  }
+
+  @override
+  void dispose() {
+    _startupCheckTimer?.cancel();
+    if (_ownsUpdater) _updater.dispose();
+    super.dispose();
+  }
 
   Widget _navIcon(AppSection section, {required bool selected}) {
     return switch (section) {
@@ -87,72 +122,149 @@ class _AppShellState extends State<AppShell> {
     });
   }
 
+  void _scheduleStartupUpdateCheck() {
+    if (_startupCheckStarted) return;
+    _startupCheckStarted = true;
+    final delay = widget.startupUpdateCheckDelay;
+    if (delay <= Duration.zero) {
+      unawaited(_runStartupUpdateCheck());
+      return;
+    }
+    _startupCheckTimer = Timer(delay, () {
+      unawaited(_runStartupUpdateCheck());
+    });
+  }
+
+  Future<void> _runStartupUpdateCheck() async {
+    if (!mounted) return;
+    if (_updater.isChecking || _updater.isDownloading) return;
+
+    try {
+      final result = await _updater.checkForUpdate();
+      if (!mounted) return;
+      if (result.status != UpdateCheckStatus.available) return;
+      final version = result.latestVersion;
+      if (version == null || version.trim().isEmpty) return;
+      if (!await _bannerPrefs.shouldShowFor(version)) return;
+      if (!mounted) return;
+      setState(() {
+        _bannerVersion = normalizeVersion(version);
+        _bannerSubtitle = _updater.isIos
+            ? MobileUpdateController.iosNonStoreMessage
+            : null;
+      });
+    } catch (e) {
+      try {
+        await widget.appLogRepository.append(
+          level: AppLogLevel.warn,
+          source: AppLogSources.updater,
+          message: '启动检查更新失败（已静默）：$e',
+        );
+      } catch (_) {}
+    }
+  }
+
+  Future<void> _dismissBanner() async {
+    final version = _bannerVersion;
+    if (version != null) {
+      await _bannerPrefs.dismissVersion(version);
+    }
+    if (!mounted) return;
+    setState(() {
+      _bannerVersion = null;
+      _bannerSubtitle = null;
+    });
+  }
+
+  void _goUpdateFromBanner() {
+    setState(() {
+      _bannerVersion = null;
+      _bannerSubtitle = null;
+      _section = AppSection.settings;
+      _settingsTabIndex = 4;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final tokens = materialTokensOf(context);
     final imeVisible = MediaQuery.viewInsetsOf(context).bottom > 0;
     final selectedIndex = AppSection.values.indexOf(_section);
+    final bannerVersion = _bannerVersion;
 
     return Scaffold(
       backgroundColor: tokens.canvas,
       body: SafeArea(
         bottom: false,
-        // IndexedStack 保各 tab 状态；短 opacity 作分区切换动效。
-        child: AnimatedOpacity(
-          opacity: _paneOpacity,
-          duration: const Duration(milliseconds: 140),
-          curve: Curves.easeOut,
-          child: IndexedStack(
-            index: selectedIndex,
-            children: [
-              for (final section in AppSection.values)
-                if (section == AppSection.chat)
-                  ChatPage(
-                    providerRepository: widget.providerRepository,
-                    sessionRepository: widget.sessionRepository,
-                    chatDefaultsRepository: widget.chatDefaultsRepository,
-                    appLogRepository: widget.appLogRepository,
-                    generation: widget.generation,
-                    chatClient: widget.chatClient,
-                    onOpenProviders: _openProviders,
-                  )
-                else if (section == AppSection.image)
-                  ImagePage(
-                    providerRepository: widget.providerRepository,
-                    sessionRepository: widget.imageSessionRepository,
-                    chatDefaultsRepository: widget.chatDefaultsRepository,
-                    appLogRepository: widget.appLogRepository,
-                    generation: widget.generation,
-                    chatClient: widget.chatClient,
-                    imageClient: widget.imageClient,
-                    onOpenProviders: _openProviders,
-                  )
-                else if (section == AppSection.video)
-                  VideoPage(
-                    providerRepository: widget.providerRepository,
-                    sessionRepository: widget.videoSessionRepository,
-                    chatDefaultsRepository: widget.chatDefaultsRepository,
-                    appLogRepository: widget.appLogRepository,
-                    generation: widget.generation,
-                    chatClient: widget.chatClient,
-                    videoClient: widget.videoClient,
-                    onOpenProviders: _openProviders,
-                  )
-                else if (section == AppSection.settings)
-                  SettingsPage(
-                    themeController: widget.themeController,
-                    providerRepository: widget.providerRepository,
-                    chatDefaultsRepository: widget.chatDefaultsRepository,
-                    appearanceRepository: widget.appearanceRepository,
-                    appLogRepository: widget.appLogRepository,
-                    dataBackupService: widget.dataBackupService,
-                    generation: widget.generation,
-                    initialTabIndex: _settingsTabIndex,
-                  )
-                else
-                  const SizedBox.shrink(),
-            ],
-          ),
+        child: Column(
+          children: [
+            if (bannerVersion != null)
+              UpdateBanner(
+                version: bannerVersion,
+                subtitle: _bannerSubtitle,
+                onGoUpdate: _goUpdateFromBanner,
+                onLater: () => unawaited(_dismissBanner()),
+              ),
+            Expanded(
+              child: AnimatedOpacity(
+                opacity: _paneOpacity,
+                duration: MaterialMotion.sectionSwitch,
+                curve: MaterialMotion.standard,
+                child: IndexedStack(
+                  index: selectedIndex,
+                  children: [
+                    for (final section in AppSection.values)
+                      if (section == AppSection.chat)
+                        ChatPage(
+                          providerRepository: widget.providerRepository,
+                          sessionRepository: widget.sessionRepository,
+                          chatDefaultsRepository: widget.chatDefaultsRepository,
+                          appLogRepository: widget.appLogRepository,
+                          generation: widget.generation,
+                          chatClient: widget.chatClient,
+                          onOpenProviders: _openProviders,
+                        )
+                      else if (section == AppSection.image)
+                        ImagePage(
+                          providerRepository: widget.providerRepository,
+                          sessionRepository: widget.imageSessionRepository,
+                          chatDefaultsRepository: widget.chatDefaultsRepository,
+                          appLogRepository: widget.appLogRepository,
+                          generation: widget.generation,
+                          chatClient: widget.chatClient,
+                          imageClient: widget.imageClient,
+                          onOpenProviders: _openProviders,
+                        )
+                      else if (section == AppSection.video)
+                        VideoPage(
+                          providerRepository: widget.providerRepository,
+                          sessionRepository: widget.videoSessionRepository,
+                          chatDefaultsRepository: widget.chatDefaultsRepository,
+                          appLogRepository: widget.appLogRepository,
+                          generation: widget.generation,
+                          chatClient: widget.chatClient,
+                          videoClient: widget.videoClient,
+                          onOpenProviders: _openProviders,
+                        )
+                      else if (section == AppSection.settings)
+                        SettingsPage(
+                          themeController: widget.themeController,
+                          providerRepository: widget.providerRepository,
+                          chatDefaultsRepository: widget.chatDefaultsRepository,
+                          appearanceRepository: widget.appearanceRepository,
+                          appLogRepository: widget.appLogRepository,
+                          dataBackupService: widget.dataBackupService,
+                          generation: widget.generation,
+                          initialTabIndex: _settingsTabIndex,
+                          updateController: _updater,
+                        )
+                      else
+                        const SizedBox.shrink(),
+                  ],
+                ),
+              ),
+            ),
+          ],
         ),
       ),
       bottomNavigationBar: imeVisible

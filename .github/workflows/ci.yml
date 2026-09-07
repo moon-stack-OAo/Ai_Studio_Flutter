@@ -1,0 +1,57 @@
+# 日常 CI：PR / 推送到主分支时 analyze + test
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - master
+      - dev
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  analyze-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Flutter version
+        run: flutter --version
+
+      - name: Pub get (workspace)
+        run: flutter pub get
+
+      - name: Analyze
+        run: |
+          dart analyze packages/core
+          dart analyze packages/design_fluent
+          dart analyze packages/design_material
+          dart analyze apps/desktop_fluent
+          dart analyze apps/mobile_material
+
+      - name: Test core
+        run: dart test packages/core
+
+      - name: Test design packages
+        run: |
+          dart test packages/design_fluent
+          dart test packages/design_material
+
+      - name: Test apps (widget)
+        run: |
+          cd apps/desktop_fluent && flutter test
+          cd ../../apps/mobile_material && flutter test

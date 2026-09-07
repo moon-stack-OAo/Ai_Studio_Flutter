@@ -134,7 +134,51 @@ FluentThemeData _buildTheme(
       secondaryBorder: BorderSide(color: tokens.focusRing, width: 1),
     ),
     dialogTheme: buildFluentContentDialogTheme(tokens),
+    infoBarTheme: _infoBarTheme(tokens),
     extensions: [densityTokens],
+  );
+}
+
+InfoBarThemeData _infoBarTheme(FluentTokens tokens) {
+  return InfoBarThemeData(
+    padding: const EdgeInsetsDirectional.only(
+      top: 12,
+      bottom: 12,
+      start: 14,
+      end: 8,
+    ),
+    decoration: (severity) {
+      final Color tint;
+      switch (severity) {
+        case InfoBarSeverity.info:
+          tint = tokens.primary;
+        case InfoBarSeverity.warning:
+          tint = tokens.warning;
+        case InfoBarSeverity.success:
+          tint = tokens.success;
+        case InfoBarSeverity.error:
+          tint = tokens.danger;
+      }
+      return BoxDecoration(
+        color: Color.lerp(tint, tokens.surface, 0.88),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: Color.lerp(tint, tokens.border, 0.55)!,
+        ),
+      );
+    },
+    iconColor: (severity) {
+      switch (severity) {
+        case InfoBarSeverity.info:
+          return tokens.primary;
+        case InfoBarSeverity.warning:
+          return tokens.warning;
+        case InfoBarSeverity.success:
+          return tokens.success;
+        case InfoBarSeverity.error:
+          return tokens.danger;
+      }
+    },
   );
 }
 

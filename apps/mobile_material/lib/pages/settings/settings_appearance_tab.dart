@@ -14,6 +14,10 @@ class SettingsAppearanceTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final tokens = materialTokensOf(context);
+    final density =
+        UiDensity.fromVisualDensity(Theme.of(context).visualDensity);
+    final cardPad = density.settingsCardPadding;
+    final formGap = density.settingsFormGap;
     return ListenableBuilder(
       listenable: themeController,
       builder: (context, _) {
@@ -23,7 +27,7 @@ class SettingsAppearanceTab extends StatelessWidget {
           children: [
             Card(
               child: Padding(
-                padding: const EdgeInsets.all(14),
+                padding: EdgeInsets.all(cardPad),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
@@ -33,9 +37,10 @@ class SettingsAppearanceTab extends StatelessWidget {
                         fontSize: 14,
                         fontWeight: FontWeight.w600,
                         color: tokens.ink,
+                        fontFamily: tokens.fontFamily,
                       ),
                     ),
-                    const SizedBox(height: 12),
+                    SizedBox(height: formGap),
                     SegmentedButton<ThemePreference>(
                       segments: [
                         for (final pref in ThemePreference.values)
@@ -54,10 +59,10 @@ class SettingsAppearanceTab extends StatelessWidget {
                 ),
               ),
             ),
-            const SizedBox(height: 12),
+            SizedBox(height: formGap - 2),
             Card(
               child: Padding(
-                padding: const EdgeInsets.all(14),
+                padding: EdgeInsets.all(cardPad),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
@@ -67,9 +72,10 @@ class SettingsAppearanceTab extends StatelessWidget {
                         fontSize: 14,
                         fontWeight: FontWeight.w600,
                         color: tokens.ink,
+                        fontFamily: tokens.fontFamily,
                       ),
                     ),
-                    const SizedBox(height: 12),
+                    SizedBox(height: formGap),
                     DropdownButtonFormField<AppFontScale>(
                       key: ValueKey(themeController.fontScale),
                       initialValue: themeController.fontScale,
@@ -89,7 +95,7 @@ class SettingsAppearanceTab extends StatelessWidget {
                         if (v != null) themeController.setFontScale(v);
                       },
                     ),
-                    const SizedBox(height: 12),
+                    SizedBox(height: formGap),
                     DropdownButtonFormField<UiDensity>(
                       key: ValueKey(themeController.density),
                       initialValue: themeController.density,
@@ -109,10 +115,14 @@ class SettingsAppearanceTab extends StatelessWidget {
                         if (v != null) themeController.setDensity(v);
                       },
                     ),
-                    const SizedBox(height: 10),
+                    SizedBox(height: formGap - 2),
                     Text(
-                      '紧凑：列表更密、底栏略矮；舒适：行距更松。移动默认紧凑；触控主操作 ≥ 48dp。',
-                      style: TextStyle(fontSize: 12, color: tokens.inkMuted),
+                      '紧凑：列表更密、Composer 更贴、底栏略矮；舒适：行距与表单项更松。移动默认紧凑；触控主操作 ≥ 48dp。',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: tokens.inkMuted,
+                        fontFamily: tokens.fontFamily,
+                      ),
                     ),
                   ],
                 ),

@@ -40,50 +40,62 @@ class SettingsShell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final tokens = fluentTokensOf(context);
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        SizedBox(
-          width: tokens.settingsCatWidth,
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              color: tokens.surface,
-              border: Border(right: BorderSide(color: tokens.border)),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
-                  child: Text(
-                    '设置',
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: tokens.inkSecondary,
-                      fontFamily: tokens.fontFamily,
+    final density =
+        UiDensity.fromVisualDensity(FluentTheme.of(context).visualDensity);
+    return FocusTraversalGroup(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          SizedBox(
+            width: tokens.settingsCatWidth,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: tokens.surface,
+                border: Border(right: BorderSide(color: tokens.border)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Padding(
+                    padding: EdgeInsets.fromLTRB(
+                      16,
+                      density == UiDensity.compact ? 10 : 14,
+                      16,
+                      density == UiDensity.compact ? 6 : 10,
+                    ),
+                    child: Text(
+                      '设置',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: tokens.inkSecondary,
+                        fontFamily: tokens.fontFamily,
+                      ),
                     ),
                   ),
-                ),
-                Expanded(
-                  child: ListView(
-                    padding: const EdgeInsets.fromLTRB(8, 0, 8, 12),
-                    children: [
-                      for (final item in SettingsCategory.values)
-                        _SettingsCatTile(
-                          category: item,
-                          selected: item == category,
-                          onPressed: () => onCategoryChanged(item),
-                        ),
-                    ],
+                  Expanded(
+                    child: ListView(
+                      padding: const EdgeInsets.fromLTRB(8, 0, 8, 12),
+                      children: [
+                        for (final item in SettingsCategory.values)
+                          _SettingsCatTile(
+                            category: item,
+                            selected: item == category,
+                            tileVPad: density.settingsCatTileVertical,
+                            onPressed: () => onCategoryChanged(item),
+                          ),
+                      ],
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
-        ),
-        Expanded(child: _buildContent()),
-      ],
+          Expanded(child: _buildContent()),
+        ],
+      ),
     );
   }
 
@@ -116,11 +128,13 @@ class _SettingsCatTile extends StatelessWidget {
   const _SettingsCatTile({
     required this.category,
     required this.selected,
+    required this.tileVPad,
     required this.onPressed,
   });
 
   final SettingsCategory category;
   final bool selected;
+  final double tileVPad;
   final VoidCallback onPressed;
 
   @override
@@ -133,52 +147,65 @@ class _SettingsCatTile extends StatelessWidget {
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 1),
-      child: Button(
-        onPressed: onPressed,
-        style: ButtonStyle(
-          padding: const WidgetStatePropertyAll(
-            EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          ),
-          backgroundColor: WidgetStateProperty.resolveWith((states) {
-            if (selected) return bg;
-            if (states.contains(WidgetState.hovered) ||
-                states.contains(WidgetState.focused)) {
-              return tokens.ink.withValues(alpha: 0.05);
-            }
-            return Colors.transparent;
-          }),
-          foregroundColor: WidgetStatePropertyAll(fg),
-          shape: WidgetStatePropertyAll(
-            RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(8),
-              side: BorderSide.none,
+      child: Semantics(
+        button: true,
+        selected: selected,
+        label: '${category.label}，${category.description}',
+        excludeSemantics: true,
+        child: Button(
+          onPressed: onPressed,
+          style: ButtonStyle(
+            padding: WidgetStatePropertyAll(
+              EdgeInsets.symmetric(horizontal: 12, vertical: tileVPad),
             ),
+            backgroundColor: WidgetStateProperty.resolveWith((states) {
+              if (selected) return bg;
+              if (states.contains(WidgetState.hovered) ||
+                  states.contains(WidgetState.focused)) {
+                return tokens.ink.withValues(alpha: 0.05);
+              }
+              return Colors.transparent;
+            }),
+            foregroundColor: WidgetStatePropertyAll(fg),
+            shape: WidgetStateProperty.resolveWith((states) {
+              final focused = states.contains(WidgetState.focused);
+              return RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+                side: focused
+                    ? BorderSide(color: tokens.primary.withValues(alpha: 0.55))
+                    : BorderSide.none,
+              );
+            }),
           ),
-        ),
-        child: Align(
-          alignment: Alignment.centerLeft,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                category.label,
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
-                  color: fg,
-                  fontFamily: tokens.fontFamily,
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  category.label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+                    color: fg,
+                    fontFamily: tokens.fontFamily,
+                  ),
                 ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                category.description,
-                style: TextStyle(
-                  fontSize: 11,
-                  color: tokens.inkMuted,
-                  fontFamily: tokens.fontFamily,
+                const SizedBox(height: 2),
+                Text(
+                  category.description,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: tokens.inkMuted,
+                    fontFamily: tokens.fontFamily,
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

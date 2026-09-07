@@ -41,17 +41,26 @@ class _CollapsiblePromptState extends State<CollapsiblePrompt> {
   }
 
   Widget _chevron(Color color) {
-    return MouseRegion(
-      cursor: SystemMouseCursors.click,
-      child: GestureDetector(
-        onTap: () => setState(() => _expanded = !_expanded),
-        behavior: HitTestBehavior.opaque,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(4, 2, 0, 2),
-          child: Icon(
-            _expanded ? FluentIcons.chevron_up : FluentIcons.chevron_down,
-            size: 12,
-            color: color,
+    final tip = _expanded ? '收起提示词' : '展开提示词';
+    return Tooltip(
+      message: tip,
+      child: Semantics(
+        button: true,
+        label: tip,
+        excludeSemantics: true,
+        child: MouseRegion(
+          cursor: SystemMouseCursors.click,
+          child: GestureDetector(
+            onTap: () => setState(() => _expanded = !_expanded),
+            behavior: HitTestBehavior.opaque,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(4, 2, 0, 2),
+              child: Icon(
+                _expanded ? FluentIcons.chevron_up : FluentIcons.chevron_down,
+                size: 12,
+                color: color,
+              ),
+            ),
           ),
         ),
       ),

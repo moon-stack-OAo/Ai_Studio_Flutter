@@ -2,6 +2,7 @@ import 'package:core/core.dart';
 import 'package:design_fluent/design_fluent.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 
+import '../../widgets/empty_illustrations.dart';
 import '../../widgets/fluent_empty_states.dart';
 import '../../widgets/prompt_assist_panel.dart';
 import 'image_controller.dart';
@@ -101,10 +102,11 @@ class _ImagePageState extends State<ImagePage> {
         final ready = widget.providerRepository.hasConfiguredImageProvider;
         if (!ready) {
           return FluentFeatureEmpty(
-            title: '开始生图',
-            message: '尚未配置生图模型。前往设置添加 API Key 并选择生图模型，即可开始文生图。',
-            actionLabel: '配置提供商',
+            title: '尚未配置生图模型',
+            message: '前往设置添加 API Key 并选择生图模型后，即可开始文生图。',
+            actionLabel: '去设置',
             onAction: widget.onOpenProviders,
+            illustration: const FluentEmptyIllustration.noProvider(),
           );
         }
 
@@ -135,9 +137,14 @@ class _ImagePageState extends State<ImagePage> {
                     if (generating)
                       Padding(
                         padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
-                        child: InfoBar(
-                          title: Text('正在生成 ${_controller.n} 张 · 可停止'),
-                          severity: InfoBarSeverity.info,
+                        child: Semantics(
+                          liveRegion: true,
+                          container: true,
+                          label: '正在生成 ${_controller.n} 张 · 可停止',
+                          child: InfoBar(
+                            title: Text('正在生成 ${_controller.n} 张 · 可停止'),
+                            severity: InfoBarSeverity.info,
+                          ),
                         ),
                       ),
                     Expanded(

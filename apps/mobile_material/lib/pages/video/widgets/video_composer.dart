@@ -178,7 +178,10 @@ class _VideoComposerState extends State<VideoComposer> {
                     ),
                   ),
                 IconButton(
-                  visualDensity: VisualDensity.compact,
+                  tooltip: _expanded ? '收起参数' : '展开参数',
+                  style: IconButton.styleFrom(
+                    minimumSize: const Size(48, 48),
+                  ),
                   onPressed: () => setState(() => _expanded = !_expanded),
                   icon: Icon(
                     _expanded ? Icons.expand_less : Icons.expand_more,
@@ -336,19 +339,23 @@ class _VideoComposerState extends State<VideoComposer> {
                     ],
                   ),
                   const SizedBox(height: 6),
-                  TextField(
-                    controller: _promptCtrl,
-                    onChanged:
-                        widget.generating ? null : widget.onPromptChanged,
-                    enabled: !widget.generating,
-                    maxLines: 4,
-                    minLines: 3,
-                    decoration: InputDecoration(
-                      hintText: '描述你想生成的视频画面与运镜…',
-                      filled: true,
-                      fillColor: tokens.surfaceMuted,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
+                  Semantics(
+                    textField: true,
+                    label: '提示词',
+                    child: TextField(
+                      controller: _promptCtrl,
+                      onChanged:
+                          widget.generating ? null : widget.onPromptChanged,
+                      enabled: !widget.generating,
+                      maxLines: 4,
+                      minLines: 3,
+                      decoration: InputDecoration(
+                        hintText: '描述你想生成的视频画面与运镜…',
+                        filled: true,
+                        fillColor: tokens.surfaceMuted,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
                       ),
                     ),
                   ),
@@ -420,19 +427,33 @@ class _VideoComposerState extends State<VideoComposer> {
           Padding(
             padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
             child: SizedBox(
-              height: 44,
+              height: 48,
               child: widget.generating
-                  ? FilledButton(
-                      style: FilledButton.styleFrom(
-                        backgroundColor: tokens.danger,
-                        foregroundColor: tokens.onPrimary,
+                  ? Semantics(
+                      button: true,
+                      label: '取消生成',
+                      excludeSemantics: true,
+                      child: FilledButton(
+                        style: FilledButton.styleFrom(
+                          backgroundColor: tokens.danger,
+                          foregroundColor: tokens.onPrimary,
+                          minimumSize: const Size.fromHeight(48),
+                        ),
+                        onPressed: widget.onStop,
+                        child: const Text('取消'),
                       ),
-                      onPressed: widget.onStop,
-                      child: const Text('取消'),
                     )
-                  : FilledButton(
-                      onPressed: widget.enabled ? widget.onGenerate : null,
-                      child: Text(hasRef ? '图生视频' : '创建任务'),
+                  : Semantics(
+                      button: true,
+                      label: hasRef ? '图生视频' : '创建视频任务',
+                      excludeSemantics: true,
+                      child: FilledButton(
+                        style: FilledButton.styleFrom(
+                          minimumSize: const Size.fromHeight(48),
+                        ),
+                        onPressed: widget.enabled ? widget.onGenerate : null,
+                        child: Text(hasRef ? '图生视频' : '创建任务'),
+                      ),
                     ),
             ),
           ),

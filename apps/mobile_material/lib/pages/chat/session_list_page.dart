@@ -2,6 +2,8 @@ import 'package:core/core.dart';
 import 'package:design_material/design_material.dart';
 import 'package:flutter/material.dart';
 
+import '../../shell/back_host.dart';
+import '../../widgets/empty_illustrations.dart';
 import '../../widgets/material_empty_states.dart';
 
 /// M-SessionList：全屏会话列表层；系统返回先 pop。
@@ -129,108 +131,119 @@ class SessionListPage extends StatelessWidget {
     final itemVPad = density.sessionItemVerticalPadding;
     final separator = density.sessionListSeparator;
 
-    return Scaffold(
-      backgroundColor: tokens.canvas,
-      appBar: AppBar(
-        title: const Text('会话'),
-        leading: IconButton(
-          tooltip: '返回',
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () => Navigator.of(context).pop(),
+    return BackHost(
+      child: Scaffold(
+        backgroundColor: tokens.canvas,
+        appBar: AppBar(
+          title: const Text('会话'),
+          leading: BackHost.leadingButton(context),
         ),
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () {
-          onCreate();
-          Navigator.of(context).pop();
-        },
-        tooltip: '新建会话',
-        child: const Icon(Icons.add),
-      ),
-      body: sessions.isEmpty
-          ? MaterialSessionListEmpty(
-              onCreate: () {
-                onCreate();
-                Navigator.of(context).pop();
-              },
-            )
-          : ListView.separated(
-              padding: const EdgeInsets.fromLTRB(12, 8, 12, 88),
-              itemCount: sessions.length,
-              separatorBuilder: (context, index) => SizedBox(height: separator),
-              itemBuilder: (context, index) {
-                final session = sessions[index];
-                final selected = session.id == activeId;
-                final streaming = session.id == streamingSessionId;
-                return Material(
-                  color: selected ? tokens.surfaceElevated : tokens.surface,
-                  borderRadius: BorderRadius.circular(12),
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(12),
-                    onTap: () {
-                      onSelect(session.id);
-                      Navigator.of(context).pop();
-                    },
-                    onLongPress: () => _showActions(context, session),
-                    child: Container(
-                      padding: EdgeInsets.symmetric(
-                        horizontal: 14,
-                        vertical: itemVPad,
-                      ),
-                      decoration: BoxDecoration(
+        floatingActionButton: FloatingActionButton(
+          onPressed: () {
+            onCreate();
+            BackHost.pop(context);
+          },
+          tooltip: '新建会话',
+          child: const Icon(Icons.add),
+        ),
+        body: sessions.isEmpty
+            ? MaterialSessionListEmpty(
+                onCreate: () {
+                  onCreate();
+                  BackHost.pop(context);
+                },
+                illustration: const MaterialEmptyIllustration.noSessions(),
+              )
+            : ListView.separated(
+                padding: const EdgeInsets.fromLTRB(12, 8, 12, 88),
+                itemCount: sessions.length,
+                separatorBuilder: (context, index) =>
+                    SizedBox(height: separator),
+                itemBuilder: (context, index) {
+                  final session = sessions[index];
+                  final selected = session.id == activeId;
+                  final streaming = session.id == streamingSessionId;
+                  final status = streaming ? '流式中' : '本地会话';
+                  final label = selected
+                      ? '${session.title}，$status，已选中'
+                      : '${session.title}，$status';
+                  return Semantics(
+                    button: true,
+                    selected: selected,
+                    label: label,
+                    excludeSemantics: true,
+                    child: Material(
+                      color: selected ? tokens.surfaceElevated : tokens.surface,
+                      borderRadius: BorderRadius.circular(12),
+                      child: InkWell(
                         borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: selected
-                              ? tokens.primary.withValues(alpha: 0.35)
-                              : tokens.border,
-                        ),
-                      ),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  session.title,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(
-                                    fontSize: 15,
-                                    fontWeight: selected
-                                        ? FontWeight.w600
-                                        : FontWeight.w500,
-                                    color: tokens.ink,
-                                    fontFamily: tokens.fontFamily,
-                                  ),
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  streaming ? '流式中' : '本地会话',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: streaming
-                                        ? tokens.primary
-                                        : tokens.inkMuted,
-                                    fontFamily: tokens.fontFamily,
-                                  ),
-                                ),
-                              ],
+                        onTap: () {
+                          onSelect(session.id);
+                          BackHost.pop(context);
+                        },
+                        onLongPress: () => _showActions(context, session),
+                        child: Container(
+                          constraints: const BoxConstraints(minHeight: 48),
+                          padding: EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: itemVPad,
+                          ),
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: selected
+                                  ? tokens.primary.withValues(alpha: 0.35)
+                                  : tokens.border,
                             ),
                           ),
-                          if (selected)
-                            Icon(
-                              Icons.check_circle,
-                              color: tokens.primary,
-                              size: 20,
-                            ),
-                        ],
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      session.title,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        fontSize: 15,
+                                        fontWeight: selected
+                                            ? FontWeight.w600
+                                            : FontWeight.w500,
+                                        color: tokens.ink,
+                                        fontFamily: tokens.fontFamily,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      status,
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: streaming
+                                            ? tokens.primary
+                                            : tokens.inkMuted,
+                                        fontFamily: tokens.fontFamily,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              if (selected)
+                                Icon(
+                                  Icons.check_circle,
+                                  color: tokens.primary,
+                                  size: 20,
+                                ),
+                            ],
+                          ),
+                        ),
                       ),
                     ),
-                  ),
-                );
-              },
-            ),
+                  );
+                },
+              ),
+      ),
     );
   }
 }

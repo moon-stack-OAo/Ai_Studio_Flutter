@@ -1,0 +1,116 @@
+# 手动 / 主分支推送：构建 Windows 安装包与 Android APK（上传 artifact，不发 Release）
+name: build
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - 'apps/**'
+      - 'packages/**'
+      - 'packaging/**'
+      - 'pubspec.yaml'
+      - 'pubspec.lock'
+      - '.github/workflows/build.yml'
+
+concurrency:
+  group: build-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Pub get
+        run: flutter pub get
+
+      - name: Build Windows release
+        working-directory: apps/desktop_fluent
+        run: flutter build windows --release
+
+      - name: Read version
+        id: ver
+        shell: bash
+        run: |
+          VERSION="$(grep -E '^version:' apps/desktop_fluent/pubspec.yaml | head -1 | sed -E 's/^version:[[:space:]]*//; s/\+.*//')"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION"
+
+      - name: Install Inno Setup
+        shell: pwsh
+        run: |
+          choco install innosetup -y --no-progress
+          $iscc = @(
+            "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe",
+            "${env:ProgramFiles}\Inno Setup 6\ISCC.exe"
+          ) | Where-Object { Test-Path $_ } | Select-Object -First 1
+          if (-not $iscc) { throw 'ISCC.exe not found' }
+          echo "ISCC=$iscc" >> $env:GITHUB_ENV
+
+      - name: Compile installer
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path packaging/windows/output | Out-Null
+          & "$env:ISCC" "/DMyAppVersion=${{ steps.ver.outputs.version }}" "packaging\windows\ai-studio.iss"
+
+      - name: Upload Windows artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-setup
+          path: packaging/windows/output/*.exe
+          if-no-files-found: error
+
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Pub get
+        run: flutter pub get
+
+      - name: Build APK release
+        working-directory: apps/mobile_material
+        run: flutter build apk --release
+
+      - name: Rename APK
+        shell: bash
+        run: |
+          VERSION="$(grep -E '^version:' apps/mobile_material/pubspec.yaml | head -1 | sed -E 's/^version:[[:space:]]*//; s/\+.*//')"
+          SRC="apps/mobile_material/build/app/outputs/flutter-apk/app-release.apk"
+          test -f "$SRC"
+          mkdir -p dist
+          cp -f "$SRC" "dist/AI.Studio_${VERSION}.apk"
+          ls -lh dist/
+
+      - name: Upload Android artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-apk
+          path: dist/*.apk
+          if-no-files-found: error

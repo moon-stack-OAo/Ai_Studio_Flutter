@@ -24,6 +24,7 @@ class MessageBubble extends StatefulWidget {
 class _MessageBubbleState extends State<MessageBubble> {
   final FlyoutController _flyout = FlyoutController();
   bool _hovered = false;
+  bool _focused = false;
 
   ChatMessage get message => widget.message;
 
@@ -107,18 +108,20 @@ class _MessageBubbleState extends State<MessageBubble> {
     }
     final border = tokens.border;
     final roleColor = isUser ? tokens.primaryPressed : tokens.inkMuted;
-    final showActions = _hovered && !message.streaming;
+    final showActions = (_hovered || _focused) && !message.streaming;
     final canRecall = widget.recallEnabled && widget.onRecall != null;
 
-    return MouseRegion(
-      onEnter: (_) => setState(() => _hovered = true),
-      onExit: (_) => setState(() => _hovered = false),
-      child: FlyoutTarget(
-        controller: _flyout,
-        child: GestureDetector(
-          onSecondaryTapUp: (details) =>
-              _showContextMenu(details.globalPosition),
-          child: Padding(
+    return FocusableActionDetector(
+      onShowFocusHighlight: (v) => setState(() => _focused = v),
+      child: MouseRegion(
+        onEnter: (_) => setState(() => _hovered = true),
+        onExit: (_) => setState(() => _hovered = false),
+        child: FlyoutTarget(
+          controller: _flyout,
+          child: GestureDetector(
+            onSecondaryTapUp: (details) =>
+                _showContextMenu(details.globalPosition),
+            child: Padding(
             padding: const EdgeInsets.symmetric(vertical: 9),
             // 短消息随内容宽度；外层 Align 左右分侧 + maxWidth:780 约束长内容
             child: Column(
@@ -268,6 +271,7 @@ class _MessageBubbleState extends State<MessageBubble> {
             ),
           ),
         ),
+        ),
       ),
     );
   }
@@ -367,30 +371,35 @@ class _ActionChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return HoverButton(
-      onPressed: onPressed,
-      cursor: SystemMouseCursors.click,
-      builder: (context, states) {
-        final hovered = states.isHovered || states.isPressed;
-        return Container(
-          height: 26,
-          padding: const EdgeInsets.symmetric(horizontal: 8),
-          decoration: BoxDecoration(
-            color: hovered ? tokens.surfaceMuted : tokens.surface,
-            borderRadius: BorderRadius.circular(5),
-            border: Border.all(color: tokens.border),
-          ),
-          alignment: Alignment.center,
-          child: Text(
-            label,
-            style: TextStyle(
-              fontSize: 11,
-              color: hovered ? tokens.ink : tokens.inkSecondary,
-              fontFamily: tokens.fontFamily,
+    return Semantics(
+      button: true,
+      label: label,
+      excludeSemantics: true,
+      child: HoverButton(
+        onPressed: onPressed,
+        cursor: SystemMouseCursors.click,
+        builder: (context, states) {
+          final hovered = states.isHovered || states.isPressed;
+          return Container(
+            height: 26,
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            decoration: BoxDecoration(
+              color: hovered ? tokens.surfaceMuted : tokens.surface,
+              borderRadius: BorderRadius.circular(5),
+              border: Border.all(color: tokens.border),
             ),
-          ),
-        );
-      },
+            alignment: Alignment.center,
+            child: Text(
+              label,
+              style: TextStyle(
+                fontSize: 11,
+                color: hovered ? tokens.ink : tokens.inkSecondary,
+                fontFamily: tokens.fontFamily,
+              ),
+            ),
+          );
+        },
+      ),
     );
   }
 }

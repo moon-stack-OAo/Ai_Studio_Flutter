@@ -2,6 +2,7 @@ import 'package:core/core.dart';
 import 'package:design_fluent/design_fluent.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 
+import '../../widgets/empty_illustrations.dart';
 import '../../widgets/fluent_empty_states.dart';
 import '../../widgets/prompt_assist_panel.dart';
 import 'video_controller.dart';
@@ -111,10 +112,11 @@ class _VideoPageState extends State<VideoPage> {
         final ready = widget.providerRepository.hasConfiguredVideoProvider;
         if (!ready) {
           return FluentFeatureEmpty(
-            title: '开始生视频',
-            message: '尚未配置视频模型。前往设置添加 API Key 并选择视频模型，即可创建文生视频任务。',
-            actionLabel: '配置提供商',
+            title: '尚未配置视频模型',
+            message: '前往设置添加 API Key 并选择视频模型后，即可创建文生视频任务。',
+            actionLabel: '去设置',
             onAction: widget.onOpenProviders,
+            illustration: const FluentEmptyIllustration.noProvider(),
           );
         }
 
@@ -148,9 +150,14 @@ class _VideoPageState extends State<VideoPage> {
                     if (generating)
                       Padding(
                         padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
-                        child: InfoBar(
-                          title: const Text('任务进行中 · 可取消'),
-                          severity: InfoBarSeverity.info,
+                        child: Semantics(
+                          liveRegion: true,
+                          container: true,
+                          label: '任务进行中 · 可取消',
+                          child: const InfoBar(
+                            title: Text('任务进行中 · 可取消'),
+                            severity: InfoBarSeverity.info,
+                          ),
                         ),
                       ),
                     Expanded(

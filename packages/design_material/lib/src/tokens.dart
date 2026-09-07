@@ -21,6 +21,7 @@ class MaterialTokens extends ThemeExtension<MaterialTokens> {
     required this.danger,
     required this.warning,
     required this.focusRing,
+    required this.scrim,
     required this.fontFamily,
     required this.monoFontFamily,
   });
@@ -41,6 +42,7 @@ class MaterialTokens extends ThemeExtension<MaterialTokens> {
   final Color danger;
   final Color warning;
   final Color focusRing;
+  final Color scrim;
   final String fontFamily;
   final String monoFontFamily;
 
@@ -56,15 +58,16 @@ class MaterialTokens extends ThemeExtension<MaterialTokens> {
     surfaceElevated: Color(0xFFEFE9DE),
     ink: Color(0xFF141413),
     inkSecondary: Color(0xFF3D3D3A),
-    inkMuted: Color(0xFF6C6A64),
+    inkMuted: Color(0xFF5C5A55),
     border: Color(0xFFE7E6E1),
     primary: Color(0xFFD97757),
     primaryPressed: Color(0xFFA9583E),
     onPrimary: Color(0xFFFFFFFF),
-    success: Color(0xFF3F6F4E),
+    success: Color(0xFF2F6A40),
     danger: Color(0xFFB42318),
     warning: Color(0xFFB45309),
-    focusRing: Color(0x66D97757),
+    focusRing: Color(0x99D97757),
+    scrim: Color(0xB8141413),
     fontFamily: fontStackFamily,
     monoFontFamily: monoStackFamily,
   );
@@ -78,15 +81,16 @@ class MaterialTokens extends ThemeExtension<MaterialTokens> {
     surfaceElevated: Color(0xFF1C1C1C),
     ink: Color(0xFFFAFAFA),
     inkSecondary: Color(0xFFA1A1AA),
-    inkMuted: Color(0xFF71717A),
+    inkMuted: Color(0xFF8B8B96),
     border: Color(0xFF27272A),
     primary: Color(0xFF3B82F6),
     primaryPressed: Color(0xFF2563EB),
     onPrimary: Color(0xFFFFFFFF),
-    success: Color(0xFF3F6F4E),
+    success: Color(0xFF34D399),
     danger: Color(0xFFEF4444),
     warning: Color(0xFFF59E0B),
-    focusRing: Color(0x663B82F6),
+    focusRing: Color(0x993B82F6),
+    scrim: Color(0xCC000000),
     fontFamily: fontStackFamily,
     monoFontFamily: monoStackFamily,
   );
@@ -112,6 +116,7 @@ class MaterialTokens extends ThemeExtension<MaterialTokens> {
     Color? danger,
     Color? warning,
     Color? focusRing,
+    Color? scrim,
     String? fontFamily,
     String? monoFontFamily,
   }) {
@@ -132,6 +137,7 @@ class MaterialTokens extends ThemeExtension<MaterialTokens> {
       danger: danger ?? this.danger,
       warning: warning ?? this.warning,
       focusRing: focusRing ?? this.focusRing,
+      scrim: scrim ?? this.scrim,
       fontFamily: fontFamily ?? this.fontFamily,
       monoFontFamily: monoFontFamily ?? this.monoFontFamily,
     );

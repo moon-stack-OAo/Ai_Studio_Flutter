@@ -1,6 +1,7 @@
 import 'package:design_fluent/design_fluent.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 
+import 'empty_illustrations.dart';
 import 'fluent_empty_states.dart';
 
 class SessionListItem {
@@ -43,18 +44,26 @@ class SessionListPane extends StatelessWidget {
     final density =
         UiDensity.fromVisualDensity(FluentTheme.of(context).visualDensity);
     final itemVPad = density.sessionItemVerticalPadding;
+    final listGap = density.sessionListGap;
     return ColoredBox(
       color: tokens.surface,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(12, 12, 8, 8),
+            padding: EdgeInsets.fromLTRB(
+              12,
+              density == UiDensity.compact ? 8 : 12,
+              8,
+              density == UiDensity.compact ? 6 : 8,
+            ),
             child: Row(
               children: [
                 Expanded(
                   child: Text(
                     headerTitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.w600,
@@ -80,7 +89,10 @@ class SessionListPane extends StatelessWidget {
           ),
           Expanded(
             child: sessions.isEmpty
-                ? FluentSessionListEmpty(onCreate: onCreate)
+                ? FluentSessionListEmpty(
+                    onCreate: onCreate,
+                    illustration: const FluentEmptyIllustration.noSessions(),
+                  )
                 : ListView.builder(
                     padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
                     itemCount: sessions.length,
@@ -89,7 +101,7 @@ class SessionListPane extends StatelessWidget {
                       final selected = session.id == selectedId;
                       final busy = session.id == busySessionId;
                       return Padding(
-                        padding: const EdgeInsets.only(bottom: 4),
+                        padding: EdgeInsets.only(bottom: listGap),
                         child: _SessionRow(
                           session: session,
                           selected: selected,
@@ -204,115 +216,142 @@ class _SessionRowState extends State<_SessionRow> {
     final tokens = fluentTokensOf(context);
     final subtitle = widget.session.subtitle?.trim() ?? '';
 
+    final labelParts = <String>[
+      widget.session.title,
+      if (subtitle.isNotEmpty) subtitle,
+      if (widget.busy) '进行中',
+      if (widget.selected) '已选中',
+    ];
+
     return FlyoutTarget(
       controller: _flyout,
       child: GestureDetector(
         onSecondaryTapUp: (d) => _showMenu(d.globalPosition),
-        child: HoverButton(
-          onPressed: _renaming ? null : widget.onSelect,
-          cursor: SystemMouseCursors.click,
-          builder: (context, states) {
-            final hovered = states.isHovered;
-            final Color bg;
-            if (widget.selected) {
-              bg = tokens.primary.withValues(alpha: 0.10);
-            } else if (hovered) {
-              bg = tokens.surfaceMuted;
-            } else {
-              bg = Colors.transparent;
-            }
-            return Container(
-              padding: EdgeInsets.fromLTRB(
-                10,
-                widget.itemVPad,
-                6,
-                widget.itemVPad,
-              ),
-              decoration: BoxDecoration(
-                color: bg,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Row(
-                children: [
-                  if (widget.busy)
-                    const Padding(
-                      padding: EdgeInsets.only(right: 6),
-                      child: SizedBox(
-                        width: 10,
-                        height: 10,
-                        child: ProgressRing(strokeWidth: 1.5),
+        child: Semantics(
+          button: !_renaming,
+          selected: widget.selected,
+          label: labelParts.join('，'),
+          excludeSemantics: !_renaming,
+          child: HoverButton(
+            onPressed: _renaming ? null : widget.onSelect,
+            cursor: SystemMouseCursors.click,
+            builder: (context, states) {
+              final hovered = states.isHovered;
+              final focused = states.isFocused;
+              final Color bg;
+              if (widget.selected) {
+                bg = tokens.primary.withValues(alpha: 0.10);
+              } else if (hovered || focused) {
+                bg = tokens.surfaceMuted;
+              } else {
+                bg = Colors.transparent;
+              }
+              return Container(
+                padding: EdgeInsets.fromLTRB(
+                  10,
+                  widget.itemVPad,
+                  6,
+                  widget.itemVPad,
+                ),
+                decoration: BoxDecoration(
+                  color: bg,
+                  borderRadius: BorderRadius.circular(8),
+                  border: focused
+                      ? Border.all(
+                          color: tokens.primary.withValues(alpha: 0.55),
+                        )
+                      : null,
+                ),
+                child: Row(
+                  children: [
+                    if (widget.busy)
+                      const Padding(
+                        padding: EdgeInsets.only(right: 6),
+                        child: SizedBox(
+                          width: 10,
+                          height: 10,
+                          child: ProgressRing(strokeWidth: 1.5),
+                        ),
                       ),
-                    ),
-                  Expanded(
-                    child: _renaming
-                        ? TextBox(
-                            controller: _renameCtrl,
-                            autofocus: true,
-                            onSubmitted: (_) => _commitRename(),
-                            suffix: IconButton(
-                              icon: const Icon(
-                                FluentIcons.check_mark,
-                                size: 10,
-                              ),
-                              onPressed: _commitRename,
-                            ),
-                          )
-                        : Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                widget.session.title,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: widget.selected
-                                      ? FontWeight.w600
-                                      : FontWeight.w500,
-                                  color: tokens.ink,
-                                  fontFamily: tokens.fontFamily,
+                    Expanded(
+                      child: _renaming
+                          ? TextBox(
+                              controller: _renameCtrl,
+                              autofocus: true,
+                              onSubmitted: (_) => _commitRename(),
+                              suffix: Tooltip(
+                                message: '确认重命名',
+                                child: Semantics(
+                                  button: true,
+                                  label: '确认重命名',
+                                  excludeSemantics: true,
+                                  child: IconButton(
+                                    icon: const Icon(
+                                      FluentIcons.check_mark,
+                                      size: 10,
+                                    ),
+                                    onPressed: _commitRename,
+                                  ),
                                 ),
                               ),
-                              if (subtitle.isNotEmpty) ...[
-                                const SizedBox(height: 3),
+                            )
+                          : Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
                                 Text(
-                                  subtitle,
+                                  widget.session.title,
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                   style: TextStyle(
-                                    fontSize: 11,
-                                    color: tokens.inkMuted,
+                                    fontSize: 13,
+                                    fontWeight: widget.selected
+                                        ? FontWeight.w600
+                                        : FontWeight.w500,
+                                    color: tokens.ink,
                                     fontFamily: tokens.fontFamily,
                                   ),
                                 ),
+                                if (subtitle.isNotEmpty) ...[
+                                  const SizedBox(height: 3),
+                                  Text(
+                                    subtitle,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: tokens.inkMuted,
+                                      fontFamily: tokens.fontFamily,
+                                    ),
+                                  ),
+                                ],
                               ],
-                            ],
+                            ),
+                    ),
+                    if (!_renaming &&
+                        widget.onDelete != null &&
+                        (hovered || focused || widget.selected))
+                      Tooltip(
+                        message: '删除会话',
+                        child: Semantics(
+                          button: true,
+                          label: '删除会话 ${widget.session.title}',
+                          excludeSemantics: true,
+                          child: IconButton(
+                            icon: Icon(
+                              FluentIcons.delete,
+                              size: 12,
+                              color: tokens.inkMuted,
+                            ),
+                            onPressed: widget.onDelete,
                           ),
-                  ),
-                  if (!_renaming &&
-                      widget.onDelete != null &&
-                      (hovered || widget.selected))
-                    Tooltip(
-                      message: '删除会话',
-                      child: Semantics(
-                        button: true,
-                        label: '删除会话 ${widget.session.title}',
-                        excludeSemantics: true,
-                        child: IconButton(
-                          icon: Icon(
-                            FluentIcons.delete,
-                            size: 12,
-                            color: tokens.inkMuted,
-                          ),
-                          onPressed: widget.onDelete,
                         ),
                       ),
-                    ),
-                ],
-              ),
-            );
-          },
+                  ],
+                ),
+              );
+            },
+          ),
         ),
       ),
     );

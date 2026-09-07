@@ -175,6 +175,7 @@ class _SettingsLogsTabState extends State<SettingsLogsTab> {
                   TextField(
                     controller: _searchCtrl,
                     decoration: const InputDecoration(
+                      labelText: '搜索日志',
                       hintText: '搜索消息…',
                       isDense: true,
                       prefixIcon: Icon(Icons.search, size: 20),
@@ -223,7 +224,11 @@ class _SettingsLogsTabState extends State<SettingsLogsTab> {
                 padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
                 child: DecoratedBox(
                   decoration: BoxDecoration(
-                    color: const Color(0xFF1A1917),
+                    color: Color.lerp(
+                      MaterialTokens.dark.surfaceElevated,
+                      MaterialTokens.dark.canvas,
+                      0.35,
+                    ),
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(color: tokens.border),
                   ),
@@ -233,7 +238,8 @@ class _SettingsLogsTabState extends State<SettingsLogsTab> {
                             '暂无日志',
                             style: TextStyle(
                               fontSize: 14,
-                              color: tokens.inkMuted,
+                              color: MaterialTokens.dark.inkMuted,
+                              fontFamily: tokens.fontFamily,
                             ),
                           ),
                         )
@@ -245,7 +251,8 @@ class _SettingsLogsTabState extends State<SettingsLogsTab> {
                           itemCount: visible.length,
                           separatorBuilder: (_, _) => Divider(
                             height: 1,
-                            color: Colors.white.withValues(alpha: 0.06),
+                            color: MaterialTokens.dark.ink
+                                .withValues(alpha: 0.08),
                           ),
                           itemBuilder: (context, index) {
                             final e = visible[index];
@@ -257,15 +264,15 @@ class _SettingsLogsTabState extends State<SettingsLogsTab> {
                                   style: TextStyle(
                                     fontSize: 11.5,
                                     height: 1.45,
-                                    color: const Color(0xFFE8E4DC),
+                                    color: MaterialTokens.dark.ink,
                                   ).withMonoFont(tokens),
                                   children: [
                                     TextSpan(
                                       text: AppLogRepository.formatTimestamp(
                                         e.at,
                                       ),
-                                      style: const TextStyle(
-                                        color: Color(0xFF71717A),
+                                      style: TextStyle(
+                                        color: MaterialTokens.dark.inkMuted,
                                         fontSize: 10,
                                       ),
                                     ),

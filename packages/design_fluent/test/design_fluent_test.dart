@@ -54,6 +54,22 @@ void main() {
     expect(UiDensity.comfortable.settingsCatWidth, 260);
     expect(UiDensity.compact.sessionItemVerticalPadding, 5);
     expect(UiDensity.comfortable.sessionItemVerticalPadding, 8);
+    expect(UiDensity.compact.composerPadding.top, 8);
+    expect(UiDensity.comfortable.composerPadding.top, 12);
+    expect(UiDensity.compact.settingsFormGap, 8);
+    expect(UiDensity.comfortable.settingsFormGap, 12);
+    expect(UiDensity.compact.settingsCatTileVertical, 7);
+    expect(UiDensity.comfortable.settingsCatTileVertical, 10);
+  });
+
+  test('tokens expose scrim and surface ladder', () {
+    expect(FluentTokens.light.scrim, const Color(0xB8141413));
+    expect(FluentTokens.dark.scrim, const Color(0xCC000000));
+    expect(FluentTokens.light.canvas, isNot(FluentTokens.light.surfaceMuted));
+    expect(
+      FluentTokens.dark.surfaceElevated,
+      isNot(FluentTokens.dark.canvas),
+    );
   });
 
   test('theme builders honor fontScale and density', () {

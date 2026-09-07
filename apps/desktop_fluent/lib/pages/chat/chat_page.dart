@@ -2,6 +2,7 @@ import 'package:core/core.dart';
 import 'package:design_fluent/design_fluent.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 
+import '../../widgets/empty_illustrations.dart';
 import '../../widgets/fluent_empty_states.dart';
 import '../../widgets/session_list_pane.dart';
 import 'chat_controller.dart';
@@ -120,10 +121,11 @@ class _ChatPageState extends State<ChatPage> {
         final ready = widget.providerRepository.hasConfiguredChatProvider;
         if (!ready) {
           return FluentFeatureEmpty(
-            title: '开始对话',
-            message: '尚未配置提供商。前往设置添加 API Key，即可开始流式对话。',
-            actionLabel: '添加提供商',
+            title: '尚未配置提供商',
+            message: '前往设置添加 API Key 后，即可开始流式对话。',
+            actionLabel: '去设置',
             onAction: widget.onOpenProviders,
+            illustration: const FluentEmptyIllustration.noProvider(),
           );
         }
 
@@ -135,63 +137,65 @@ class _ChatPageState extends State<ChatPage> {
 
         return ColoredBox(
           color: tokens.canvas,
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              SizedBox(
-                width: tokens.settingsCatWidth,
-                child: SessionListPane(
-                  sessions: [
-                    for (final s in widget.sessionRepository.sortedSessions)
-                      SessionListItem(
-                        id: s.id,
-                        title: s.title,
-                        subtitle: _sessionSubtitle(s),
-                      ),
-                  ],
-                  selectedId: widget.sessionRepository.activeId,
-                  busySessionId: widget.generation.sessionId,
-                  onSelect: (id) => _controller.setActiveSession(id),
-                  onCreate: () => _controller.createSession(),
-                  onDelete: (id) => _controller.removeSession(id),
-                  onRename: (id, title) =>
-                      _controller.renameSession(id, title),
+          child: FocusTraversalGroup(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                SizedBox(
+                  width: tokens.settingsCatWidth,
+                  child: SessionListPane(
+                    sessions: [
+                      for (final s in widget.sessionRepository.sortedSessions)
+                        SessionListItem(
+                          id: s.id,
+                          title: s.title,
+                          subtitle: _sessionSubtitle(s),
+                        ),
+                    ],
+                    selectedId: widget.sessionRepository.activeId,
+                    busySessionId: widget.generation.sessionId,
+                    onSelect: (id) => _controller.setActiveSession(id),
+                    onCreate: () => _controller.createSession(),
+                    onDelete: (id) => _controller.removeSession(id),
+                    onRename: (id, title) =>
+                        _controller.renameSession(id, title),
+                  ),
                 ),
-              ),
-              Container(width: 1, color: tokens.border),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    _ChatHeader(
-                      title: session?.title ?? '新对话',
-                      tokens: tokens,
-                      controller: _controller,
-                      hasOverrides: hasOverrides,
-                      onOpenOverrides: session == null
-                          ? null
-                          : () => _openOverrides(session),
-                    ),
-                    Expanded(
-                      child: MessageList(
-                        messages: messages,
-                        recallEnabled: !streamingHere,
-                        onRecallUser: (id) =>
-                            _controller.recallUserMessage(id),
-                        emptyHint: '输入消息开始对话',
-                        emptySubtitle: '选择左侧会话，或在下方输入第一条消息。',
+                Container(width: 1, color: tokens.border),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      _ChatHeader(
+                        title: session?.title ?? '新对话',
+                        tokens: tokens,
+                        controller: _controller,
+                        hasOverrides: hasOverrides,
+                        onOpenOverrides: session == null
+                            ? null
+                            : () => _openOverrides(session),
                       ),
-                    ),
-                    Composer(
-                      enabled: _controller.canSend,
-                      streaming: streamingHere,
-                      onSend: _controller.send,
-                      onStop: _controller.stop,
-                    ),
-                  ],
+                      Expanded(
+                        child: MessageList(
+                          messages: messages,
+                          recallEnabled: !streamingHere,
+                          onRecallUser: (id) =>
+                              _controller.recallUserMessage(id),
+                          emptyHint: '还没有消息',
+                          emptySubtitle: '选择左侧会话，或在下方输入第一条消息开始对话。',
+                        ),
+                      ),
+                      Composer(
+                        enabled: _controller.canSend,
+                        streaming: streamingHere,
+                        onSend: _controller.send,
+                        onStop: _controller.stop,
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         );
       },
@@ -244,62 +248,76 @@ class _ChatHeader extends StatelessWidget {
           ChatModelCombo(controller: controller),
           const Spacer(),
           if (onOpenOverrides != null)
-            HoverButton(
-              onPressed: onOpenOverrides,
-              cursor: SystemMouseCursors.click,
-              builder: (context, states) {
-                final hovered = states.isHovered || states.isPressed;
-                return Container(
-                  height: 30,
-                  padding: const EdgeInsets.symmetric(horizontal: 10),
-                  decoration: BoxDecoration(
-                    color: hovered
-                        ? tokens.surfaceMuted
-                        : Colors.transparent,
-                    borderRadius: BorderRadius.circular(6),
-                    border: Border.all(
-                      color: hovered ? tokens.border : Colors.transparent,
-                    ),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        '会话参数',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: tokens.inkSecondary,
-                          fontFamily: tokens.fontFamily,
+            Semantics(
+              button: true,
+              label: hasOverrides ? '会话参数，已覆盖默认值' : '会话参数',
+              excludeSemantics: true,
+              child: Tooltip(
+                message: hasOverrides ? '会话参数（已覆盖）' : '会话参数',
+                child: HoverButton(
+                  onPressed: onOpenOverrides,
+                  cursor: SystemMouseCursors.click,
+                  builder: (context, states) {
+                    final hovered = states.isHovered || states.isPressed;
+                    final focused = states.isFocused;
+                    return Container(
+                      height: 30,
+                      padding: const EdgeInsets.symmetric(horizontal: 10),
+                      decoration: BoxDecoration(
+                        color: hovered || focused
+                            ? tokens.surfaceMuted
+                            : Colors.transparent,
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(
+                          color: focused
+                              ? tokens.primary.withValues(alpha: 0.55)
+                              : (hovered
+                                  ? tokens.border
+                                  : Colors.transparent),
                         ),
                       ),
-                      if (hasOverrides) ...[
-                        const SizedBox(width: 6),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 5,
-                            vertical: 1,
-                          ),
-                          decoration: BoxDecoration(
-                            color: tokens.primary.withValues(alpha: 0.14),
-                            borderRadius: BorderRadius.circular(4),
-                            border: Border.all(
-                              color: tokens.primary.withValues(alpha: 0.35),
-                            ),
-                          ),
-                          child: Text(
-                            '已覆盖',
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            '会话参数',
                             style: TextStyle(
-                              fontSize: 10,
-                              color: tokens.primaryPressed,
+                              fontSize: 12,
+                              color: tokens.inkSecondary,
                               fontFamily: tokens.fontFamily,
                             ),
                           ),
-                        ),
-                      ],
-                    ],
-                  ),
-                );
-              },
+                          if (hasOverrides) ...[
+                            const SizedBox(width: 6),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 5,
+                                vertical: 1,
+                              ),
+                              decoration: BoxDecoration(
+                                color: tokens.primary.withValues(alpha: 0.14),
+                                borderRadius: BorderRadius.circular(4),
+                                border: Border.all(
+                                  color:
+                                      tokens.primary.withValues(alpha: 0.35),
+                                ),
+                              ),
+                              child: Text(
+                                '已覆盖',
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  color: tokens.primaryPressed,
+                                  fontFamily: tokens.fontFamily,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    );
+                  },
+                ),
+              ),
             ),
         ],
       ),

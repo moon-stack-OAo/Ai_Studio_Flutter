@@ -29,12 +29,17 @@ class TitleBarThemeButton extends StatelessWidget {
         final next = pref.toggled;
         return Tooltip(
           message: '切换主题（当前${pref.label} → ${next.label}）',
-          child: IconButton(
-            onPressed: controller.cycleLightDark,
-            icon: Icon(
-              _iconFor(pref),
-              size: 14,
-              color: tokens.inkSecondary,
+          child: Semantics(
+            button: true,
+            label: '切换主题，当前${pref.label}',
+            excludeSemantics: true,
+            child: IconButton(
+              onPressed: controller.cycleLightDark,
+              icon: Icon(
+                _iconFor(pref),
+                size: 14,
+                color: tokens.inkSecondary,
+              ),
             ),
           ),
         );

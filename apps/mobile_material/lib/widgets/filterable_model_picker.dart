@@ -150,6 +150,7 @@ class _FilterableModelPickerState extends State<FilterableModelPicker> {
                 : '搜索已拉取模型…',
             isDense: true,
             suffixIcon: IconButton(
+              tooltip: showList ? '收起模型列表' : '展开模型列表',
               icon: Icon(
                 showList ? Icons.expand_less : Icons.expand_more,
                 color: widget.options.isEmpty && !widget.allowClear
@@ -219,6 +220,7 @@ class _FilterableModelPickerState extends State<FilterableModelPicker> {
                 ).withMonoFont(tokens),
               ),
               onDeleted: widget.enabled ? () => _commit('') : null,
+              deleteButtonTooltipMessage: '清除所选模型',
               deleteIconColor: tokens.inkMuted,
               side: BorderSide(color: tokens.border),
               backgroundColor: tokens.surfaceMuted,

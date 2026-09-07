@@ -3,6 +3,7 @@ import 'package:design_fluent/design_fluent.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 
 import '../../../widgets/collapsible_prompt.dart';
+import '../../../widgets/empty_illustrations.dart';
 import '../../../widgets/fluent_empty_states.dart';
 
 /// F-VideoQueue：time-split + prompt-mini + 任务卡。
@@ -19,7 +20,7 @@ class VideoQueue extends StatefulWidget {
     this.selectedId,
     this.onReload,
     this.isReloading,
-    this.emptyHint = '输入提示词创建视频任务',
+    this.emptyHint = '还没有视频任务',
     this.emptySubtitle = '在右侧参数区填写提示词后创建任务。',
   });
 
@@ -48,6 +49,7 @@ class _VideoQueueState extends State<VideoQueue> {
       return FluentContentEmpty(
         hint: widget.emptyHint,
         subtitle: widget.emptySubtitle,
+        illustration: const FluentEmptyIllustration.noVideos(),
       );
     }
 
@@ -299,91 +301,95 @@ class _TurnBlock extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 8),
-          GestureDetector(
-            onTap: () {
-              if (item.status == VideoItemStatus.success) {
-                (onSelect ?? onPlay)?.call(item);
-              }
-            },
-            child: Container(
-              padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
-              decoration: BoxDecoration(
-                color: tokens.surfaceMuted,
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(
-                  color: selected
-                      ? Color.lerp(tokens.primary, tokens.border, 0.55)!
-                      : item.status == VideoItemStatus.loading
-                          ? Color.lerp(tokens.primary, tokens.border, 0.55)!
-                          : tokens.border,
-                ),
-                boxShadow: item.status == VideoItemStatus.loading
-                    ? [
-                        BoxShadow(
-                          color: tokens.primary.withValues(alpha: 0.12),
-                          blurRadius: 0,
-                          spreadRadius: 3,
-                        ),
-                      ]
-                    : null,
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              title,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                                color: tokens.ink,
-                                fontFamily: tokens.fontFamily,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              _metaLine(),
-                              style: TextStyle(
-                                fontSize: 11,
-                                color: tokens.inkMuted,
-                                fontFamily: tokens.fontFamily,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 3,
-                        ),
-                        decoration: BoxDecoration(
-                          color: _pillColor().withValues(alpha: 0.15),
-                          borderRadius: BorderRadius.circular(999),
-                          border: Border.all(
-                            color: _pillColor().withValues(alpha: 0.4),
-                          ),
-                        ),
-                        child: Text(
-                          _statusLabel(),
-                          style: TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w600,
-                            color: _pillColor(),
-                            fontFamily: tokens.fontFamily,
-                          ),
-                        ),
-                      ),
-                    ],
+          Semantics(
+            button: item.status == VideoItemStatus.success,
+            selected: selected,
+            label: '视频回合 $turnIndex，$title，状态 ${_statusLabelZh()}，${_metaLine()}',
+            child: GestureDetector(
+              onTap: () {
+                if (item.status == VideoItemStatus.success) {
+                  (onSelect ?? onPlay)?.call(item);
+                }
+              },
+              child: Container(
+                padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+                decoration: BoxDecoration(
+                  color: tokens.surfaceMuted,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color: selected
+                        ? Color.lerp(tokens.primary, tokens.border, 0.55)!
+                        : item.status == VideoItemStatus.loading
+                            ? Color.lerp(tokens.primary, tokens.border, 0.55)!
+                            : tokens.border,
                   ),
+                  boxShadow: item.status == VideoItemStatus.loading
+                      ? [
+                          BoxShadow(
+                            color: tokens.primary.withValues(alpha: 0.12),
+                            blurRadius: 0,
+                            spreadRadius: 3,
+                          ),
+                        ]
+                      : null,
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                title,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: tokens.ink,
+                                  fontFamily: tokens.fontFamily,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                _metaLine(),
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: tokens.inkMuted,
+                                  fontFamily: tokens.fontFamily,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 3,
+                          ),
+                          decoration: BoxDecoration(
+                            color: _pillColor().withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(999),
+                            border: Border.all(
+                              color: _pillColor().withValues(alpha: 0.4),
+                            ),
+                          ),
+                          child: Text(
+                            _statusLabel(),
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w600,
+                              color: _pillColor(),
+                              fontFamily: tokens.fontFamily,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   if (item.status == VideoItemStatus.loading) ...[
                     const SizedBox(height: 10),
                     ProgressBar(
@@ -417,10 +423,28 @@ class _TurnBlock extends StatelessWidget {
                 ],
               ),
             ),
+            ),
           ),
         ],
       ),
     );
+  }
+
+  String _statusLabelZh() {
+    switch (item.status) {
+      case VideoItemStatus.loading:
+        final p = item.progress;
+        if (p != null) return '生成中 ${p.round()}%';
+        return '生成中';
+      case VideoItemStatus.pendingResume:
+        return '待恢复';
+      case VideoItemStatus.success:
+        return '已完成';
+      case VideoItemStatus.error:
+        return '失败';
+      case VideoItemStatus.abandoned:
+        return '已放弃';
+    }
   }
 
   String _metaLine() {

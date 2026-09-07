@@ -168,7 +168,7 @@ ColorScheme _colorScheme(MaterialTokens tokens) {
     outline: tokens.border,
     outlineVariant: tokens.border,
     shadow: const Color(0xFF000000),
-    scrim: const Color(0xFF000000),
+    scrim: tokens.scrim,
     inverseSurface: tokens.ink,
     onInverseSurface: tokens.canvas,
     inversePrimary: tokens.primaryPressed,
@@ -266,7 +266,19 @@ ThemeData _buildTheme(
     ),
     snackBarTheme: SnackBarThemeData(
       backgroundColor: tokens.surfaceElevated,
-      contentTextStyle: TextStyle(color: tokens.ink),
+      contentTextStyle: TextStyle(
+        color: tokens.ink,
+        fontFamily: tokens.fontFamily,
+        fontFamilyFallback: kMaterialFontFamilyFallback,
+      ),
+      actionTextColor: tokens.primary,
+      disabledActionTextColor: tokens.inkMuted,
+      behavior: SnackBarBehavior.floating,
+      elevation: 2,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: tokens.border),
+      ),
     ),
     dialogTheme: DialogThemeData(
       backgroundColor: tokens.surfaceElevated,

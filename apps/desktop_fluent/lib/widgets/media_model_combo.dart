@@ -93,51 +93,61 @@ class _MediaModelComboState extends State<MediaModelCombo> {
       label = widget.placeholder;
     }
     final ready = widget.enabled && readyProviders.isNotEmpty;
+    final readyLabel = ready ? '模型已就绪' : '模型未就绪';
 
     return FlyoutTarget(
       controller: _flyout,
-      child: HoverButton(
-        onPressed: ready ? _open : null,
-        cursor:
-            ready ? SystemMouseCursors.click : SystemMouseCursors.basic,
-        builder: (context, states) {
-          final hovered = states.isHovered || states.isPressed;
-          return Container(
-            height: 34,
-            padding: const EdgeInsets.symmetric(horizontal: 10),
-            decoration: BoxDecoration(
-              color: tokens.surfaceMuted,
-              borderRadius: BorderRadius.circular(7),
-              border: Border.all(
-                color: hovered && ready
-                    ? Color.lerp(tokens.primary, tokens.border, 0.55)!
-                    : tokens.border,
-              ),
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: ready ? tokens.ink : tokens.inkMuted,
-                      fontFamily: tokens.fontFamily,
-                    ),
+      child: Tooltip(
+        message: '$label，$readyLabel',
+        child: Semantics(
+          button: true,
+          enabled: ready,
+          label: '选择模型，$label，$readyLabel',
+          excludeSemantics: true,
+          child: HoverButton(
+            onPressed: ready ? _open : null,
+            cursor:
+                ready ? SystemMouseCursors.click : SystemMouseCursors.basic,
+            builder: (context, states) {
+              final hovered = states.isHovered || states.isPressed;
+              return Container(
+                height: 34,
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                decoration: BoxDecoration(
+                  color: tokens.surfaceMuted,
+                  borderRadius: BorderRadius.circular(7),
+                  border: Border.all(
+                    color: hovered && ready
+                        ? Color.lerp(tokens.primary, tokens.border, 0.55)!
+                        : tokens.border,
                   ),
                 ),
-                const SizedBox(width: 4),
-                Icon(
-                  FluentIcons.chevron_down,
-                  size: 10,
-                  color: tokens.inkMuted,
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: ready ? tokens.ink : tokens.inkMuted,
+                          fontFamily: tokens.fontFamily,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    Icon(
+                      FluentIcons.chevron_down,
+                      size: 10,
+                      color: tokens.inkMuted,
+                    ),
+                  ],
                 ),
-              ],
-            ),
-          );
-        },
+              );
+            },
+          ),
+        ),
       ),
     );
   }
@@ -450,15 +460,20 @@ class _MediaModelFlyoutState extends State<_MediaModelFlyout> {
                 const SizedBox(width: 4),
                 Tooltip(
                   message: '刷新模型列表',
-                  child: IconButton(
-                    icon: _loading
-                        ? const SizedBox(
-                            width: 14,
-                            height: 14,
-                            child: ProgressRing(strokeWidth: 1.5),
-                          )
-                        : const Icon(FluentIcons.refresh, size: 12),
-                    onPressed: _loading ? null : _refreshForce,
+                  child: Semantics(
+                    button: true,
+                    label: '刷新模型列表',
+                    excludeSemantics: true,
+                    child: IconButton(
+                      icon: _loading
+                          ? const SizedBox(
+                              width: 14,
+                              height: 14,
+                              child: ProgressRing(strokeWidth: 1.5),
+                            )
+                          : const Icon(FluentIcons.refresh, size: 12),
+                      onPressed: _loading ? null : _refreshForce,
+                    ),
                   ),
                 ),
               ],

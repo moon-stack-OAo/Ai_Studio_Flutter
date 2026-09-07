@@ -2,8 +2,11 @@ import 'package:core/core.dart';
 import 'package:desktop_fluent/app/theme_controller.dart';
 import 'package:desktop_fluent/main.dart';
 import 'package:desktop_fluent/pages/chat/widgets/composer.dart';
+import 'package:desktop_fluent/shell/app_section.dart';
+import 'package:desktop_fluent/shell/update_banner.dart';
 import 'package:desktop_fluent/widgets/session_list_pane.dart';
 import 'package:desktop_fluent/pages/settings/settings_about_page.dart';
+import 'package:desktop_fluent/pages/settings/settings_shell.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:package_info_plus/package_info_plus.dart';
@@ -89,24 +92,25 @@ void main() {
           logs: logs,
         ),
         generation: GenerationRuntime(),
+        startupUpdateCheckDelay: Duration.zero,
       ),
     );
     await tester.pumpAndSettle();
 
     expect(find.byType(IndexedStack), findsOneWidget);
-    expect(find.text('开始对话'), findsOneWidget);
+    expect(find.text('尚未配置提供商'), findsOneWidget);
 
     // compact 侧栏只显示图标，title 作为 tooltip / semantics。
     await tester.tap(find.byTooltip('生图'));
     await tester.pump(const Duration(milliseconds: 200));
     await tester.pumpAndSettle();
-    expect(find.text('开始生图'), findsOneWidget);
+    expect(find.text('尚未配置生图模型'), findsOneWidget);
     expect(find.byType(IndexedStack), findsOneWidget);
 
     await tester.tap(find.byTooltip('对话'));
     await tester.pump(const Duration(milliseconds: 200));
     await tester.pumpAndSettle();
-    expect(find.text('开始对话'), findsOneWidget);
+    expect(find.text('尚未配置提供商'), findsOneWidget);
   });
 
   testWidgets('shell shows chat empty state', (tester) async {
@@ -152,12 +156,13 @@ void main() {
           logs: logs,
         ),
         generation: GenerationRuntime(),
+        startupUpdateCheckDelay: Duration.zero,
       ),
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('开始对话'), findsWidgets);
-    expect(find.text('添加提供商'), findsOneWidget);
+    expect(find.text('尚未配置提供商'), findsWidgets);
+    expect(find.text('去设置'), findsOneWidget);
   });
 
   testWidgets('configured provider shows session list and composer',
@@ -219,16 +224,17 @@ void main() {
           logs: logs,
         ),
         generation: GenerationRuntime(),
+        startupUpdateCheckDelay: Duration.zero,
       ),
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('开始对话'), findsNothing);
-    expect(find.text('添加提供商'), findsNothing);
+    expect(find.text('尚未配置提供商'), findsNothing);
+    expect(find.text('去设置'), findsNothing);
     expect(find.text('会话'), findsOneWidget);
     expect(find.text('新对话'), findsWidgets);
-    expect(find.text('输入消息开始对话'), findsOneWidget);
-    expect(find.text('选择左侧会话，或在下方输入第一条消息。'), findsOneWidget);
+    expect(find.text('还没有消息'), findsOneWidget);
+    expect(find.text('选择左侧会话，或在下方输入第一条消息开始对话。'), findsOneWidget);
     expect(find.text('发送'), findsOneWidget);
     expect(find.textContaining('Local · gpt-test'), findsOneWidget);
     expect(find.text('会话参数'), findsOneWidget);
@@ -320,7 +326,7 @@ void main() {
 
     expect(find.text('检查更新'), findsOneWidget);
     expect(find.textContaining('已生效'), findsOneWidget);
-    expect(find.textContaining('清单格式对齐现网'), findsOneWidget);
+    expect(find.textContaining('本仓 Releases'), findsOneWidget);
     expect(find.text('导出设置'), findsOneWidget);
     expect(find.text('导入设置'), findsOneWidget);
     expect(find.text('清除本地数据'), findsOneWidget);
@@ -386,6 +392,31 @@ void main() {
     await tester.pumpAndSettle();
   });
 
+  testWidgets('session list row exposes semantics label', (tester) async {
+    await tester.pumpWidget(
+      FluentApp(
+        home: ScaffoldPage(
+          content: SessionListPane(
+            sessions: const [
+              SessionListItem(id: 's1', title: '测试会话', subtitle: '今天'),
+            ],
+            selectedId: 's1',
+            onSelect: (_) {},
+            onCreate: () {},
+            onDelete: (_) {},
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.byTooltip('新建会话'), findsOneWidget);
+    expect(
+      find.bySemanticsLabel(RegExp(r'测试会话')),
+      findsWidgets,
+    );
+  });
+
   testWidgets('composer send/stop expose tooltips and labels', (tester) async {
     await tester.pumpWidget(
       FluentApp(
@@ -421,5 +452,80 @@ void main() {
 
     expect(find.text('停止'), findsOneWidget);
     expect(find.byTooltip('停止生成'), findsOneWidget);
+    expect(find.bySemanticsLabel('消息输入'), findsWidgets);
+  });
+
+  testWidgets('settings category tiles expose semantics labels', (tester) async {
+    final appearance = AppearanceRepository(storage: MemoryAppearanceStorage());
+    await appearance.load();
+    final providers = ProviderRepository(
+      storage: MemoryProviderStorage(),
+      connectionTester: StubProviderConnectionTester(),
+    );
+    await providers.load();
+    final chatDefaults =
+        ChatDefaultsRepository(storage: MemoryChatDefaultsStorage());
+    await chatDefaults.load();
+    final logs = await makeLogs();
+    final chatSessions =
+        ChatSessionRepository(storage: MemoryChatSessionStorage());
+    await chatSessions.load();
+    final imageSessions =
+        ImageSessionRepository(storage: MemoryImageSessionStorage());
+    await imageSessions.load();
+    final videoSessions = await makeVideoSessions();
+    final backup = await makeBackup(
+      providers: providers,
+      chatSessions: chatSessions,
+      imageSessions: imageSessions,
+      videoSessions: videoSessions,
+      chatDefaults: chatDefaults,
+      appearance: appearance,
+      logs: logs,
+    );
+    final theme = ThemeController(repository: appearance);
+    theme.loadFrom(appearance.settings);
+
+    await tester.pumpWidget(
+      FluentApp(
+        home: ScaffoldPage(
+          content: SettingsShell(
+            category: SettingsCategory.providers,
+            onCategoryChanged: (_) {},
+            themeController: theme,
+            appearanceRepository: appearance,
+            providerRepository: providers,
+            chatDefaultsRepository: chatDefaults,
+            appLogRepository: logs,
+            dataBackupService: backup,
+            generation: GenerationRuntime(),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.bySemanticsLabel(RegExp(r'提供商')), findsWidgets);
+    expect(find.bySemanticsLabel(RegExp(r'外观')), findsWidgets);
+  });
+
+  testWidgets('update banner is a live region', (tester) async {
+    await tester.pumpWidget(
+      FluentApp(
+        home: ScaffoldPage(
+          content: UpdateBanner(
+            version: '1.2.3',
+            onGoUpdate: () {},
+            onLater: () {},
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(
+      find.bySemanticsLabel(RegExp(r'发现新版本 1\.2\.3')),
+      findsWidgets,
+    );
   });
 }

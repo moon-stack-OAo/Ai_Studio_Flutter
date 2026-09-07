@@ -5,6 +5,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 
 import 'app/theme_controller.dart';
 import 'shell/app_shell.dart';
+import 'update/mobile_update_controller.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -61,6 +62,8 @@ Future<void> main() async {
     logs: appLogs,
   );
 
+  final updateController = MobileUpdateController();
+
   runApp(
     AiStudioApp(
       themeController: themeController,
@@ -76,6 +79,7 @@ Future<void> main() async {
       chatClient: chatClient,
       imageClient: imageClient,
       videoClient: videoClient,
+      updateController: updateController,
     ),
   );
 }
@@ -96,6 +100,8 @@ class AiStudioApp extends StatelessWidget {
     this.chatClient,
     this.imageClient,
     this.videoClient,
+    this.updateController,
+    this.startupUpdateCheckDelay = const Duration(milliseconds: 800),
   });
 
   final ThemeController themeController;
@@ -111,6 +117,8 @@ class AiStudioApp extends StatelessWidget {
   final OpenAiCompatibleChatClient? chatClient;
   final OpenAiCompatibleImageClient? imageClient;
   final OpenAiCompatibleVideoClient? videoClient;
+  final MobileUpdateController? updateController;
+  final Duration startupUpdateCheckDelay;
 
   @override
   Widget build(BuildContext context) {
@@ -149,6 +157,8 @@ class AiStudioApp extends StatelessWidget {
             chatClient: chatClient,
             imageClient: imageClient,
             videoClient: videoClient,
+            updateController: updateController,
+            startupUpdateCheckDelay: startupUpdateCheckDelay,
           ),
         );
       },

@@ -385,18 +385,26 @@ class _Transport extends StatelessWidget {
       builder: (context, value, _) {
         return Row(
           children: [
-            IconButton(
-              icon: Icon(
-                value.isPlaying ? FluentIcons.pause : FluentIcons.play,
-                size: 14,
+            Tooltip(
+              message: value.isPlaying ? '暂停' : '播放',
+              child: Semantics(
+                button: true,
+                label: value.isPlaying ? '暂停' : '播放',
+                excludeSemantics: true,
+                child: IconButton(
+                  icon: Icon(
+                    value.isPlaying ? FluentIcons.pause : FluentIcons.play,
+                    size: 14,
+                  ),
+                  onPressed: () {
+                    if (value.isPlaying) {
+                      controller.pause();
+                    } else {
+                      controller.play();
+                    }
+                  },
+                ),
               ),
-              onPressed: () {
-                if (value.isPlaying) {
-                  controller.pause();
-                } else {
-                  controller.play();
-                }
-              },
             ),
             Expanded(
               child: VideoProgressIndicator(

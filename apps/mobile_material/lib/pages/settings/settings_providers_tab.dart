@@ -3,6 +3,7 @@ import 'package:design_material/design_material.dart';
 import 'package:flutter/material.dart';
 
 import '../../widgets/filterable_model_picker.dart';
+import '../../widgets/empty_illustrations.dart';
 import '../../widgets/material_empty_states.dart';
 
 class SettingsProvidersTab extends StatefulWidget {
@@ -340,7 +341,10 @@ class _SettingsProvidersTabState extends State<SettingsProvidersTab> {
         ),
         const SizedBox(height: 8),
         if (providers.isEmpty)
-          MaterialProvidersListEmpty(onAdd: _addProvider)
+          MaterialProvidersListEmpty(
+            onAdd: _addProvider,
+            illustration: const MaterialEmptyIllustration.noProviders(),
+          )
         else
           Card(
             clipBehavior: Clip.antiAlias,
@@ -427,6 +431,7 @@ class _SettingsProvidersTabState extends State<SettingsProvidersTab> {
                       labelText: 'API Key',
                       hintText: 'sk-…',
                       suffixIcon: IconButton(
+                        tooltip: _obscureKey ? '显示密钥' : '隐藏密钥',
                         icon: Icon(
                           _obscureKey
                               ? Icons.visibility_outlined

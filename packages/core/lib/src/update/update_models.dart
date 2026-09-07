@@ -1,17 +1,15 @@
 import 'version_compare.dart';
 
-/// 默认桌面更新清单 URL（Tauri 风格 latest.json）。
-///
-/// 清单格式对齐现网 AiStudio；发布 Flutter 构建前请确认产物为本仓安装包。
+/// 默认桌面更新清单 URL（`latest.json`，平台键兼容历史 updater 格式）。
 const String kDesktopUpdateManifestUrl =
-    'https://github.com/moon-stack-OAo/AiStudio/releases/latest/download/latest.json';
+    'https://github.com/moon-stack-OAo/Ai_Studio_Flutter/releases/latest/download/latest.json';
 
-/// 默认 Android 侧载更新清单 URL（与现网 `androidUpdater.js` 同源）。
+/// 默认 Android 侧载更新清单 URL。
 ///
 /// 字段：`version` / `notes` / `pub_date` / `platforms`；
 /// 平台资产除 `url` 外须含 **`sha256`**（64 位 hex）。
 const String kAndroidUpdateManifestUrl =
-    'https://github.com/moon-stack-OAo/AiStudio/releases/latest/download/android-latest.json';
+    'https://github.com/moon-stack-OAo/Ai_Studio_Flutter/releases/latest/download/android-latest.json';
 
 /// 单平台安装包条目。
 class PlatformAsset {

@@ -3,6 +3,7 @@ import 'package:design_fluent/design_fluent.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 
 import '../../widgets/filterable_model_picker.dart';
+import '../../widgets/empty_illustrations.dart';
 import '../../widgets/fluent_empty_states.dart';
 
 class SettingsProvidersPage extends StatefulWidget {
@@ -377,7 +378,11 @@ class _SettingsProvidersPageState extends State<SettingsProvidersPage> {
                   ),
                   Expanded(
                     child: providers.isEmpty
-                        ? FluentProvidersListEmpty(onAdd: _addProvider)
+                        ? FluentProvidersListEmpty(
+                            onAdd: _addProvider,
+                            illustration:
+                                const FluentEmptyIllustration.noProviders(),
+                          )
                         : ListView.separated(
                             padding: const EdgeInsets.fromLTRB(10, 0, 10, 16),
                             itemCount: providers.length,
@@ -806,7 +811,7 @@ class _ProviderForm extends StatelessWidget {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  '先「拉取模型」；列表可搜索筛选，也可直接输入自定义模型名（对齐现网 filterable+tag）。',
+                  '先「拉取模型」；列表可搜索筛选，也可直接输入自定义模型名。',
                   style: TextStyle(
                     fontSize: 12,
                     color: tokens.inkMuted,

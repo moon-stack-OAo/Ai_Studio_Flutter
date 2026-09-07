@@ -1,6 +1,7 @@
 import 'package:core/core.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 
+import '../../../widgets/empty_illustrations.dart';
 import '../../../widgets/fluent_empty_states.dart';
 import 'message_bubble.dart';
 
@@ -60,8 +61,9 @@ class _MessageListState extends State<MessageList> {
   Widget build(BuildContext context) {
     if (widget.messages.isEmpty) {
       return FluentContentEmpty(
-        hint: widget.emptyHint ?? '输入消息开始对话',
+        hint: widget.emptyHint ?? '还没有消息',
         subtitle: widget.emptySubtitle,
+        illustration: const FluentEmptyIllustration.noMessages(),
       );
     }
 

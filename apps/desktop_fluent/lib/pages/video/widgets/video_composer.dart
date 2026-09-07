@@ -209,19 +209,23 @@ class _VideoComposerState extends State<VideoComposer> {
                 const SizedBox(height: 12),
                 _label(tokens, '提示词'),
                 const SizedBox(height: 6),
-                TextBox(
-                  controller: _promptCtrl,
-                  onChanged:
-                      widget.generating ? null : widget.onPromptChanged,
-                  maxLines: 6,
-                  minLines: 4,
-                  enabled: !widget.generating,
-                  placeholder: '描述你想生成的视频画面与运镜…',
-                  style: TextStyle(
-                    fontFamily: tokens.fontFamily,
-                    fontSize: 13,
-                    height: 1.45,
-                    color: tokens.ink,
+                Semantics(
+                  label: '视频提示词',
+                  textField: true,
+                  child: TextBox(
+                    controller: _promptCtrl,
+                    onChanged:
+                        widget.generating ? null : widget.onPromptChanged,
+                    maxLines: 6,
+                    minLines: 4,
+                    enabled: !widget.generating,
+                    placeholder: '描述你想生成的视频画面与运镜…',
+                    style: TextStyle(
+                      fontFamily: tokens.fontFamily,
+                      fontSize: 13,
+                      height: 1.45,
+                      color: tokens.ink,
+                    ),
                   ),
                 ),
                 const SizedBox(height: 12),
@@ -270,20 +274,43 @@ class _VideoComposerState extends State<VideoComposer> {
                 SizedBox(
                   height: 36,
                   child: widget.generating
-                      ? Button(
-                          onPressed: widget.onStop,
-                          style: ButtonStyle(
-                            backgroundColor:
-                                WidgetStatePropertyAll(tokens.danger),
-                            foregroundColor:
-                                const WidgetStatePropertyAll(Colors.white),
+                      ? Tooltip(
+                          message: '取消生成',
+                          child: Semantics(
+                            button: true,
+                            label: '取消生成',
+                            excludeSemantics: true,
+                            child: Button(
+                              onPressed: widget.onStop,
+                              style: ButtonStyle(
+                                backgroundColor:
+                                    WidgetStatePropertyAll(tokens.danger),
+                                foregroundColor:
+                                    const WidgetStatePropertyAll(Colors.white),
+                              ),
+                              child: const Text('取消'),
+                            ),
                           ),
-                          child: const Text('取消'),
                         )
-                      : FilledButton(
-                          onPressed: widget.enabled ? widget.onGenerate : null,
-                          child: Text(
-                            widget.referenceImage != null ? '图生视频' : '创建任务',
+                      : Tooltip(
+                          message: widget.referenceImage != null
+                              ? '图生视频'
+                              : '创建视频任务',
+                          child: Semantics(
+                            button: true,
+                            label: widget.referenceImage != null
+                                ? '图生视频'
+                                : '创建视频任务',
+                            excludeSemantics: true,
+                            child: FilledButton(
+                              onPressed:
+                                  widget.enabled ? widget.onGenerate : null,
+                              child: Text(
+                                widget.referenceImage != null
+                                    ? '图生视频'
+                                    : '创建任务',
+                              ),
+                            ),
                           ),
                         ),
                 ),
@@ -352,31 +379,47 @@ class _SegItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: enabled ? onTap : null,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 100),
-        height: 28,
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: active
-              ? tokens.primary.withValues(alpha: 0.20)
-              : Colors.transparent,
-          borderRadius: BorderRadius.circular(6),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: 11,
-            fontWeight: active ? FontWeight.w600 : FontWeight.w400,
-            color: !enabled
-                ? tokens.inkMuted
-                : active
-                    ? tokens.primaryPressed
-                    : tokens.inkSecondary,
-            fontFamily: tokens.fontFamily,
-          ),
-        ),
+    return Semantics(
+      button: true,
+      selected: active,
+      enabled: enabled,
+      label: label,
+      excludeSemantics: true,
+      child: HoverButton(
+        onPressed: enabled ? onTap : null,
+        cursor: enabled
+            ? SystemMouseCursors.click
+            : SystemMouseCursors.basic,
+        builder: (context, states) {
+          final focused = states.isFocused;
+          return AnimatedContainer(
+            duration: const Duration(milliseconds: 100),
+            height: 28,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: active
+                  ? tokens.primary.withValues(alpha: 0.20)
+                  : Colors.transparent,
+              borderRadius: BorderRadius.circular(6),
+              border: focused
+                  ? Border.all(color: tokens.primary, width: 1.5)
+                  : null,
+            ),
+            child: Text(
+              label,
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: active ? FontWeight.w600 : FontWeight.w400,
+                color: !enabled
+                    ? tokens.inkMuted
+                    : active
+                        ? tokens.primaryPressed
+                        : tokens.inkSecondary,
+                fontFamily: tokens.fontFamily,
+              ),
+            ),
+          );
+        },
       ),
     );
   }
@@ -406,36 +449,53 @@ class _ChipWrap extends StatelessWidget {
       runSpacing: 6,
       children: options.map((e) {
         final active = e == value;
-        return GestureDetector(
-          onTap: enabled ? () => onChanged(e) : null,
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 100),
-            height: 28,
-            padding: const EdgeInsets.symmetric(horizontal: 10),
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: active
-                  ? tokens.primary.withValues(alpha: 0.14)
-                  : tokens.surfaceMuted,
-              borderRadius: BorderRadius.circular(6),
-              border: Border.all(
-                color: active
-                    ? Color.lerp(tokens.primary, tokens.border, 0.5)!
-                    : tokens.border,
-              ),
-            ),
-            child: Text(
-              labelOf?.call(e) ?? e,
-              style: TextStyle(
-                fontSize: 11,
-                color: !enabled
-                    ? tokens.inkMuted
-                    : active
-                        ? tokens.primaryPressed
-                        : tokens.inkSecondary,
-                fontFamily: tokens.fontFamily,
-              ),
-            ),
+        final chipLabel = labelOf?.call(e) ?? e;
+        return Semantics(
+          button: true,
+          selected: active,
+          enabled: enabled,
+          label: chipLabel,
+          excludeSemantics: true,
+          child: HoverButton(
+            onPressed: enabled ? () => onChanged(e) : null,
+            cursor: enabled
+                ? SystemMouseCursors.click
+                : SystemMouseCursors.basic,
+            builder: (context, states) {
+              final focused = states.isFocused;
+              return AnimatedContainer(
+                duration: const Duration(milliseconds: 100),
+                height: 28,
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: active
+                      ? tokens.primary.withValues(alpha: 0.14)
+                      : tokens.surfaceMuted,
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(
+                    color: focused
+                        ? tokens.primary
+                        : active
+                            ? Color.lerp(tokens.primary, tokens.border, 0.5)!
+                            : tokens.border,
+                    width: focused ? 1.5 : 1,
+                  ),
+                ),
+                child: Text(
+                  chipLabel,
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: !enabled
+                        ? tokens.inkMuted
+                        : active
+                            ? tokens.primaryPressed
+                            : tokens.inkSecondary,
+                    fontFamily: tokens.fontFamily,
+                  ),
+                ),
+              );
+            },
           ),
         );
       }).toList(),
@@ -497,93 +557,104 @@ class _VideoReferenceBoxState extends State<_VideoReferenceBox> {
         if (_dragging) setState(() => _dragging = false);
         await _handleDrop(detail);
       },
-      child: GestureDetector(
-        onTap: canPick ? widget.onPick : null,
-        child: MouseRegion(
-          cursor: canPick || (canDrop && !hasRef)
-              ? SystemMouseCursors.click
-              : SystemMouseCursors.basic,
-          child: Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(
-                color: highlight ? tokens.primary : tokens.border,
+      child: Semantics(
+        button: canPick,
+        label: hasRef
+            ? '参考图已设置，可清除或拖放替换'
+            : (widget.unsupportedHint ?? '选择或拖放参考图'),
+        excludeSemantics: hasRef || widget.unsupportedHint != null,
+        child: GestureDetector(
+          onTap: canPick ? widget.onPick : null,
+          child: MouseRegion(
+            cursor: canPick || (canDrop && !hasRef)
+                ? SystemMouseCursors.click
+                : SystemMouseCursors.basic,
+            child: Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: highlight ? tokens.primary : tokens.border,
+                ),
+                color: highlight
+                    ? tokens.primary.withValues(alpha: 0.08)
+                    : tokens.canvas,
               ),
-              color: highlight
-                  ? tokens.primary.withValues(alpha: 0.08)
-                  : tokens.canvas,
+              child: hasRef
+                  ? Row(
+                      children: [
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(6),
+                          child: SizedBox(
+                            width: 56,
+                            height: 56,
+                            child: _VideoRefThumb(ref: widget.reference!),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                '已设为参考',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w500,
+                                  color: tokens.inkSecondary,
+                                  fontFamily: tokens.fontFamily,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                highlight ? '松开以替换参考图' : '图生视频 · 可拖放替换',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: tokens.inkMuted,
+                                  fontFamily: tokens.fontFamily,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        if (widget.onClear != null)
+                          Semantics(
+                            button: true,
+                            label: '清除参考图',
+                            child: HyperlinkButton(
+                              onPressed: widget.onClear,
+                              child: const Text('清除'),
+                            ),
+                          ),
+                      ],
+                    )
+                  : Column(
+                      children: [
+                        Text(
+                          widget.unsupportedHint != null
+                              ? '不可用'
+                              : (highlight ? '松开以设为参考' : '选择或拖放文件'),
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                            color: tokens.inkSecondary,
+                            fontFamily: tokens.fontFamily,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          widget.unsupportedHint ??
+                              'PNG / JPEG / WebP · 可选首帧参考',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: tokens.inkMuted,
+                            fontFamily: tokens.fontFamily,
+                          ),
+                        ),
+                      ],
+                    ),
             ),
-            child: hasRef
-                ? Row(
-                    children: [
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(6),
-                        child: SizedBox(
-                          width: 56,
-                          height: 56,
-                          child: _VideoRefThumb(ref: widget.reference!),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              '已设为参考',
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w500,
-                                color: tokens.inkSecondary,
-                                fontFamily: tokens.fontFamily,
-                              ),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              highlight ? '松开以替换参考图' : '图生视频 · 可拖放替换',
-                              style: TextStyle(
-                                fontSize: 11,
-                                color: tokens.inkMuted,
-                                fontFamily: tokens.fontFamily,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      if (widget.onClear != null)
-                        HyperlinkButton(
-                          onPressed: widget.onClear,
-                          child: const Text('清除'),
-                        ),
-                    ],
-                  )
-                : Column(
-                    children: [
-                      Text(
-                        widget.unsupportedHint != null
-                            ? '不可用'
-                            : (highlight ? '松开以设为参考' : '选择或拖放文件'),
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w500,
-                          color: tokens.inkSecondary,
-                          fontFamily: tokens.fontFamily,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        widget.unsupportedHint ??
-                            'PNG / JPEG / WebP · 可选首帧参考',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: tokens.inkMuted,
-                          fontFamily: tokens.fontFamily,
-                        ),
-                      ),
-                    ],
-                  ),
           ),
         ),
       ),

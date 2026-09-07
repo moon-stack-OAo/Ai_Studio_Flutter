@@ -5,7 +5,7 @@ import 'package:http/http.dart' as http;
 
 /// 结构化提示拼装面板：维度 Chip + 预览 + 填入/清空/AI 润色。
 ///
-/// 对齐现网 [PromptBuilderPanel]；S4 对 preview 调用 [enhancePrompt]。
+/// 提示词维度构建面板；S4 对 preview 调用 [enhancePrompt]。
 class PromptBuilderPanel extends StatefulWidget {
   const PromptBuilderPanel({
     super.key,

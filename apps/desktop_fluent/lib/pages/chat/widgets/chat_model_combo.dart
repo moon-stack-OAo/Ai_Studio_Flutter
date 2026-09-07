@@ -82,62 +82,72 @@ class _ChatModelComboState extends State<ChatModelCombo> {
       label = '未配置模型';
     }
 
+    final readyLabel = ready ? '模型已就绪' : '模型未就绪';
     return FlyoutTarget(
       controller: _flyout,
-      child: HoverButton(
-        onPressed: ready ? _open : null,
-        cursor: ready
-            ? SystemMouseCursors.click
-            : SystemMouseCursors.basic,
-        builder: (context, states) {
-          final hovered = states.isHovered || states.isPressed;
-          return Container(
-            height: 30,
-            padding: const EdgeInsets.symmetric(horizontal: 10),
-            decoration: BoxDecoration(
-              color: tokens.surface,
-              borderRadius: BorderRadius.circular(6),
-              border: Border.all(
-                color: hovered
-                    ? Color.lerp(tokens.primary, tokens.border, 0.55)!
-                    : tokens.border,
-              ),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 6,
-                  height: 6,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: ready ? tokens.success : tokens.inkMuted,
+      child: Tooltip(
+        message: '$label，$readyLabel',
+        child: Semantics(
+          button: true,
+          enabled: ready,
+          label: '选择对话模型，$label，$readyLabel',
+          excludeSemantics: true,
+          child: HoverButton(
+            onPressed: ready ? _open : null,
+            cursor: ready
+                ? SystemMouseCursors.click
+                : SystemMouseCursors.basic,
+            builder: (context, states) {
+              final hovered = states.isHovered || states.isPressed;
+              return Container(
+                height: 30,
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                decoration: BoxDecoration(
+                  color: tokens.surface,
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(
+                    color: hovered
+                        ? Color.lerp(tokens.primary, tokens.border, 0.55)!
+                        : tokens.border,
                   ),
                 ),
-                const SizedBox(width: 8),
-                ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 220),
-                  child: Text(
-                    label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: tokens.inkSecondary,
-                      fontFamily: tokens.fontFamily,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 6,
+                      height: 6,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: ready ? tokens.success : tokens.inkMuted,
+                      ),
                     ),
-                  ),
+                    const SizedBox(width: 8),
+                    ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 220),
+                      child: Text(
+                        label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: tokens.inkSecondary,
+                          fontFamily: tokens.fontFamily,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Icon(
+                      FluentIcons.chevron_down,
+                      size: 10,
+                      color: tokens.inkMuted,
+                    ),
+                  ],
                 ),
-                const SizedBox(width: 6),
-                Icon(
-                  FluentIcons.chevron_down,
-                  size: 10,
-                  color: tokens.inkMuted,
-                ),
-              ],
-            ),
-          );
-        },
+              );
+            },
+          ),
+        ),
       ),
     );
   }
@@ -416,18 +426,23 @@ class _ModelComboFlyoutState extends State<_ModelComboFlyout> {
                 const SizedBox(width: 4),
                 Tooltip(
                   message: '刷新模型列表',
-                  child: IconButton(
-                    icon: _loading
-                        ? const SizedBox(
-                            width: 14,
-                            height: 14,
-                            child: ProgressRing(strokeWidth: 1.5),
-                          )
-                        : const Icon(
-                            FluentIcons.refresh,
-                            size: 12,
-                          ),
-                    onPressed: _loading ? null : _refreshForce,
+                  child: Semantics(
+                    button: true,
+                    label: '刷新模型列表',
+                    excludeSemantics: true,
+                    child: IconButton(
+                      icon: _loading
+                          ? const SizedBox(
+                              width: 14,
+                              height: 14,
+                              child: ProgressRing(strokeWidth: 1.5),
+                            )
+                          : const Icon(
+                              FluentIcons.refresh,
+                              size: 12,
+                            ),
+                      onPressed: _loading ? null : _refreshForce,
+                    ),
                   ),
                 ),
               ],

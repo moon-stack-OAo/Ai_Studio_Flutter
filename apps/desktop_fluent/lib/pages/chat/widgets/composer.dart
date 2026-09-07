@@ -79,6 +79,8 @@ class _ComposerState extends State<Composer> {
   @override
   Widget build(BuildContext context) {
     final tokens = fluentTokensOf(context);
+    final density =
+        UiDensity.fromVisualDensity(FluentTheme.of(context).visualDensity);
     final canType = widget.enabled && !widget.streaming;
     final isDark = tokens.brightness == Brightness.dark;
     final radius = isDark ? 10.0 : 12.0;
@@ -92,7 +94,7 @@ class _ComposerState extends State<Composer> {
         : null;
 
     return Container(
-      padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
+      padding: density.composerPadding,
       decoration: BoxDecoration(
         color: tokens.surface,
         border: Border(top: BorderSide(color: tokens.border)),
@@ -123,11 +125,15 @@ class _ComposerState extends State<Composer> {
                   Expanded(
                     child: Text(
                       '正在流式输出 · 可随时停止',
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         fontSize: 12,
-                        color: isDark
-                            ? const Color(0xFFBFDBFE)
-                            : tokens.inkSecondary,
+                        color: Color.lerp(
+                          tokens.primary,
+                          tokens.ink,
+                          isDark ? 0.35 : 0.55,
+                        ),
                         fontFamily: tokens.fontFamily,
                       ),
                     ),
@@ -139,7 +145,7 @@ class _ComposerState extends State<Composer> {
           AnimatedContainer(
             duration: const Duration(milliseconds: 120),
             curve: Curves.easeOut,
-            padding: const EdgeInsets.fromLTRB(14, 10, 10, 10),
+            padding: density.composerInnerPadding,
             decoration: BoxDecoration(
               color: cardBg,
               borderRadius: BorderRadius.circular(radius),
@@ -158,50 +164,52 @@ class _ComposerState extends State<Composer> {
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 Expanded(
-                  // OD textarea: min-height 44 / max-height 120
                   child: ConstrainedBox(
-                    constraints: const BoxConstraints(
-                      minHeight: 44,
-                      maxHeight: 120,
+                    constraints: BoxConstraints(
+                      minHeight: density == UiDensity.compact ? 36 : 44,
+                      maxHeight: density == UiDensity.compact ? 100 : 120,
                     ),
-                    child: Focus(
-                      onKeyEvent: _onKey,
-                      child: TextBox(
-                        controller: _controller,
-                        focusNode: _focus,
-                        enabled: canType,
-                        maxLines: null,
-                        minLines: 2,
-                        placeholder: widget.streaming
-                            ? '生成中…'
-                            : '输入消息… Enter 发送，Shift+Enter 换行',
-                        style: TextStyle(
-                          fontFamily: tokens.fontFamily,
-                          fontSize: 14,
-                          height: 1.5,
-                          color: tokens.ink,
-                        ),
-                        placeholderStyle: TextStyle(
-                          fontFamily: tokens.fontFamily,
-                          fontSize: 14,
-                          height: 1.5,
-                          color: tokens.inkMuted,
-                        ),
-                        padding: EdgeInsets.zero,
-                        unfocusedColor: Colors.transparent,
-                        highlightColor: Colors.transparent,
-                        decoration: const WidgetStatePropertyAll(
-                          BoxDecoration(color: Colors.transparent),
-                        ),
-                        foregroundDecoration: const WidgetStatePropertyAll(
-                          BoxDecoration(),
+                    child: Semantics(
+                      label: '消息输入',
+                      textField: true,
+                      child: Focus(
+                        onKeyEvent: _onKey,
+                        child: TextBox(
+                          controller: _controller,
+                          focusNode: _focus,
+                          enabled: canType,
+                          maxLines: null,
+                          minLines: density == UiDensity.compact ? 1 : 2,
+                          placeholder: widget.streaming
+                              ? '生成中…'
+                              : '输入消息… Enter 发送，Shift+Enter 换行',
+                          style: TextStyle(
+                            fontFamily: tokens.fontFamily,
+                            fontSize: 14,
+                            height: 1.5,
+                            color: tokens.ink,
+                          ),
+                          placeholderStyle: TextStyle(
+                            fontFamily: tokens.fontFamily,
+                            fontSize: 14,
+                            height: 1.5,
+                            color: tokens.inkMuted,
+                          ),
+                          padding: EdgeInsets.zero,
+                          unfocusedColor: Colors.transparent,
+                          highlightColor: Colors.transparent,
+                          decoration: const WidgetStatePropertyAll(
+                            BoxDecoration(color: Colors.transparent),
+                          ),
+                          foregroundDecoration: const WidgetStatePropertyAll(
+                            BoxDecoration(),
+                          ),
                         ),
                       ),
                     ),
                   ),
                 ),
                 const SizedBox(width: 10),
-                // OD .send-stop: height 36 / min-width 72
                 ConstrainedBox(
                   constraints: const BoxConstraints(
                     minWidth: 72,
@@ -233,16 +241,15 @@ class _ComposerState extends State<Composer> {
                                           states.isHovered) {
                                         return Color.lerp(
                                           tokens.danger,
-                                          const Color(0xFF000000),
+                                          tokens.ink,
                                           0.12,
                                         )!;
                                       }
                                       return tokens.danger;
                                     },
                                   ),
-                                  foregroundColor:
-                                      const WidgetStatePropertyAll(
-                                    Colors.white,
+                                  foregroundColor: WidgetStatePropertyAll(
+                                    tokens.onPrimary,
                                   ),
                                   shape: WidgetStatePropertyAll(
                                     RoundedRectangleBorder(
@@ -295,18 +302,22 @@ class _ComposerState extends State<Composer> {
               ],
             ),
           ),
-          const SizedBox(height: 8),
+          SizedBox(height: density == UiDensity.compact ? 6 : 8),
           Row(
             children: [
-              Text(
-                widget.streaming ? '流式生成中' : '本地密钥 · 无云同步',
-                style: TextStyle(
-                  fontSize: 11,
-                  color: tokens.inkMuted,
-                  fontFamily: tokens.fontFamily,
+              Flexible(
+                child: Text(
+                  widget.streaming ? '流式生成中' : '本地密钥 · 无云同步',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: tokens.inkMuted,
+                    fontFamily: tokens.fontFamily,
+                  ),
                 ),
               ),
-              const Spacer(),
+              const SizedBox(width: 8),
               Text(
                 'Enter 发送',
                 style: TextStyle(

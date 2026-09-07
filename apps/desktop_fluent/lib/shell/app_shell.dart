@@ -13,6 +13,7 @@ import '../update/update_controller.dart';
 import 'app_section.dart';
 import 'fluent_app_title_bar.dart';
 import 'title_bar_theme_button.dart';
+import 'update_banner.dart';
 import 'window_bootstrap.dart';
 import 'window_close_coordinator.dart';
 
@@ -33,6 +34,8 @@ class AppShell extends StatefulWidget {
     this.videoClient,
     this.updateController,
     this.closeCoordinator,
+    this.updateBannerPrefs,
+    this.startupUpdateCheckDelay = const Duration(milliseconds: 800),
   });
 
   final ThemeController themeController;
@@ -49,6 +52,8 @@ class AppShell extends StatefulWidget {
   final OpenAiCompatibleVideoClient? videoClient;
   final UpdateController? updateController;
   final WindowCloseCoordinator? closeCoordinator;
+  final UpdateBannerPrefs? updateBannerPrefs;
+  final Duration startupUpdateCheckDelay;
 
   @override
   State<AppShell> createState() => _AppShellState();
@@ -61,6 +66,10 @@ class _AppShellState extends State<AppShell> {
   late final AppearanceRepository _fallbackAppearance =
       AppearanceRepository(storage: MemoryAppearanceStorage());
   late final List<Widget> _sectionPages;
+  late final UpdateBannerPrefs _bannerPrefs;
+  String? _bannerVersion;
+  bool _startupCheckStarted = false;
+  Timer? _startupCheckTimer;
 
   AppearanceRepository get _appearanceRepository =>
       widget.themeController.appearanceRepository ?? _fallbackAppearance;
@@ -68,6 +77,7 @@ class _AppShellState extends State<AppShell> {
   @override
   void initState() {
     super.initState();
+    _bannerPrefs = widget.updateBannerPrefs ?? UpdateBannerPrefs();
     _sectionPages = [
       ChatPage(
         providerRepository: widget.providerRepository,
@@ -108,15 +118,76 @@ class _AppShellState extends State<AppShell> {
         coordinator.attach();
       });
     }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _scheduleStartupUpdateCheck();
+    });
   }
 
   @override
   void dispose() {
+    _startupCheckTimer?.cancel();
     final coordinator = widget.closeCoordinator;
     if (coordinator != null && supportsCustomTitleBar) {
       unawaited(coordinator.detach());
     }
     super.dispose();
+  }
+
+  void _scheduleStartupUpdateCheck() {
+    if (_startupCheckStarted) return;
+    _startupCheckStarted = true;
+    final delay = widget.startupUpdateCheckDelay;
+    if (delay <= Duration.zero) {
+      unawaited(_runStartupUpdateCheck());
+      return;
+    }
+    _startupCheckTimer = Timer(delay, () {
+      unawaited(_runStartupUpdateCheck());
+    });
+  }
+
+  Future<void> _runStartupUpdateCheck() async {
+    if (!mounted) return;
+
+    final updater = widget.updateController;
+    if (updater == null || !updater.isConfigured) return;
+    if (updater.isChecking || updater.isDownloading) return;
+
+    try {
+      final result = await updater.checkForUpdate();
+      if (!mounted) return;
+      if (result.status != UpdateCheckStatus.available) return;
+      final version = result.latestVersion;
+      if (version == null || version.trim().isEmpty) return;
+      if (!await _bannerPrefs.shouldShowFor(version)) return;
+      if (!mounted) return;
+      setState(() => _bannerVersion = normalizeVersion(version));
+    } catch (e) {
+      try {
+        await widget.appLogRepository.append(
+          level: AppLogLevel.warn,
+          source: AppLogSources.updater,
+          message: '启动检查更新失败（已静默）：$e',
+        );
+      } catch (_) {}
+    }
+  }
+
+  Future<void> _dismissBanner() async {
+    final version = _bannerVersion;
+    if (version != null) {
+      await _bannerPrefs.dismissVersion(version);
+    }
+    if (!mounted) return;
+    setState(() => _bannerVersion = null);
+  }
+
+  void _goUpdateFromBanner() {
+    setState(() {
+      _bannerVersion = null;
+      _section = AppSection.settings;
+      _settingsCategory = SettingsCategory.about;
+    });
   }
 
   void _openSettingsFromTray() {
@@ -194,6 +265,16 @@ class _AppShellState extends State<AppShell> {
         ),
     };
 
+    if (result.status == UpdateCheckStatus.available) {
+      final version = result.latestVersion;
+      if (version != null &&
+          version.trim().isNotEmpty &&
+          await _bannerPrefs.shouldShowFor(version) &&
+          mounted) {
+        setState(() => _bannerVersion = normalizeVersion(version));
+      }
+    }
+
     displayInfoBar(
       context,
       builder: (context, close) {
@@ -242,6 +323,7 @@ class _AppShellState extends State<AppShell> {
   Widget build(BuildContext context) {
     final tokens = fluentTokensOf(context);
     final coordinator = widget.closeCoordinator;
+    final bannerVersion = _bannerVersion;
 
     return Column(
       children: [
@@ -257,12 +339,18 @@ class _AppShellState extends State<AppShell> {
             ),
           ],
         ),
+        if (bannerVersion != null)
+          UpdateBanner(
+            version: bannerVersion,
+            onGoUpdate: _goUpdateFromBanner,
+            onLater: () => unawaited(_dismissBanner()),
+          ),
         Expanded(
           child: FluentTheme(
             // 侧栏同级切换：短淡入，避免 Entrance 位移「飘」感。
             data: FluentTheme.of(context).copyWith(
-              fastAnimationDuration: const Duration(milliseconds: 140),
-              animationCurve: Curves.easeOut,
+              fastAnimationDuration: FluentMotion.sectionSwitch,
+              animationCurve: FluentMotion.standard,
             ),
             child: NavigationView(
               // fluent_ui 默认 body 用 ValueKey(selected) 换页，切走即 dispose；
@@ -273,8 +361,8 @@ class _AppShellState extends State<AppShell> {
                 return AnimatedOpacity(
                   key: const ValueKey('desktop_section_host'),
                   opacity: _paneOpacity,
-                  duration: const Duration(milliseconds: 140),
-                  curve: Curves.easeOut,
+                  duration: FluentMotion.sectionSwitch,
+                  curve: FluentMotion.standard,
                   child: IndexedStack(
                     index: _selectedIndex,
                     sizing: StackFit.expand,

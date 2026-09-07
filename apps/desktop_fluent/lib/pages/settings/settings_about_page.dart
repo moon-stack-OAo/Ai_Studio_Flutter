@@ -206,10 +206,8 @@ class _SettingsAboutPageState extends State<SettingsAboutPage> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                '将下载安装包并拉起安装器。清单格式对齐现网；'
-                '请确认发布的是本 Flutter 构建后再升级，'
-                '否则可能安装到旧版 Tauri 包。',
+              const Text(
+                '将从本仓 Releases 下载 Windows 安装包并拉起安装器。',
               ),
               if (check.notes.trim().isNotEmpty) ...[
                 const SizedBox(height: 12),
@@ -648,7 +646,7 @@ class _SettingsAboutPageState extends State<SettingsAboutPage> {
                 Text(
                   updater == null || !updater.isConfigured
                       ? '更新通道：未配置更新源'
-                      : '更新通道：直链 latest.json（minisign 签名校验）',
+                      : '更新通道：本仓 Releases · latest.json（minisign 校验）',
                   style: TextStyle(
                     fontSize: 12,
                     color: tokens.inkMuted,
@@ -657,7 +655,7 @@ class _SettingsAboutPageState extends State<SettingsAboutPage> {
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  '清单格式对齐现网；请确认发布的是本 Flutter 构建后再升级。',
+                  '不上架应用商店；安装包为 Inno Setup（AI.Studio_*_x64-setup.exe）。',
                   style: TextStyle(
                     fontSize: 11,
                     color: tokens.inkMuted,

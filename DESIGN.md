@@ -2,17 +2,17 @@
 
 产品设计规格（四端目标）。用于重构选型、原型对照与实现验收；实现细节见 [`docs/architecture.md`](./docs/architecture.md)。
 
-| 项     | 值                                                                         |
-|-------|---------------------------------------------------------------------------|
-| 产品    | AI Studio                                                                 |
-| 定位    | 本地多模态 AI 客户端（密钥与会话仅存本机，无自建后端托管）                                           |
-| 目标平台  | **Windows · macOS · Android · iOS**                                       |
-| UI 策略 | **两套独立设计系统**：桌面 **Fluent** · 移动 **Material 3**（Android / iOS 共用 Material） |
-| 色彩气质  | **亮色仿 Claude**（暖奶油纸感）· **暗色仿 Cursor**（冷灰 IDE 感）                           |
-| 文档状态  | Draft · 关键已决（Q1–Q3/Q5）；**P0–P2 主路径已落地**（2026-09-07 核对）；P3 抛光未专项验收     |
-| 实现栈   | **Flutter 新仓库**：`D:\Moon\tools\Ai_Studio_Flutter`                         |
-| 分发更新  | **不上架应用商店**；延续现网直链自动更新（桌面清单 + Android 侧载清单）                               |
-| 关联    | 现网 Vue/Tauri 仅作能力规格与更新协议参考                                                |
+| 项     | 值                                                                              |
+|-------|--------------------------------------------------------------------------------|
+| 产品    | AI Studio                                                                      |
+| 定位    | 本地多模态 AI 客户端（密钥与会话仅存本机，无自建后端托管）                                                |
+| 目标平台  | **Windows · macOS · Android · iOS**                                            |
+| UI 策略 | **两套独立设计系统**：桌面 **Fluent** · 移动 **Material 3**（Android / iOS 共用 Material）      |
+| 色彩气质  | **亮色仿 Claude**（暖奶油纸感）· **暗色仿 Cursor**（冷灰 IDE 感）                                |
+| 文档状态  | Draft · 关键已决（Q1–Q3/Q5）；**P0–P2 已落地**；**P3 抛光已落地**（含 a11y 全路径自证清单；非第三方 WCAG 认证） |
+| 实现栈   | **Flutter 新仓库**：`D:\Moon\tools\Ai_Studio_Flutter`                              |
+| 分发更新  | **不上架应用商店**；延续现网直链自动更新（桌面清单 + Android 侧载清单）                                    |
+| 关联    | 现网 Vue/Tauri 仅作能力规格与更新协议参考                                                     |
 
 ---
 
@@ -408,15 +408,15 @@ Flutter 落点：`packages/design_fluent` 与 `packages/design_material` 的 `Th
 
 ### 5.8 反馈、覆层与系统力
 
-| 能力 ID           | 职责         | Fluent（F）                  | Material（M）                         | 关键状态          |
-|-----------------|------------|----------------------------|-------------------------------------|---------------|
-| `FB-CONFIRM`    | 破坏性确认      | `F-ContentDialog`          | `M-ConfirmDialog` / 确认 sheet        | 开 / 关         |
-| `FB-TOAST`      | 短反馈        | InfoBar / TeachingTip      | Snackbar                            | 成功 / 失败       |
-| `FB-PROGRESS`   | 不确定或确定进度   | ProgressRing / ProgressBar | Circular / LinearProgress           | —             |
-| `FB-UPDATE`     | 更新提示       | `F-UpdateBanner` 或关于页内联    | `M-UpdateBanner` / 关于页；结果用 Snackbar | 见 `SET-ABOUT` |
-| `SYS-SAVE-FILE` | 另存为（桌面）    | 系统保存对话框                    | —                                   | 取消 / 成功       |
-| `SYS-GALLERY`   | 存相册（移动）    | —                          | 系统相册写入；权限说明                         | 已授权 / 拒绝      |
-| `SYS-SHARE`     | 系统分享（移动）     | —                          | Share sheet；**P3 待办**（当前未实现） | —             |
+| 能力 ID           | 职责       | Fluent（F）                  | Material（M）                         | 关键状态          |
+|-----------------|----------|----------------------------|-------------------------------------|---------------|
+| `FB-CONFIRM`    | 破坏性确认    | `F-ContentDialog`          | `M-ConfirmDialog` / 确认 sheet        | 开 / 关         |
+| `FB-TOAST`      | 短反馈      | InfoBar / TeachingTip      | Snackbar                            | 成功 / 失败       |
+| `FB-PROGRESS`   | 不确定或确定进度 | ProgressRing / ProgressBar | Circular / LinearProgress           | —             |
+| `FB-UPDATE`     | 更新提示     | `F-UpdateBanner` 或关于页内联    | `M-UpdateBanner` / 关于页；结果用 Snackbar | 见 `SET-ABOUT` |
+| `SYS-SAVE-FILE` | 另存为（桌面）  | 系统保存对话框                    | —                                   | 取消 / 成功       |
+| `SYS-GALLERY`   | 存相册（移动）  | —                          | 系统相册写入；权限说明                         | 已授权 / 拒绝      |
+| `SYS-SHARE`     | 系统分享（移动） | —                          | Share sheet（`share_plus`）；图/视频本地文件  | 取消 / 成功 / 失败  |
 
 ---
 
@@ -461,9 +461,22 @@ Flutter 落点：`packages/design_fluent` 与 `packages/design_material` 的 `Th
 
 | Fluent       | Material                |
 |--------------|-------------------------|
-| 键盘可达主路径；可见焦点 | 触控目标充足；不依赖悬停            |
+| 键盘可达主路径；可见焦点 | 触控目标充足（≥48）；不依赖悬停       |
 | 与系统高对比度尽量兼容  | 横屏不遮挡 Composer / NavBar |
 | 失败不只靠颜色      | 失败不只靠颜色                 |
+
+### 7.1 实现约定（WCAG 2.2 AA **自证**，非第三方认证）
+
+| 项       | 约定                                                                                           |
+|---------|----------------------------------------------------------------------------------------------|
+| 语义      | 图标按钮均有 `tooltip` / `Semantics(button,label)`；列表行含 `selected` 与状态文案；输入框有可读 label（消息/提示词/搜索日志） |
+| 动态播报    | 更新横幅、生图/生视频进行中条使用 `Semantics(liveRegion: true)`                                              |
+| 触控 / 焦点 | Material 主操作与时间线操作钮 ≥48；Fluent 自定义控件用 HoverButton/焦点环，工具钮悬停或焦点可见                             |
+| 不只靠颜色   | 错误保留文案；模型就绪/未就绪写入语义 label；会话参数「已覆盖」写入 Semantics                                              |
+| 对比度     | token：`inkMuted` / 暗色 `success` / `focusRing` 已按 AA 方向微调（见 `design_*` tokens）                |
+| Windows | 仅 **debug** 整树 `ExcludeSemantics` 规避 AXTree 刷错；**release / profile 语义树可用**                   |
+
+自证范围：双端壳导航、会话列表、Composer、生图/生视频主路径、设置分类与危险操作、空态 CTA、灯箱/播放器主控件。未宣称第三方实验室认证。
 
 ---
 
@@ -498,23 +511,26 @@ Flutter 落点：`packages/design_fluent` 与 `packages/design_material` 的 `Th
 - Android：相册 + **侧载清单自动更新**（对齐现网 `android-latest.json`；不上架）
 - iOS：相册 + 非 Store 分发策略（内测包 / 企业签等，**不上架**；无侧载商店文案）
 - **验收**：能力对等；UI 可识别为 M3；iOS 与 Android 同属 Material 系统
-- **未纳入本阶段**：`SYS-SHARE`（见 P3）
 
-### P3 — 双系统抛光 · **部分提前完成，专项未验收**
+### P3 — 双系统抛光 · **已落地**
 
 - ~~设置导入导出、存储清理~~（已提前落地：`SET-DATA` / `DataBackupService`）
-- 各系统主题、密度、动效、空态专项（token / 字号五档 / 密度 / 基础空态已有；抛光专项未验收）
-- 无障碍与键盘可达专项（仅局部 Semantics；未正式验收）
-- **`SYS-SHARE`**：Material 图/视频系统分享入口（`share_plus` 等）——**待办**
+- ~~空态 / 短动效~~（部分落地：未配置 vs 无数据文案与 CTA 对齐；Tab 切换 / 空态出现 / 灯箱 / 会话列表短 fade·slide）
+- ~~各系统主题、密度专项~~（部分落地：token 表面层级/`scrim`；InfoBar·Snackbar 吃 token；comfortable/compact 作用于会话行高、Composer 内边距、设置表单项间距；字号五档极端档 overflow 微调；空态 `illustration` 插槽）
+- ~~空态插画~~（已落地：双端 `CustomPainter` 简易线稿，跟随 token 亮暗；覆盖未配置提供商 / 无消息·无生图·无视频 / 会话列表空 / 设置提供商列表空；不引入 `flutter_svg`）
+- ~~无障碍与键盘可达~~（已落地：双端全路径 Semantics/tooltip/触控≥48/liveRegion/焦点；Windows debug 可关语义树；**WCAG 2.2 AA 自证，非第三方认证**）
+- ~~**`SYS-SHARE`**：Material 图/视频系统分享入口（`share_plus`）~~（已落地）
+- ~~**`NAV-BACK`**：Material `M-BackHost` 统一托管全屏层返回~~（已落地）
+- ~~**`FB-UPDATE`**：双端壳层启动更新横幅（`F-UpdateBanner` / `M-UpdateBanner`；关于页入口保留）~~（已落地）
 - （可选）评估是否另开 Cupertino——默认不做
 
 ### 9.1 实现对照（2026-09-07 核对 §5）
 
-| 范围 | 结论 |
-|------|------|
-| §5.3–5.7 壳 / 对话 / 生图 / 生视频 / 设置 | 双端 ✅（Material `NAV-BACK` 靠路由栈达标，无独立 BackHost 类） |
-| §5.8 反馈与系统力 | 除 `SYS-SHARE` ❌ 外均 ✅；`FB-UPDATE` 入口在关于页/托盘，无独立全局 Banner |
-| 易漏项 | 耗时自适应、用户末条撤回、回合时间分隔、IME 藏底栏、关闭嵌关于、三模型可搜索、托盘三态均已落地 |
+| 范围                              | 结论                                                                      |
+|---------------------------------|-------------------------------------------------------------------------|
+| §5.3–5.7 壳 / 对话 / 生图 / 生视频 / 设置 | 双端 ✅（Material `NAV-BACK`：`BackHost` / `M-BackHost` 统一托管全屏层）             |
+| §5.8 反馈与系统力                     | ✅（含 Material `SYS-SHARE`）；`FB-UPDATE`：冷启动壳层横幅 + 关于页/托盘入口；「稍后」按版本记 prefs |
+| 易漏项                             | 耗时自适应、用户末条撤回、回合时间分隔、IME 藏底栏、关闭嵌关于、三模型可搜索、托盘三态均已落地                       |
 
 ---
 
@@ -601,4 +617,10 @@ packages/design_material/
 | 2026-09-04 | Logo：从现网 `src-tauri/icons` 拷入 `design/brand/`；原型标题栏改用 `assets/logo.png`；Windows `app_icon.ico` 已替换                                     |
 | 2026-09-04 | 各端图标批量生成：Windows ICO · macOS AppIcon · iOS AppIcon（desktop+mobile）· Android mipmap（mobile+desktop scaffold）均基于 `design/brand/icon.png` |
 | 2026-09-04 | 审稿修补：§2.1 分层图对齐 `design_*`/`apps/*`；端矩阵 iOS/Android 分发与「不上架」一致；文档状态标注关键已决；补 `docs/architecture.md` 与 `SECURITY.md` 占位                  |
-| 2026-09-07 | **实现对照**：P0–P2 主路径已满足；`SYS-SHARE` 列入 P3；§9 标注分期状态并补 §9.1；文档状态更新 |
+| 2026-09-07 | **实现对照**：P0–P2 主路径已满足；`SYS-SHARE` 列入 P3；§9 标注分期状态并补 §9.1；文档状态更新                                                                        |
+| 2026-09-07 | Material `SYS-SHARE`：`share_plus` + 生图/生视频分享入口落地；§5.8 / §9 / Changelog 同步                                                              |
+| 2026-09-07 | P3 空态/动效部分落地：未配置 vs 无数据语义对齐；壳切换/灯箱/列表短动效；§9 标注                                                                                         |
+| 2026-09-07 | P3 无障碍部分落地：主路径 Semantics/tooltip/焦点；Windows ExcludeSemantics 仅 debug；§7 备注                                                             |
+| 2026-09-07 | P3 无障碍全路径自证：双端补语义/触控48/liveRegion/对比度 token；§7.1 自证清单；不宣称第三方认证                                                                         |
+| 2026-09-07 | P3 主题/密度部分落地：`scrim`、InfoBar/Snackbar token、密度作用到会话/Composer/设置；空态 `illustration` 插槽                                                   |
+| 2026-09-07 | P3 空态插画落地：双端 CustomPainter 简易线稿接入 `illustration`；§9 标注                                                                                 |

@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart' show VisualDensity;
+import 'package:flutter/material.dart' show EdgeInsets, VisualDensity;
 
 /// UI 密度（SET-APPEARANCE）。Material / 移动端默认偏紧（紧凑），仍保留两档。
 enum UiDensity {
@@ -32,6 +32,32 @@ enum UiDensity {
   double get navigationBarHeight => switch (this) {
         UiDensity.comfortable => 68,
         UiDensity.compact => 64,
+      };
+
+  /// Composer 水平内边距与顶距；底距由安全区/IME 另算。
+  EdgeInsets get composerPadding => switch (this) {
+        UiDensity.comfortable => const EdgeInsets.fromLTRB(14, 10, 14, 0),
+        UiDensity.compact => const EdgeInsets.fromLTRB(12, 8, 12, 0),
+      };
+
+  /// Composer 输入框 contentPadding。
+  EdgeInsets get composerFieldPadding => switch (this) {
+        UiDensity.comfortable =>
+          const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+        UiDensity.compact =>
+          const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      };
+
+  /// 设置表单项垂直间距。
+  double get settingsFormGap => switch (this) {
+        UiDensity.comfortable => 14,
+        UiDensity.compact => 10,
+      };
+
+  /// 设置卡片内边距。
+  double get settingsCardPadding => switch (this) {
+        UiDensity.comfortable => 16,
+        UiDensity.compact => 12,
       };
 
   /// 由 [VisualDensity] 反推（主题已写入 visualDensity 时使用）。

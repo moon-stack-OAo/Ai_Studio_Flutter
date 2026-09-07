@@ -11,6 +11,10 @@ class SettingsAppearancePage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final tokens = fluentTokensOf(context);
+    final density =
+        UiDensity.fromVisualDensity(FluentTheme.of(context).visualDensity);
+    final sectionPad = density.settingsSectionPadding;
+    final formGap = density.settingsFormGap;
     return ListenableBuilder(
       listenable: themeController,
       builder: (context, _) {
@@ -22,6 +26,8 @@ class SettingsAppearancePage extends StatelessWidget {
             children: [
               Text(
                 '外观',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   fontSize: 20,
                   fontWeight: FontWeight.w600,
@@ -29,9 +35,9 @@ class SettingsAppearancePage extends StatelessWidget {
                   fontFamily: tokens.fontFamily,
                 ),
               ),
-              const SizedBox(height: 18),
+              SizedBox(height: formGap + 6),
               Container(
-                padding: const EdgeInsets.all(16),
+                padding: EdgeInsets.all(sectionPad),
                 decoration: BoxDecoration(
                   color: tokens.surface,
                   borderRadius: BorderRadius.circular(12),
@@ -49,7 +55,7 @@ class SettingsAppearancePage extends StatelessWidget {
                         fontFamily: tokens.fontFamily,
                       ),
                     ),
-                    const SizedBox(height: 12),
+                    SizedBox(height: formGap),
                     Row(
                       children: [
                         for (final pref in ThemePreference.values) ...[
@@ -69,9 +75,9 @@ class SettingsAppearancePage extends StatelessWidget {
                   ],
                 ),
               ),
-              const SizedBox(height: 14),
+              SizedBox(height: formGap + 2),
               Container(
-                padding: const EdgeInsets.all(16),
+                padding: EdgeInsets.all(sectionPad),
                 decoration: BoxDecoration(
                   color: tokens.surface,
                   borderRadius: BorderRadius.circular(12),
@@ -89,7 +95,7 @@ class SettingsAppearancePage extends StatelessWidget {
                         fontFamily: tokens.fontFamily,
                       ),
                     ),
-                    const SizedBox(height: 12),
+                    SizedBox(height: formGap),
                     _LabeledField(
                       label: '字号',
                       child: ComboBox<AppFontScale>(
@@ -107,7 +113,7 @@ class SettingsAppearancePage extends StatelessWidget {
                         },
                       ),
                     ),
-                    const SizedBox(height: 12),
+                    SizedBox(height: formGap),
                     _LabeledField(
                       label: '密度',
                       child: ComboBox<UiDensity>(
@@ -129,9 +135,9 @@ class SettingsAppearancePage extends StatelessWidget {
                         },
                       ),
                     ),
-                    const SizedBox(height: 10),
+                    SizedBox(height: formGap - 2),
                     Text(
-                      '舒适：列表与窗格更疏；紧凑：会话行与设置侧栏更紧。桌面默认舒适。',
+                      '舒适：列表与窗格更疏；紧凑：会话行、Composer 与设置侧栏更紧。桌面默认舒适。',
                       style: TextStyle(
                         fontSize: 12,
                         color: tokens.inkMuted,
@@ -217,6 +223,8 @@ class _ThemeSegButton extends StatelessWidget {
         child: Center(
           child: Text(
             label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
             style: TextStyle(
               fontSize: 12,
               fontWeight: selected ? FontWeight.w600 : FontWeight.w500,

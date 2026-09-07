@@ -123,6 +123,7 @@ class AiStudioApp extends StatelessWidget {
     this.updateController,
     this.navigatorKey,
     this.closeCoordinator,
+    this.startupUpdateCheckDelay = const Duration(milliseconds: 800),
   });
 
   final ThemeController themeController;
@@ -140,6 +141,7 @@ class AiStudioApp extends StatelessWidget {
   final UpdateController? updateController;
   final GlobalKey<NavigatorState>? navigatorKey;
   final WindowCloseCoordinator? closeCoordinator;
+  final Duration startupUpdateCheckDelay;
 
   @override
   Widget build(BuildContext context) {
@@ -175,6 +177,7 @@ class AiStudioApp extends StatelessWidget {
             videoClient: videoClient,
             updateController: updateController,
             closeCoordinator: closeCoordinator,
+            startupUpdateCheckDelay: startupUpdateCheckDelay,
           ),
         );
       },

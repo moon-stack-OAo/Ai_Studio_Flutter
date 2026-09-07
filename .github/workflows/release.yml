@@ -1,0 +1,317 @@
+# 推送 v* tag：构建 Windows Inno 安装包 + Android APK，生成清单并发布 GitHub Release
+# 示例：git tag v1.0.0 && git push origin v1.0.0
+#
+# 流程：先创建 draft → Windows / Android 并行上传 → 校验资产后正式发布
+#
+# Secrets（本仓）：
+# - TAURI_SIGNING_PRIVATE_KEY / TAURI_SIGNING_PRIVATE_KEY_PASSWORD（桌面 updater 签名，复用现网密钥）
+# - ANDROID_KEY_ALIAS / ANDROID_KEY_PASSWORD / ANDROID_KEY_BASE64（可选；缺省则 debug 签名 APK）
+name: release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  create-draft:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+      tag: ${{ steps.meta.outputs.tag }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Resolve version
+        id: meta
+        shell: bash
+        run: |
+          TAG="${{ github.ref_name }}"
+          VERSION="${TAG#v}"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Extract changelog
+        run: node .github/scripts/extract-changelog.mjs "${{ github.ref_name }}"
+
+      - name: Create or reuse draft Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ github.ref_name }}"
+          TITLE="AI Studio ${TAG}"
+          PRERELEASE_ARGS=()
+          if [[ "$TAG" == *-* ]]; then
+            PRERELEASE_ARGS+=(--prerelease)
+          fi
+
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            IS_DRAFT="$(gh release view "$TAG" --json isDraft --jq .isDraft)"
+            if [ "$IS_DRAFT" != "true" ]; then
+              echo "::error::Release $TAG 已正式发布，拒绝覆盖。请换新 tag 或手动处理。"
+              exit 1
+            fi
+            gh release edit "$TAG" \
+              --title "$TITLE" \
+              --notes-file release-notes.md \
+              "${PRERELEASE_ARGS[@]}"
+            echo "::notice::复用已有 draft Release: $TAG"
+          else
+            gh release create "$TAG" \
+              --draft \
+              --title "$TITLE" \
+              --notes-file release-notes.md \
+              "${PRERELEASE_ARGS[@]}"
+            echo "::notice::已创建 draft Release: $TAG"
+          fi
+
+  publish-windows:
+    needs: create-draft
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Pub get
+        run: flutter pub get
+
+      - name: Build Windows release
+        working-directory: apps/desktop_fluent
+        run: flutter build windows --release
+
+      - name: Install Inno Setup
+        shell: pwsh
+        run: |
+          choco install innosetup -y --no-progress
+          $iscc = @(
+            "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe",
+            "${env:ProgramFiles}\Inno Setup 6\ISCC.exe"
+          ) | Where-Object { Test-Path $_ } | Select-Object -First 1
+          if (-not $iscc) { throw 'ISCC.exe not found' }
+          echo "ISCC=$iscc" >> $env:GITHUB_ENV
+
+      - name: Compile installer
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path packaging/windows/output | Out-Null
+          & "$env:ISCC" "/DMyAppVersion=${{ needs.create-draft.outputs.version }}" "packaging\windows\ai-studio.iss"
+
+      - name: Sign installer (Tauri / minisign compatible)
+        shell: pwsh
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          $exe = "packaging\windows\output\AI.Studio_${{ needs.create-draft.outputs.version }}_x64-setup.exe"
+          if (-not (Test-Path -LiteralPath $exe)) { throw "安装包不存在: $exe" }
+          .\.github\scripts\sign-tauri.ps1 -File $exe
+
+      - name: Generate latest.json
+        shell: bash
+        env:
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: |
+          VERSION="${{ needs.create-draft.outputs.version }}"
+          EXE="packaging/windows/output/AI.Studio_${VERSION}_x64-setup.exe"
+          node .github/scripts/generate-desktop-latest.mjs "${{ github.ref_name }}" --exe "$EXE" --sig "${EXE}.sig"
+          test -f latest.json
+          if grep -q 'api.github.com/.*/releases/assets/' latest.json; then
+            echo "::error::latest.json 含 API 资产 URL"
+            cat latest.json
+            exit 1
+          fi
+
+      - name: Upload Windows assets to draft
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          TAG="${{ github.ref_name }}"
+          VERSION="${{ needs.create-draft.outputs.version }}"
+          EXE="packaging/windows/output/AI.Studio_${VERSION}_x64-setup.exe"
+          gh release upload "$TAG" "$EXE" "${EXE}.sig" latest.json --clobber
+
+  publish-android:
+    needs: create-draft
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Pub get
+        run: flutter pub get
+
+      - name: Configure Android release signing (optional)
+        env:
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          ANDROID_KEY_BASE64: ${{ secrets.ANDROID_KEY_BASE64 }}
+        shell: bash
+        run: |
+          GRADLE="apps/mobile_material/android/app/build.gradle.kts"
+          if [ -z "$ANDROID_KEY_ALIAS" ] || [ -z "$ANDROID_KEY_PASSWORD" ] || [ -z "$ANDROID_KEY_BASE64" ]; then
+            echo "::warning::未配置 ANDROID_KEY_*，将使用 debug 签名 APK（侧载可用，非正式分发）"
+            exit 0
+          fi
+          echo "$ANDROID_KEY_BASE64" | base64 -d > "${RUNNER_TEMP}/keystore.jks"
+          test -s "${RUNNER_TEMP}/keystore.jks"
+          cat > apps/mobile_material/android/key.properties <<EOF
+          storePassword=${ANDROID_KEY_PASSWORD}
+          keyPassword=${ANDROID_KEY_PASSWORD}
+          keyAlias=${ANDROID_KEY_ALIAS}
+          storeFile=${RUNNER_TEMP}/keystore.jks
+          EOF
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('apps/mobile_material/android/app/build.gradle.kts')
+          text = p.read_text(encoding='utf-8')
+          if 'signingConfigs.create("release")' in text:
+              print('signing already patched')
+              raise SystemExit(0)
+          needle = 'android {\n'
+          inject = '''android {
+              val keystorePropertiesFile = rootProject.file("key.properties")
+              val keystoreProperties = java.util.Properties()
+              if (keystorePropertiesFile.exists()) {
+                  keystoreProperties.load(keystorePropertiesFile.inputStream())
+              }
+
+              signingConfigs {
+                  create("release") {
+                      if (keystorePropertiesFile.exists()) {
+                          keyAlias = keystoreProperties["keyAlias"] as String
+                          keyPassword = keystoreProperties["keyPassword"] as String
+                          storeFile = file(keystoreProperties["storeFile"] as String)
+                          storePassword = keystoreProperties["storePassword"] as String
+                      }
+                  }
+              }
+
+          '''
+          if needle not in text:
+              raise SystemExit('无法定位 android { 块')
+          text = text.replace(needle, inject, 1)
+          text = text.replace(
+              'signingConfig = signingConfigs.getByName("debug")',
+              'signingConfig = if (keystorePropertiesFile.exists()) signingConfigs.getByName("release") else signingConfigs.getByName("debug")',
+              1,
+          )
+          p.write_text(text, encoding='utf-8')
+          print('patched release signing')
+          PY
+
+      - name: Build APK release
+        working-directory: apps/mobile_material
+        run: flutter build apk --release
+
+      - name: Package APK + android-latest.json
+        env:
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        shell: bash
+        run: |
+          VERSION="${{ needs.create-draft.outputs.version }}"
+          TAG="${{ github.ref_name }}"
+          SRC="apps/mobile_material/build/app/outputs/flutter-apk/app-release.apk"
+          test -f "$SRC"
+          mkdir -p dist
+          OUT="dist/AI.Studio_${VERSION}.apk"
+          cp -f "$SRC" "$OUT"
+          node .github/scripts/generate-android-latest.mjs "$TAG" "$OUT"
+          test -f android-latest.json
+
+      - name: Upload Android assets to draft
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          TAG="${{ github.ref_name }}"
+          VERSION="${{ needs.create-draft.outputs.version }}"
+          gh release upload "$TAG" \
+            "dist/AI.Studio_${VERSION}.apk" \
+            android-latest.json \
+            --clobber
+
+  publish-release:
+    needs: [create-draft, publish-windows, publish-android]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verify assets and publish
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          TAG="${{ github.ref_name }}"
+          mapfile -t ASSETS < <(gh release view "$TAG" --json assets --jq '.assets[].name')
+          printf '当前资产:\n'
+          printf '  - %s\n' "${ASSETS[@]}"
+
+          missing=0
+          require() {
+            local pattern="$1"
+            local label="$2"
+            if printf '%s\n' "${ASSETS[@]}" | grep -qiE "$pattern"; then
+              echo "OK: $label"
+            else
+              echo "::error::缺少资产: $label (pattern=$pattern)"
+              missing=1
+            fi
+          }
+
+          require '_x64-setup\.exe$' "Windows Inno installer"
+          require '_x64-setup\.exe\.sig$' "Windows installer signature"
+          require '\.apk$' "Android APK"
+          require '^latest\.json$' "Desktop updater latest.json"
+          require '^android-latest\.json$' "Android updater android-latest.json"
+
+          if [ "$missing" -ne 0 ]; then
+            echo "::error::资产不完整，保持 draft，不正式发布"
+            exit 1
+          fi
+
+          gh release edit "$TAG" --draft=false
+          echo "::notice::已正式发布 $TAG"

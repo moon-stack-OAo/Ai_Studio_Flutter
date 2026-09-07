@@ -6,6 +6,7 @@ import 'package:design_material/design_material.dart';
 import 'package:flutter/material.dart';
 
 import '../../../widgets/collapsible_prompt.dart';
+import '../../../widgets/empty_illustrations.dart';
 import '../../../widgets/material_empty_states.dart';
 
 /// M-ImageTimeline：竖向卡片流；回合分隔可读。
@@ -16,8 +17,9 @@ class ImageTimeline extends StatefulWidget {
     required this.loadBytes,
     required this.onPreview,
     required this.onSaveAlbum,
+    this.onShare,
     this.onUseAsReference,
-    this.emptyHint = '输入提示词开始生图',
+    this.emptyHint = '还没有生成结果',
     this.emptySubtitle = '在上方填写提示词后生成。',
   });
 
@@ -25,6 +27,7 @@ class ImageTimeline extends StatefulWidget {
   final Future<Uint8List?> Function(ImageRef ref) loadBytes;
   final void Function(ImageItem item, int index, ImageRef ref) onPreview;
   final void Function(ImageItem item, int index, ImageRef ref) onSaveAlbum;
+  final void Function(ImageItem item, int index, ImageRef ref)? onShare;
   final void Function(ImageItem item, int index, ImageRef ref)?
       onUseAsReference;
   final String emptyHint;
@@ -88,6 +91,7 @@ class _ImageTimelineState extends State<ImageTimeline> {
       return MaterialContentEmpty(
         hint: widget.emptyHint,
         subtitle: widget.emptySubtitle,
+        illustration: const MaterialEmptyIllustration.noImages(),
       );
     }
 
@@ -107,6 +111,7 @@ class _ImageTimelineState extends State<ImageTimeline> {
             loadBytes: widget.loadBytes,
             onPreview: widget.onPreview,
             onSaveAlbum: widget.onSaveAlbum,
+            onShare: widget.onShare,
             onUseAsReference: widget.onUseAsReference,
           ),
         );
@@ -124,6 +129,7 @@ class ImageTimelineTurn extends StatelessWidget {
     required this.loadBytes,
     required this.onPreview,
     required this.onSaveAlbum,
+    this.onShare,
     this.onUseAsReference,
   });
 
@@ -132,6 +138,7 @@ class ImageTimelineTurn extends StatelessWidget {
   final Future<Uint8List?> Function(ImageRef ref) loadBytes;
   final void Function(ImageItem item, int index, ImageRef ref) onPreview;
   final void Function(ImageItem item, int index, ImageRef ref) onSaveAlbum;
+  final void Function(ImageItem item, int index, ImageRef ref)? onShare;
   final void Function(ImageItem item, int index, ImageRef ref)?
       onUseAsReference;
 
@@ -208,6 +215,7 @@ class ImageTimelineTurn extends StatelessWidget {
                 loadBytes: loadBytes,
                 onPreview: onPreview,
                 onSaveAlbum: onSaveAlbum,
+                onShare: onShare,
                 onUseAsReference: onUseAsReference,
               ),
           ],
@@ -273,6 +281,7 @@ class _ResultGrid extends StatelessWidget {
     required this.loadBytes,
     required this.onPreview,
     required this.onSaveAlbum,
+    this.onShare,
     this.onUseAsReference,
   });
 
@@ -281,6 +290,7 @@ class _ResultGrid extends StatelessWidget {
   final Future<Uint8List?> Function(ImageRef ref) loadBytes;
   final void Function(ImageItem item, int index, ImageRef ref) onPreview;
   final void Function(ImageItem item, int index, ImageRef ref) onSaveAlbum;
+  final void Function(ImageItem item, int index, ImageRef ref)? onShare;
   final void Function(ImageItem item, int index, ImageRef ref)?
       onUseAsReference;
 
@@ -306,10 +316,12 @@ class _ResultGrid extends StatelessWidget {
         final ref = item.images[i];
         return _ThumbCard(
           ref: ref,
+          imageIndex: i + 1,
           tokens: tokens,
           loadBytes: loadBytes,
           onPreview: () => onPreview(item, i, ref),
           onSaveAlbum: () => onSaveAlbum(item, i, ref),
+          onShare: onShare == null ? null : () => onShare!(item, i, ref),
           onUseAsReference: onUseAsReference == null
               ? null
               : () => onUseAsReference!(item, i, ref),
@@ -322,18 +334,22 @@ class _ResultGrid extends StatelessWidget {
 class _ThumbCard extends StatelessWidget {
   const _ThumbCard({
     required this.ref,
+    required this.imageIndex,
     required this.tokens,
     required this.loadBytes,
     required this.onPreview,
     required this.onSaveAlbum,
+    this.onShare,
     this.onUseAsReference,
   });
 
   final ImageRef ref;
+  final int imageIndex;
   final MaterialTokens tokens;
   final Future<Uint8List?> Function(ImageRef ref) loadBytes;
   final VoidCallback onPreview;
   final VoidCallback onSaveAlbum;
+  final VoidCallback? onShare;
   final VoidCallback? onUseAsReference;
 
   Future<void> _showActions(BuildContext context) async {
@@ -361,6 +377,15 @@ class _ThumbCard extends StatelessWidget {
                   onSaveAlbum();
                 },
               ),
+              if (onShare != null)
+                ListTile(
+                  leading: const Icon(Icons.share_outlined),
+                  title: const Text('分享'),
+                  onTap: () {
+                    Navigator.of(ctx).pop();
+                    onShare!();
+                  },
+                ),
               if (onUseAsReference != null)
                 ListTile(
                   leading: const Icon(Icons.add_photo_alternate_outlined),
@@ -384,14 +409,19 @@ class _ThumbCard extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Expanded(
-          child: Material(
-            color: tokens.surfaceMuted,
-            borderRadius: BorderRadius.circular(12),
-            clipBehavior: Clip.antiAlias,
-            child: InkWell(
-              onTap: onPreview,
-              onLongPress: () => _showActions(context),
-              child: _ThumbImage(ref: ref, loadBytes: loadBytes),
+          child: Semantics(
+            button: true,
+            label: '预览生成图 $imageIndex',
+            excludeSemantics: true,
+            child: Material(
+              color: tokens.surfaceMuted,
+              borderRadius: BorderRadius.circular(12),
+              clipBehavior: Clip.antiAlias,
+              child: InkWell(
+                onTap: onPreview,
+                onLongPress: () => _showActions(context),
+                child: _ThumbImage(ref: ref, loadBytes: loadBytes),
+              ),
             ),
           ),
         ),
@@ -402,31 +432,34 @@ class _ThumbCard extends StatelessWidget {
           children: [
             TextButton(
               style: TextButton.styleFrom(
-                visualDensity: VisualDensity.compact,
                 padding: const EdgeInsets.symmetric(horizontal: 8),
-                minimumSize: const Size(0, 32),
-                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                minimumSize: const Size(48, 48),
               ),
               onPressed: onPreview,
               child: const Text('预览'),
             ),
             TextButton(
               style: TextButton.styleFrom(
-                visualDensity: VisualDensity.compact,
                 padding: const EdgeInsets.symmetric(horizontal: 8),
-                minimumSize: const Size(0, 32),
-                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                minimumSize: const Size(48, 48),
               ),
               onPressed: onSaveAlbum,
               child: const Text('存相册'),
             ),
+            if (onShare != null)
+              TextButton(
+                style: TextButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  minimumSize: const Size(48, 48),
+                ),
+                onPressed: onShare,
+                child: const Text('分享'),
+              ),
             if (onUseAsReference != null)
               TextButton.icon(
                 style: TextButton.styleFrom(
-                  visualDensity: VisualDensity.compact,
                   padding: const EdgeInsets.symmetric(horizontal: 8),
-                  minimumSize: const Size(0, 32),
-                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  minimumSize: const Size(48, 48),
                 ),
                 onPressed: onUseAsReference,
                 icon: const Icon(Icons.add_photo_alternate_outlined, size: 16),

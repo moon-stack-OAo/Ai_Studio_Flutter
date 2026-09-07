@@ -200,19 +200,23 @@ class _ImageComposerState extends State<ImageComposer> {
                 const SizedBox(height: 12),
                 _label(tokens, '提示词'),
                 const SizedBox(height: 6),
-                TextBox(
-                  controller: _promptCtrl,
-                  onChanged:
-                      widget.generating ? null : widget.onPromptChanged,
-                  maxLines: 6,
-                  minLines: 4,
-                  enabled: !widget.generating,
-                  placeholder: '描述你想生成的画面…',
-                  style: TextStyle(
-                    fontFamily: tokens.fontFamily,
-                    fontSize: 13,
-                    height: 1.45,
-                    color: tokens.ink,
+                Semantics(
+                  label: '图片提示词',
+                  textField: true,
+                  child: TextBox(
+                    controller: _promptCtrl,
+                    onChanged:
+                        widget.generating ? null : widget.onPromptChanged,
+                    maxLines: 6,
+                    minLines: 4,
+                    enabled: !widget.generating,
+                    placeholder: '描述你想生成的画面…',
+                    style: TextStyle(
+                      fontFamily: tokens.fontFamily,
+                      fontSize: 13,
+                      height: 1.45,
+                      color: tokens.ink,
+                    ),
                   ),
                 ),
                 const SizedBox(height: 12),
@@ -257,19 +261,36 @@ class _ImageComposerState extends State<ImageComposer> {
                 SizedBox(
                   height: 36,
                   child: widget.generating
-                      ? Button(
-                          onPressed: widget.onStop,
-                          style: ButtonStyle(
-                            backgroundColor:
-                                WidgetStatePropertyAll(tokens.danger),
-                            foregroundColor:
-                                const WidgetStatePropertyAll(Colors.white),
+                      ? Tooltip(
+                          message: '停止生成',
+                          child: Semantics(
+                            button: true,
+                            label: '停止生成',
+                            excludeSemantics: true,
+                            child: Button(
+                              onPressed: widget.onStop,
+                              style: ButtonStyle(
+                                backgroundColor:
+                                    WidgetStatePropertyAll(tokens.danger),
+                                foregroundColor:
+                                    const WidgetStatePropertyAll(Colors.white),
+                              ),
+                              child: const Text('停止生成'),
+                            ),
                           ),
-                          child: const Text('停止生成'),
                         )
-                      : FilledButton(
-                          onPressed: widget.enabled ? widget.onGenerate : null,
-                          child: const Text('生成'),
+                      : Tooltip(
+                          message: '生成图片',
+                          child: Semantics(
+                            button: true,
+                            label: '生成图片',
+                            excludeSemantics: true,
+                            child: FilledButton(
+                              onPressed:
+                                  widget.enabled ? widget.onGenerate : null,
+                              child: const Text('生成'),
+                            ),
+                          ),
                         ),
                 ),
               ],
@@ -337,31 +358,47 @@ class _SegItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: enabled ? onTap : null,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 100),
-        height: 28,
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: active
-              ? tokens.primary.withValues(alpha: 0.20)
-              : Colors.transparent,
-          borderRadius: BorderRadius.circular(6),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: 11,
-            fontWeight: active ? FontWeight.w600 : FontWeight.w400,
-            color: !enabled
-                ? tokens.inkMuted
-                : active
-                    ? tokens.primaryPressed
-                    : tokens.inkSecondary,
-            fontFamily: tokens.fontFamily,
-          ),
-        ),
+    return Semantics(
+      button: true,
+      selected: active,
+      enabled: enabled,
+      label: label,
+      excludeSemantics: true,
+      child: HoverButton(
+        onPressed: enabled ? onTap : null,
+        cursor: enabled
+            ? SystemMouseCursors.click
+            : SystemMouseCursors.basic,
+        builder: (context, states) {
+          final focused = states.isFocused;
+          return AnimatedContainer(
+            duration: const Duration(milliseconds: 100),
+            height: 28,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: active
+                  ? tokens.primary.withValues(alpha: 0.20)
+                  : Colors.transparent,
+              borderRadius: BorderRadius.circular(6),
+              border: focused
+                  ? Border.all(color: tokens.primary, width: 1.5)
+                  : null,
+            ),
+            child: Text(
+              label,
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: active ? FontWeight.w600 : FontWeight.w400,
+                color: !enabled
+                    ? tokens.inkMuted
+                    : active
+                        ? tokens.primaryPressed
+                        : tokens.inkSecondary,
+                fontFamily: tokens.fontFamily,
+              ),
+            ),
+          );
+        },
       ),
     );
   }
@@ -391,36 +428,53 @@ class _ChipWrap extends StatelessWidget {
       runSpacing: 6,
       children: options.map((e) {
         final active = e == value;
-        return GestureDetector(
-          onTap: enabled ? () => onChanged(e) : null,
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 100),
-            height: 28,
-            padding: const EdgeInsets.symmetric(horizontal: 10),
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: active
-                  ? tokens.primary.withValues(alpha: 0.14)
-                  : tokens.surfaceMuted,
-              borderRadius: BorderRadius.circular(6),
-              border: Border.all(
-                color: active
-                    ? Color.lerp(tokens.primary, tokens.border, 0.5)!
-                    : tokens.border,
-              ),
-            ),
-            child: Text(
-              labelOf?.call(e) ?? e,
-              style: TextStyle(
-                fontSize: 11,
-                color: !enabled
-                    ? tokens.inkMuted
-                    : active
-                        ? tokens.primaryPressed
-                        : tokens.inkSecondary,
-                fontFamily: tokens.fontFamily,
-              ),
-            ),
+        final chipLabel = labelOf?.call(e) ?? e;
+        return Semantics(
+          button: true,
+          selected: active,
+          enabled: enabled,
+          label: chipLabel,
+          excludeSemantics: true,
+          child: HoverButton(
+            onPressed: enabled ? () => onChanged(e) : null,
+            cursor: enabled
+                ? SystemMouseCursors.click
+                : SystemMouseCursors.basic,
+            builder: (context, states) {
+              final focused = states.isFocused;
+              return AnimatedContainer(
+                duration: const Duration(milliseconds: 100),
+                height: 28,
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: active
+                      ? tokens.primary.withValues(alpha: 0.14)
+                      : tokens.surfaceMuted,
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(
+                    color: focused
+                        ? tokens.primary
+                        : active
+                            ? Color.lerp(tokens.primary, tokens.border, 0.5)!
+                            : tokens.border,
+                    width: focused ? 1.5 : 1,
+                  ),
+                ),
+                child: Text(
+                  chipLabel,
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: !enabled
+                        ? tokens.inkMuted
+                        : active
+                            ? tokens.primaryPressed
+                            : tokens.inkSecondary,
+                    fontFamily: tokens.fontFamily,
+                  ),
+                ),
+              );
+            },
           ),
         );
       }).toList(),
@@ -479,93 +533,104 @@ class _ReferenceBoxState extends State<_ReferenceBox> {
         if (_dragging) setState(() => _dragging = false);
         await _handleDrop(detail);
       },
-      child: GestureDetector(
-        onTap: hasRef || widget.onPick == null ? null : widget.onPick,
-        child: MouseRegion(
-          cursor: (!hasRef && canInteract)
-              ? SystemMouseCursors.click
-              : SystemMouseCursors.basic,
-          child: Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(
-                color: highlight ? tokens.primary : tokens.border,
-                style: BorderStyle.solid,
+      child: Semantics(
+        button: !hasRef && widget.onPick != null,
+        label: hasRef
+            ? '参考图已设置，可清除或拖放替换'
+            : '选择或拖放参考图',
+        excludeSemantics: hasRef,
+        child: GestureDetector(
+          onTap: hasRef || widget.onPick == null ? null : widget.onPick,
+          child: MouseRegion(
+            cursor: (!hasRef && canInteract)
+                ? SystemMouseCursors.click
+                : SystemMouseCursors.basic,
+            child: Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: highlight ? tokens.primary : tokens.border,
+                  style: BorderStyle.solid,
+                ),
+                color: highlight
+                    ? tokens.primary.withValues(alpha: 0.08)
+                    : tokens.canvas,
               ),
-              color: highlight
-                  ? tokens.primary.withValues(alpha: 0.08)
-                  : tokens.canvas,
-            ),
-            child: hasRef
-                ? Row(
-                    children: [
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(6),
-                        child: SizedBox(
-                          width: 56,
-                          height: 56,
-                          child: _RefThumb(
-                            ref: widget.reference!,
-                            loadBytes: widget.loadBytes,
+              child: hasRef
+                  ? Row(
+                      children: [
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(6),
+                          child: SizedBox(
+                            width: 56,
+                            height: 56,
+                            child: _RefThumb(
+                              ref: widget.reference!,
+                              loadBytes: widget.loadBytes,
+                            ),
                           ),
                         ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              '已设为参考',
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w500,
-                                color: tokens.inkSecondary,
-                                fontFamily: tokens.fontFamily,
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                '已设为参考',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w500,
+                                  color: tokens.inkSecondary,
+                                  fontFamily: tokens.fontFamily,
+                                ),
                               ),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              highlight ? '松开以替换参考图' : '图生图 · 可拖放替换',
-                              style: TextStyle(
-                                fontSize: 11,
-                                color: tokens.inkMuted,
-                                fontFamily: tokens.fontFamily,
+                              const SizedBox(height: 2),
+                              Text(
+                                highlight ? '松开以替换参考图' : '图生图 · 可拖放替换',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: tokens.inkMuted,
+                                  fontFamily: tokens.fontFamily,
+                                ),
                               ),
+                            ],
+                          ),
+                        ),
+                        if (widget.onClear != null)
+                          Semantics(
+                            button: true,
+                            label: '清除参考图',
+                            child: HyperlinkButton(
+                              onPressed: widget.onClear,
+                              child: const Text('清除'),
                             ),
-                          ],
+                          ),
+                      ],
+                    )
+                  : Column(
+                      children: [
+                        Text(
+                          highlight ? '松开以设为参考' : '选择或拖放文件',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                            color: tokens.inkSecondary,
+                            fontFamily: tokens.fontFamily,
+                          ),
                         ),
-                      ),
-                      if (widget.onClear != null)
-                        HyperlinkButton(
-                          onPressed: widget.onClear,
-                          child: const Text('清除'),
+                        const SizedBox(height: 4),
+                        Text(
+                          '支持 PNG / JPEG / WebP',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: tokens.inkMuted,
+                            fontFamily: tokens.fontFamily,
+                          ),
                         ),
-                    ],
-                  )
-                : Column(
-                    children: [
-                      Text(
-                        highlight ? '松开以设为参考' : '选择或拖放文件',
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w500,
-                          color: tokens.inkSecondary,
-                          fontFamily: tokens.fontFamily,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        '支持 PNG / JPEG / WebP',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: tokens.inkMuted,
-                          fontFamily: tokens.fontFamily,
-                        ),
-                      ),
-                    ],
-                  ),
+                      ],
+                    ),
+            ),
           ),
         ),
       ),

@@ -28,6 +28,7 @@ dependencies:
   url_launcher: ^6.3.2
   open_filex: ^4.7.0
   gal: ^2.3.3
+  share_plus: ^13.1.0
   video_player: ^2.14.0
 
 dev_dependencies:
