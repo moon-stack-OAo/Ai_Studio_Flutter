@@ -28,8 +28,8 @@ jobs:
       - name: Cache Inno Setup installer
         uses: actions/cache@v4
         with:
-          path: ${{ runner.temp }}/innosetup-6.5.0.exe
-          key: innosetup-6.5.0-exe
+          path: ${{ runner.temp }}/innosetup-6.7.3.exe
+          key: innosetup-6.7.3-exe
 
       - name: Pub get
         run: flutter pub get
@@ -49,11 +49,14 @@ jobs:
       - name: Install Inno Setup
         shell: pwsh
         run: |
-          # 简体中文语言包需 Inno Setup 6.5.0+
+          # 简体中文语言包需 Inno Setup 6.5.0+；官方已迁 GitHub Releases，钉 6.7.3
           $ErrorActionPreference = 'Stop'
-          $installer = Join-Path $env:RUNNER_TEMP 'innosetup-6.5.0.exe'
+          $installer = Join-Path $env:RUNNER_TEMP 'innosetup-6.7.3.exe'
           if (-not (Test-Path -LiteralPath $installer)) {
-            curl.exe -fsSL -o $installer https://files.jrsoftware.org/is/6/innosetup-6.5.0.exe
+            curl.exe -fsSL -o $installer https://github.com/jrsoftware/issrc/releases/download/is-6_7_3/innosetup-6.7.3.exe
+          }
+          if (-not (Test-Path -LiteralPath $installer) -or (Get-Item -LiteralPath $installer).Length -lt 1MB) {
+            throw "Inno Setup installer missing or too small: $installer"
           }
           Start-Process -FilePath $installer -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART' -Wait
           $iscc = @(
