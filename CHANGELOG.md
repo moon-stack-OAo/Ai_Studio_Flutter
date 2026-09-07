@@ -90,4 +90,4 @@
 
 ### Changed
 
-（暂无）
+- CI：release / build 增加 Gradle 与 Inno Setup 安装包缓存，缩短重复构建时间

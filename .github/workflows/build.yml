@@ -25,6 +25,12 @@ jobs:
           channel: stable
           cache: true
 
+      - name: Cache Inno Setup installer
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/innosetup-6.5.0.exe
+          key: innosetup-6.5.0-exe
+
       - name: Pub get
         run: flutter pub get
 
@@ -45,8 +51,11 @@ jobs:
         run: |
           # 简体中文语言包需 Inno Setup 6.5.0+
           $ErrorActionPreference = 'Stop'
-          curl.exe -fsSL -o innosetup-6.5.0.exe https://files.jrsoftware.org/is/6/innosetup-6.5.0.exe
-          Start-Process -FilePath .\innosetup-6.5.0.exe -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART' -Wait
+          $installer = Join-Path $env:RUNNER_TEMP 'innosetup-6.5.0.exe'
+          if (-not (Test-Path -LiteralPath $installer)) {
+            curl.exe -fsSL -o $installer https://files.jrsoftware.org/is/6/innosetup-6.5.0.exe
+          }
+          Start-Process -FilePath $installer -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART' -Wait
           $iscc = @(
             "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe",
             "${env:ProgramFiles}\Inno Setup 6\ISCC.exe"
@@ -78,12 +87,24 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
+          cache: gradle
 
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
           channel: stable
           cache: true
+
+      - name: Cache Android build intermediates
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+            apps/mobile_material/android/.gradle
+          key: android-gradle-${{ runner.os }}-${{ hashFiles('apps/mobile_material/android/**/*.gradle*', 'apps/mobile_material/android/**/gradle-wrapper.properties', 'apps/mobile_material/pubspec.yaml', 'packages/**/pubspec.yaml', 'pubspec.lock') }}
+          restore-keys: |
+            android-gradle-${{ runner.os }}-
 
       - name: Pub get
         run: flutter pub get
