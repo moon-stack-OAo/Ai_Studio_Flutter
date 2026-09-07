@@ -7,6 +7,7 @@ import 'package:desktop_fluent/shell/update_banner.dart';
 import 'package:desktop_fluent/widgets/session_list_pane.dart';
 import 'package:desktop_fluent/pages/settings/settings_about_page.dart';
 import 'package:desktop_fluent/pages/settings/settings_shell.dart';
+import 'package:desktop_fluent/update/update_controller.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:package_info_plus/package_info_plus.dart';
@@ -294,6 +295,10 @@ void main() {
       buildNumber: '1',
       buildSignature: '',
     );
+    final updateController = UpdateController(
+      client: UpdateClient(manifestUrl: kDesktopUpdateManifestUrl),
+      currentVersion: '1.0.0',
+    );
 
     await tester.pumpWidget(
       FluentApp(
@@ -307,6 +312,7 @@ void main() {
             chatDefaults: chatDefaults,
             appearance: appearance,
           ),
+          updateController: updateController,
           packageInfo: fakeInfo,
         ),
       ),

@@ -194,6 +194,11 @@ jobs:
             echo "::warning::未配置 ANDROID_KEY_*，将使用 debug 签名 APK（侧载可用，非正式分发）"
             exit 0
           fi
+          # 常见误配：把说明注释整段粘进 Secret（以 # 开头或含 DO NOT COMMIT）
+          if [[ "$ANDROID_KEY_ALIAS" == \#* ]] || [[ "$ANDROID_KEY_ALIAS" == *"DO NOT COMMIT"* ]]; then
+            echo "::error::ANDROID_KEY_ALIAS 看起来像注释文案，不是 keystore 真实 alias。请在仓库 Secrets 中改为实际 alias（如 key0）。"
+            exit 1
+          fi
           echo "$ANDROID_KEY_BASE64" | base64 -d > "${RUNNER_TEMP}/keystore.jks"
           test -s "${RUNNER_TEMP}/keystore.jks"
           # 用 echo 写 properties，避免 YAML run 块内顶格 heredoc 破坏工作流解析，
