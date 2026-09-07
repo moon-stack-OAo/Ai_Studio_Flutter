@@ -576,7 +576,7 @@ void main() {
       expect(request.method, 'POST');
       expect(request.url.path, endsWith('/videos'));
       expect(request.headers['content-type'], contains('multipart/form-data'));
-      captured = request as http.Request;
+      captured = request;
       return http.Response(
         jsonEncode({
           'id': 'job_img2v_1',
@@ -612,7 +612,7 @@ void main() {
     int? uploadLen;
     final src = _noisyJpg(w: 2000, h: 1500);
     final client = MockClient((request) async {
-      uploadLen = (request as http.Request).bodyBytes.length;
+      uploadLen = request.bodyBytes.length;
       return http.Response(
         jsonEncode({'id': 'job_c1', 'status': 'queued'}),
         200,
@@ -638,7 +638,7 @@ void main() {
     final sizes = <int>[];
     final client = MockClient((request) async {
       calls += 1;
-      sizes.add((request as http.Request).bodyBytes.length);
+      sizes.add(request.bodyBytes.length);
       if (calls == 1) {
         return http.Response('payload too large', 413);
       }
