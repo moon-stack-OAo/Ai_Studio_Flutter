@@ -291,8 +291,9 @@ void main() {
     expect(find.text('外观'), findsWidgets);
     expect(find.text('日志'), findsWidgets);
     expect(find.text('关于'), findsWidgets);
-    expect(find.text('点选一项展开编辑'), findsOneWidget);
-    expect(find.text('编辑提供商'), findsOneWidget);
+    expect(find.textContaining('点选切换当前提供商'), findsOneWidget);
+    expect(find.text('编辑所选提供商'), findsOneWidget);
+    expect(find.text('编辑提供商'), findsNothing);
   });
 
   testWidgets('providers tab empty/loading smoke with memory storage',
@@ -322,9 +323,19 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('暂无提供商'), findsNothing);
-    expect(find.text('编辑提供商'), findsOneWidget);
+    expect(find.text('编辑提供商'), findsNothing);
+    expect(find.text('编辑所选提供商'), findsOneWidget);
     expect(find.text('xAI Grok'), findsOneWidget);
     expect(find.byType(ListTile), findsWidgets);
+
+    await tester.tap(find.text('xAI Grok'));
+    await tester.pumpAndSettle();
+    expect(find.text('编辑提供商'), findsNothing);
+
+    await tester.tap(find.text('编辑所选提供商'));
+    await tester.pumpAndSettle();
+    expect(find.text('编辑提供商'), findsOneWidget);
+    expect(find.text('保存'), findsOneWidget);
   });
 
   testWidgets('session list items expose semantics labels', (tester) async {

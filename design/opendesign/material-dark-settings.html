@@ -100,23 +100,39 @@
       display: grid; place-items: center; font-size: 12px; font-weight: 700;
       background: var(--surface-elevated); color: #93c5fd; border: 1px solid var(--border);
     }
-    .provider-form {
-      display: none;
-      border: 1px solid color-mix(in oklch, var(--primary) 35%, var(--border));
-      background: var(--surface);
-      border-radius: 14px;
-      padding: 14px;
-      animation: formIn .18s ease;
+    .sheet-scrim {
+      display: none; position: fixed; inset: 0; z-index: 40;
+      background: color-mix(in oklch, var(--ink) 35%, transparent);
+      align-items: flex-end; justify-content: stretch;
     }
-    .provider-form.open { display: block; }
-    @keyframes formIn {
-      from { opacity: 0; transform: translateY(6px); }
+    .sheet-scrim.open { display: flex; }
+    .provider-sheet {
+      width: 100%; max-height: 92vh; display: flex; flex-direction: column;
+      background: var(--surface); border-radius: 20px 20px 0 0;
+      box-shadow: 0 -8px 32px color-mix(in oklch, var(--ink) 18%, transparent);
+      animation: sheetIn .2s ease;
+    }
+    @keyframes sheetIn {
+      from { opacity: 0; transform: translateY(24px); }
       to { opacity: 1; transform: translateY(0); }
     }
-    .provider-form .form-head {
-      display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 12px;
+    .provider-sheet .drag {
+      width: 36px; height: 4px; border-radius: 999px; background: var(--border);
+      margin: 10px auto 4px;
     }
-    .provider-form .form-head .t { font-size: 14px; font-weight: 650; }
+    .provider-sheet .form-head {
+      display: flex; align-items: center; justify-content: space-between; gap: 8px;
+      padding: 4px 16px 8px;
+    }
+    .provider-sheet .form-head .t { font-size: 16px; font-weight: 650; }
+    .provider-sheet .sheet-body {
+      overflow: auto; padding: 0 16px 16px; flex: 1;
+    }
+    .provider-sheet .sheet-foot {
+      display: flex; gap: 8px; padding: 10px 16px 14px;
+      border-top: 1px solid var(--border); background: var(--surface);
+    }
+    .provider-sheet .sheet-foot .btn { flex: 1; }
     .link-btn {
       border: 0; background: transparent; color: var(--ink-muted); font-size: 12px; cursor: pointer;
     }
@@ -134,7 +150,9 @@
       background: var(--surface-elevated); color: var(--ink); padding: 0 12px; font: inherit; font-size: 14px;
     }
     .input:focus, .select:focus { outline: 2px solid color-mix(in oklch, var(--primary) 55%, transparent); border-color: var(--primary); }
-    .actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+    .section-label { font-size: 12px; font-weight: 650; color: var(--ink-secondary); margin: 4px 0 8px; }
+    .test-ok { font-size: 12px; color: var(--success, #3dd68c); align-self: center; }
+    .actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; align-items: center; }
     .btn {
       height: 48px; min-width: 88px; padding: 0 14px; border-radius: 10px; border: 0;
       font-size: 13px; font-weight: 650; cursor: pointer;
@@ -238,7 +256,7 @@
     </div>
 
     <section class="panel active" id="panel-providers" role="tabpanel" data-od-id="m-providers">
-      <p class="hint" style="padding:0 2px">点选一项展开编辑 · <span class="badge-id">M-ProvidersList</span></p>
+      <p class="hint" style="padding:0 2px">点选切换当前提供商，再点「编辑」打开抽屉 · <span class="badge-id">M-ProvidersList</span></p>
       <div class="card provider-list" data-od-id="m-providers-list">
         <button class="row selected" type="button" data-provider="compat" aria-pressed="true">
           <span class="ico" aria-hidden="true">兼</span>
@@ -264,40 +282,52 @@
           </span>
         </button>
       </div>
-
-      <div class="provider-form open" id="provider-form" data-od-id="m-provider-form">
-        <div class="form-head">
-          <div class="t">编辑提供商 <span class="badge-id">SET-PROVIDER-EDIT</span></div>
-          <button class="link-btn" type="button" id="form-collapse">收起</button>
-        </div>
-        <div class="field"><label>显示名称</label><input class="input" id="pf-name" value="OpenAI 兼容 · 自建" /></div>
-        <div class="field"><label>类型</label>
-          <select class="select" id="pf-type"><option>OpenAI 兼容</option><option>OpenAI</option><option>xAI</option></select>
-        </div>
-        <div class="field"><label>Base URL</label><input class="input" id="pf-base" value="https://api.example.local/v1" /></div>
-        <div class="field"><label>API Key</label><input class="input" id="pf-key" type="password" value="sk-local-••••••••" /></div>
-        <div class="actions">
-          <button class="btn ghost" type="button">测试连接</button>
-          <button class="btn ghost" type="button">拉取模型</button>
-          <button class="btn primary" type="button">保存</button>
-        </div>
-        <div class="field" style="margin-top:12px"><label>对话模型</label>
-          <input class="input" type="search" placeholder="搜索已拉取模型…" value="gpt-4.1-mini" />
-          <div class="chips" style="margin-top:8px"><span class="chip on">gpt-4.1-mini</span><span class="chip">gpt-4.1</span><span class="chip">claude-sonnet-4</span></div>
-          <p class="hint" style="margin-top:6px">对齐现网：拉取后选；输入=搜索过滤（filterable + tag）</p>
-        </div>
-        <div class="field"><label>生图模型</label>
-          <input class="input" type="search" placeholder="搜索已拉取模型…" value="gpt-image-1" />
-          <div class="chips" style="margin-top:8px"><span class="chip on">gpt-image-1</span><span class="chip">dall-e-3</span><span class="chip">flux-dev</span></div>
-        </div>
-        <div class="field"><label>视频模型</label>
-          <input class="input" type="search" placeholder="搜索已拉取模型…" value="sora-2" />
-          <div class="chips" style="margin-top:8px"><span class="chip">（不使用）</span><span class="chip on">sora-2</span><span class="chip">veo-2</span></div>
-        </div>
-        <p class="hint" style="margin-top:10px">密钥仅存本机 Keystore / Keychain。</p>
-      </div>
+      <button class="btn primary" type="button" id="edit-provider" style="width:100%;margin-top:12px">编辑所选提供商</button>
       <button class="add-row" type="button">＋ 添加提供商</button>
     </section>
+
+    <div class="sheet-scrim" id="provider-sheet-scrim" data-od-id="m-provider-form">
+      <div class="provider-sheet" role="dialog" aria-labelledby="provider-sheet-title">
+        <div class="drag" aria-hidden="true"></div>
+        <div class="form-head">
+          <div class="t" id="provider-sheet-title">编辑提供商 <span class="badge-id">SET-PROVIDER-EDIT</span></div>
+          <button class="link-btn" type="button" id="form-collapse">关闭</button>
+        </div>
+        <div class="sheet-body">
+          <div class="section-label">基本信息</div>
+          <div class="field"><label>显示名称</label><input class="input" id="pf-name" value="OpenAI 兼容 · 自建" /></div>
+          <div class="field"><label>类型</label>
+            <select class="select" id="pf-type"><option>OpenAI 兼容</option><option>OpenAI</option><option>xAI</option></select>
+          </div>
+          <div class="field"><label>Base URL</label><input class="input" id="pf-base" value="https://api.example.local/v1" /></div>
+          <div class="field"><label>API Key</label><input class="input" id="pf-key" type="password" value="sk-local-••••••••" /></div>
+          <div class="section-label" style="margin-top:12px">连接与模型</div>
+          <div class="actions">
+            <button class="btn ghost" type="button">测试连接</button>
+            <button class="btn ghost" type="button">拉取模型</button>
+            <span class="test-ok">● 上次成功 · 218 ms</span>
+          </div>
+          <div class="field" style="margin-top:12px"><label>对话模型</label>
+            <input class="input" type="search" placeholder="搜索已拉取模型…" value="gpt-4.1-mini" />
+            <div class="chips" style="margin-top:8px"><span class="chip on">gpt-4.1-mini</span><span class="chip">gpt-4.1</span><span class="chip">claude-sonnet-4</span></div>
+            <p class="hint" style="margin-top:6px">对齐现网：拉取后选；输入=搜索过滤（filterable + tag）</p>
+          </div>
+          <div class="field"><label>生图模型</label>
+            <input class="input" type="search" placeholder="搜索已拉取模型…" value="gpt-image-1" />
+            <div class="chips" style="margin-top:8px"><span class="chip on">gpt-image-1</span><span class="chip">dall-e-3</span><span class="chip">flux-dev</span></div>
+          </div>
+          <div class="field"><label>视频模型</label>
+            <input class="input" type="search" placeholder="搜索已拉取模型…" value="sora-2" />
+            <div class="chips" style="margin-top:8px"><span class="chip">（不使用）</span><span class="chip on">sora-2</span><span class="chip">veo-2</span></div>
+          </div>
+          <p class="hint" style="margin-top:10px">先「拉取模型」；密钥仅存本机 Keystore / Keychain。视频可清空表示不使用。</p>
+        </div>
+        <div class="sheet-foot">
+          <button class="btn primary" type="button">保存</button>
+          <button class="btn ghost" type="button" id="form-cancel">取消</button>
+        </div>
+      </div>
+    </div>
 
     <section class="panel" id="panel-chat" role="tabpanel" data-od-id="m-chat-defaults">
       <div class="card card-pad">
@@ -423,7 +453,7 @@
       xai: { name: 'xAI', type: 2, base: 'https://api.x.ai/v1', key: '' },
       openai: { name: 'OpenAI', type: 1, base: 'https://api.openai.com/v1', key: 'sk-••••••••' },
     };
-    const form = document.getElementById('provider-form');
+    const scrim = document.getElementById('provider-sheet-scrim');
     const rows = document.querySelectorAll('.provider-list .row');
     function fillForm(id) {
       const d = providerData[id];
@@ -433,18 +463,32 @@
       document.getElementById('pf-base').value = d.base;
       document.getElementById('pf-key').value = d.key || '';
     }
+    function openSheet(id) {
+      fillForm(id);
+      scrim.classList.add('open');
+    }
+    function closeSheet() {
+      scrim.classList.remove('open');
+    }
+    function selectedProviderId() {
+      const selected = document.querySelector('.provider-list .row.selected');
+      return selected?.dataset.provider || 'compat';
+    }
     rows.forEach((row) => {
       row.addEventListener('click', () => {
         rows.forEach((r) => { r.classList.remove('selected'); r.setAttribute('aria-pressed', 'false'); });
         row.classList.add('selected');
         row.setAttribute('aria-pressed', 'true');
         fillForm(row.dataset.provider);
-        form.classList.add('open');
       });
     });
-    document.getElementById('form-collapse')?.addEventListener('click', () => {
-      form.classList.remove('open');
-      rows.forEach((r) => { r.classList.remove('selected'); r.setAttribute('aria-pressed', 'false'); });
+    document.getElementById('edit-provider')?.addEventListener('click', () => {
+      openSheet(selectedProviderId());
+    });
+    document.getElementById('form-collapse')?.addEventListener('click', closeSheet);
+    document.getElementById('form-cancel')?.addEventListener('click', closeSheet);
+    scrim?.addEventListener('click', (e) => {
+      if (e.target === scrim) closeSheet();
     });
   </script>
 </body>
