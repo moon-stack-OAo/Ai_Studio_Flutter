@@ -338,6 +338,83 @@ void main() {
     expect(find.text('清除本地数据'), findsOneWidget);
     expect(find.textContaining('危险操作需确认'), findsNothing);
     expect(find.textContaining('默认导出不含 API Key'), findsOneWidget);
+    expect(find.textContaining('不上架'), findsOneWidget);
+    expect(find.text('开源许可暂未开放'), findsNothing);
+  });
+
+  testWidgets('about page fits default 1280x820 without vertical scroll',
+      (tester) async {
+    tester.view.physicalSize = const Size(1280, 820);
+    tester.view.devicePixelRatio = 1.0;
+    tester.platformDispatcher.textScaleFactorTestValue = 1.2;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+
+    final repo = ProviderRepository(
+      storage: MemoryProviderStorage(),
+      connectionTester: StubProviderConnectionTester(),
+    );
+    await repo.load();
+    final sessions = ChatSessionRepository(
+      storage: MemoryChatSessionStorage(),
+    );
+    await sessions.load();
+    final chatDefaults = ChatDefaultsRepository(
+      storage: MemoryChatDefaultsStorage(),
+    );
+    await chatDefaults.load();
+    final imageSessions = ImageSessionRepository(
+      storage: MemoryImageSessionStorage(),
+    );
+    await imageSessions.load();
+    final videoSessions = await makeVideoSessions();
+    final logs = await makeLogs();
+    final appearance = AppearanceRepository(
+      storage: MemoryAppearanceStorage(),
+    );
+    await appearance.load();
+
+    await tester.pumpWidget(
+      AiStudioApp(
+        themeController: ThemeController(repository: appearance),
+        providerRepository: repo,
+        sessionRepository: sessions,
+        imageSessionRepository: imageSessions,
+        videoSessionRepository: videoSessions,
+        chatDefaultsRepository: chatDefaults,
+        appLogRepository: logs,
+        dataBackupService: await makeBackup(
+          providers: repo,
+          chatSessions: sessions,
+          imageSessions: imageSessions,
+          videoSessions: videoSessions,
+          chatDefaults: chatDefaults,
+          appearance: appearance,
+          logs: logs,
+        ),
+        generation: GenerationRuntime(),
+        startupUpdateCheckDelay: Duration.zero,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('设置'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('关于与更新'));
+    await tester.pumpAndSettle();
+
+    final aboutPos = tester
+        .state<ScrollableState>(
+          find
+              .descendant(
+                of: find.byType(SettingsAboutPage),
+                matching: find.byType(Scrollable),
+              )
+              .first,
+        )
+        .position;
+    expect(aboutPos.maxScrollExtent, 0);
   });
 
   testWidgets('about clear data shows confirm dialog', (tester) async {

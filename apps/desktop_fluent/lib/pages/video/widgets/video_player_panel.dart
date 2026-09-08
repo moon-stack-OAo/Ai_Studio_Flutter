@@ -74,6 +74,7 @@ class VideoPlayerPanel extends StatelessWidget {
             child: item == null
                 ? _EmptyStage(tokens: tokens)
                 : _InlinePlayer(
+                    key: ValueKey(item!.id),
                     item: item!,
                     tokens: tokens,
                     onOpenSystem: onOpenSystem,
@@ -159,6 +160,7 @@ class _EmptyStage extends StatelessWidget {
 
 class _InlinePlayer extends StatefulWidget {
   const _InlinePlayer({
+    super.key,
     required this.item,
     required this.tokens,
     required this.onOpenSystem,
@@ -180,6 +182,7 @@ class _InlinePlayerState extends State<_InlinePlayer> {
   bool _ready = false;
   String? _boundItemId;
   String? _boundPath;
+  int _bindToken = 0;
 
   @override
   void initState() {
@@ -195,10 +198,9 @@ class _InlinePlayerState extends State<_InlinePlayer> {
 
   bool _shouldRebind(VideoItem item) {
     if (_boundItemId != item.id) return true;
-    if (_controller == null || !_ready) return true;
     final next = resolveVideoItemPlayablePath(item);
-    if (next == null || next.isEmpty) return false;
     if (_boundPath == next) return false;
+    if (next == null || next.isEmpty) return false;
     if (_ready && _controller != null && _controller!.value.isInitialized) {
       final upgradingToLocal = _isHttp(_boundPath) && !_isHttp(next);
       if (upgradingToLocal) return false;
@@ -217,6 +219,7 @@ class _InlinePlayerState extends State<_InlinePlayer> {
     }
 
     final path = resolveVideoItemPlayablePath(item);
+    final token = ++_bindToken;
     final old = _controller;
     _controller = null;
     _boundItemId = item.id;
@@ -228,13 +231,18 @@ class _InlinePlayerState extends State<_InlinePlayer> {
       });
     }
     await old?.dispose();
+    if (!mounted || token != _bindToken) return;
 
     if (path == null || path.isEmpty) {
-      if (mounted) setState(() => _error = '没有可播放的视频地址');
+      if (mounted && token == _bindToken) {
+        setState(() => _error = '没有可播放的视频地址');
+      }
       return;
     }
     if (path.startsWith('memory://')) {
-      if (mounted) setState(() => _error = '内存视频请先另存或系统打开');
+      if (mounted && token == _bindToken) {
+        setState(() => _error = '内存视频请先另存或系统打开');
+      }
       return;
     }
     try {
@@ -246,27 +254,34 @@ class _InlinePlayerState extends State<_InlinePlayer> {
             path.startsWith('file:') ? Uri.parse(path).toFilePath() : path;
         final f = File(filePath);
         if (!await f.exists()) {
-          if (mounted) setState(() => _error = '本地文件不存在');
+          if (mounted && token == _bindToken) {
+            setState(() => _error = '本地文件不存在');
+          }
           return;
         }
         ctrl = VideoPlayerController.file(f);
       }
+      if (!mounted || token != _bindToken) {
+        await ctrl.dispose();
+        return;
+      }
       _controller = ctrl;
       await ctrl.initialize();
-      if (!mounted || _boundItemId != item.id || _boundPath != path) {
+      if (!mounted || token != _bindToken) {
         await ctrl.dispose();
         return;
       }
       setState(() => _ready = true);
       await ctrl.play();
     } catch (e) {
-      if (!mounted) return;
+      if (!mounted || token != _bindToken) return;
       setState(() => _error = '播放器初始化失败：$e');
     }
   }
 
   @override
   void dispose() {
+    _bindToken++;
     final c = _controller;
     _controller = null;
     c?.dispose();

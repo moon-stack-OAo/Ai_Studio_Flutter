@@ -116,7 +116,7 @@ class _SettingsLogsTabState extends State<SettingsLogsTab> {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    '本机关键事件；不得含密钥明文。',
+                    '本机关键事件；生视频每轮轮询会写入。不得含密钥明文。',
                     style: TextStyle(fontSize: 12, color: tokens.inkMuted),
                   ),
                   const SizedBox(height: 10),

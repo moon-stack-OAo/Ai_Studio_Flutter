@@ -25,7 +25,8 @@ class VideoController extends ChangeNotifier {
         _sessions = sessionRepository,
         _appLogs = appLogRepository,
         _ownsClient = videoClient == null,
-        _videoClient = videoClient ?? OpenAiCompatibleVideoClient(),
+        _videoClient = videoClient ??
+            OpenAiCompatibleVideoClient(logs: appLogRepository),
         _picker = imagePicker ?? ImagePicker() {
     _modelsCache = ProviderModelsCache(
       providers: _providers,
@@ -112,16 +113,25 @@ class VideoController extends ChangeNotifier {
 
   bool get supportsReferenceImage => true;
 
+  bool get isXaiVideoActive {
+    final c = _videoCreds;
+    if (c == null) return false;
+    return isXaiVideoProvider(
+      providerType: c.type,
+      baseUrl: c.baseUrl,
+      videoModel: c.videoModel,
+    );
+  }
+
   bool get useAspectRatio {
     final creds = _videoCreds;
     if (creds == null) return false;
     if (isAgnesActive) return true;
-    return creds.type == ProviderType.xai;
+    return isXaiVideoActive;
   }
 
   bool get useResolution {
-    final creds = _videoCreds;
-    return creds?.type == ProviderType.xai;
+    return isXaiVideoActive;
   }
 
   bool get showSize {

@@ -340,7 +340,7 @@ class _QueuePanel extends StatelessWidget {
                 ),
                 const Spacer(),
                 Text(
-                  '按回合时间分隔',
+                  '按状态筛选 · 回合时间分隔',
                   style: TextStyle(
                     fontSize: 11,
                     color: tokens.inkMuted,

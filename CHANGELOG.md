@@ -9,6 +9,22 @@
 
 ---
 
+## [Unreleased]
+
+### Added
+
+（暂无）
+
+### Changed
+
+（暂无）
+
+### Fixed
+
+（暂无）
+
+---
+
 ## [1.0.0] — 2026-09-07
 
 首个可交付基线：双端独立 UI + 共享 `core`，覆盖对话 / 生图 / 生视频 / 设置与更新主路径（对应 `DESIGN.md` P0–P2；P3 抛光含 a11y 全路径自证）。
@@ -28,7 +44,9 @@
 - 对话：SSE 流式、停止 / 撤回、Markdown、会话参数覆盖、可搜索模型选择
 - 生图：文生 / 图生、时间线、灯箱、另存；移动端相册与系统分享
 - 生视频：任务进度、恢复、播放与另存；移动端分享
+- 生视频：任务队列支持按状态筛选（全部 / 生成中 / 待恢复 / 已完成 / 失败 / 已放弃），双端一致
 - 设置五分类：提供商 / 对话默认 / 外观 / 日志 / 关于
+- 设置日志：生视频 `waitJob` 每轮写入 status / progress / URL（来源 `video`），便于排查轮询
 - 桌面：托盘、关闭三态（Ask · Quit · Tray）、无边框标题栏、冷启动更新横幅
 - 移动：底栏四入口、IME 时隐藏底栏、返回托管（`BackHost`）、冷启动更新横幅
 - Android 侧载更新；iOS 非 Store 分发说明
@@ -67,6 +85,14 @@
 - 安装后显示名统一为 **AI Studio**（Windows 资源信息、macOS `PRODUCT_NAME`、Android `label`、iOS `CFBundleDisplayName`）；exe / `applicationId` / Dart 包名未改
 - Windows Inno 安装向导支持 **English / 简体中文**；CI / release 钉 Inno Setup **6.7.3**（GitHub Releases）
 - 关于页文案产品化（弱化「本仓 / latest.json / minisign / sha256」等术语；桌面注明中英安装向导）
+- CI：release / build 增加 Gradle 与 Inno Setup 安装包缓存，缩短重复构建时间
+- CI：Inno Setup 下载源改为 GitHub Releases（`is-6_7_3`）；`files.jrsoftware.org` 旧直链已 404
+
+### Fixed
+
+- 生视频：中转提供商类型为「OpenAI 兼容」但模型为 `grok-imagine-video` 时，自动走 xAI `/videos/generations` 创建协议
+- 生视频：创建/轮询响应误标 `completed`/`success` 却无 `video.url` 时继续轮询；中转无直链时回退鉴权拉 `/content`，避免「未返回可播放地址」
+- 桌面设置「关于与更新」：默认 1280×820 下收紧间距并合并多余说明，避免右侧常显滚动条
 
 ### Security
 
@@ -79,16 +105,3 @@
 - 不上架应用商店；Linux 桌面不在首期验收范围
 - Release 需配置 Secrets：`TAURI_SIGNING_PRIVATE_KEY`（必填）；可选 `ANDROID_KEY_*`
 - `docs/architecture.md` 部分描述可能滞后于实现，以代码与本 Changelog 为准
-
----
-
-## [Unreleased]
-
-### Added
-
-（暂无）
-
-### Changed
-
-- CI：release / build 增加 Gradle 与 Inno Setup 安装包缓存，缩短重复构建时间
-- CI：Inno Setup 下载源改为 GitHub Releases（`is-6_7_3`）；`files.jrsoftware.org` 旧直链已 404

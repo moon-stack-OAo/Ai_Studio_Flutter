@@ -608,7 +608,7 @@ class _SettingsAboutPageState extends State<SettingsAboutPage> {
     return ColoredBox(
       color: tokens.canvas,
       child: ListView(
-        padding: const EdgeInsets.fromLTRB(28, 20, 28, 28),
+        padding: const EdgeInsets.fromLTRB(28, 16, 28, 16),
         children: [
           Text(
             '关于与更新',
@@ -619,7 +619,7 @@ class _SettingsAboutPageState extends State<SettingsAboutPage> {
               fontFamily: tokens.fontFamily,
             ),
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 4),
           Text(
             '版本信息、直链更新与桌面关闭行为。',
             style: TextStyle(
@@ -628,7 +628,7 @@ class _SettingsAboutPageState extends State<SettingsAboutPage> {
               fontFamily: tokens.fontFamily,
             ),
           ),
-          const SizedBox(height: 18),
+          const SizedBox(height: 12),
           _SectionCard(
             title: 'AI Studio',
             child: Column(
@@ -642,27 +642,18 @@ class _SettingsAboutPageState extends State<SettingsAboutPage> {
                     fontFamily: tokens.fontFamily,
                   ),
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 4),
                 Text(
                   updater == null || !updater.isConfigured
-                      ? '更新通道：未配置更新源'
-                      : '更新通道：GitHub Releases（签名校验）',
+                      ? '更新通道：未配置更新源 · 不上架'
+                      : '更新通道：GitHub Releases（签名校验）· 不上架',
                   style: TextStyle(
                     fontSize: 12,
                     color: tokens.inkMuted,
                     fontFamily: tokens.fontFamily,
                   ),
                 ),
-                const SizedBox(height: 6),
-                Text(
-                  '不上架应用商店；Windows 安装包支持中英向导（AI.Studio_*_x64-setup.exe）。',
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: tokens.inkMuted,
-                    fontFamily: tokens.fontFamily,
-                  ),
-                ),
-                const SizedBox(height: 14),
+                const SizedBox(height: 12),
                 Wrap(
                   spacing: 8,
                   runSpacing: 8,
@@ -686,14 +677,17 @@ class _SettingsAboutPageState extends State<SettingsAboutPage> {
                             )
                           : const Text('检查更新'),
                     ),
-                    const Button(
-                      onPressed: null,
-                      child: Text('开源许可'),
+                    const Tooltip(
+                      message: '开源许可暂未开放',
+                      child: Button(
+                        onPressed: null,
+                        child: Text('开源许可'),
+                      ),
                     ),
                   ],
                 ),
                 if (check != null && check.hasUpdate) ...[
-                  const SizedBox(height: 14),
+                  const SizedBox(height: 12),
                   _UpdateAvailableCard(
                     result: check,
                     downloading: downloading,
@@ -705,19 +699,10 @@ class _SettingsAboutPageState extends State<SettingsAboutPage> {
                   const SizedBox(height: 10),
                   _DownloadProgressBar(progress: progress),
                 ],
-                const SizedBox(height: 8),
-                Text(
-                  '开源许可暂未开放',
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: tokens.inkMuted,
-                    fontFamily: tokens.fontFamily,
-                  ),
-                ),
               ],
             ),
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 10),
           _SectionCard(
             title: '关闭行为',
             child: Column(
@@ -732,7 +717,8 @@ class _SettingsAboutPageState extends State<SettingsAboutPage> {
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       for (final opt in _closeOptions) ...[
-                        if (opt != _closeOptions.first) const SizedBox(height: 6),
+                        if (opt != _closeOptions.first)
+                          const SizedBox(height: 4),
                         _CloseBehaviorTile(
                           wire: opt.wire,
                           title: opt.label,
@@ -743,7 +729,7 @@ class _SettingsAboutPageState extends State<SettingsAboutPage> {
                     ],
                   ),
                 ),
-                const SizedBox(height: 10),
+                const SizedBox(height: 8),
                 Text(
                   '已生效：点击标题栏关闭或系统关闭时按此偏好执行；可随时改回「每次询问」。',
                   style: TextStyle(
@@ -755,7 +741,7 @@ class _SettingsAboutPageState extends State<SettingsAboutPage> {
               ],
             ),
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 10),
           _SectionCard(
             title: '数据',
             child: Column(
@@ -769,7 +755,7 @@ class _SettingsAboutPageState extends State<SettingsAboutPage> {
                     fontFamily: tokens.fontFamily,
                   ),
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 8),
                 Wrap(
                   spacing: 8,
                   runSpacing: 8,
@@ -795,7 +781,7 @@ class _SettingsAboutPageState extends State<SettingsAboutPage> {
                     ),
                   ],
                 ),
-                const SizedBox(height: 10),
+                const SizedBox(height: 8),
                 Text(
                   '默认导出不含 API Key。含密钥导出、导入密钥与全部清除均需确认。',
                   style: TextStyle(
@@ -988,7 +974,7 @@ class _SectionCard extends StatelessWidget {
               fontFamily: tokens.fontFamily,
             ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 10),
           child,
         ],
       ),
@@ -1027,7 +1013,7 @@ class _CloseBehaviorTile extends StatelessWidget {
         border: Border.all(color: border),
       ),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         child: RadioButton<String>(
           value: wire,
           content: Column(

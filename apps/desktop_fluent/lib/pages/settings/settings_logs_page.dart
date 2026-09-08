@@ -118,7 +118,7 @@ class _SettingsLogsPageState extends State<SettingsLogsPage> {
                     ),
                     const SizedBox(height: 6),
                     Text(
-                      '采集本机关键事件；对话 / 生图 / 生视频错误会写入。日志不得含密钥明文。',
+                      '采集本机关键事件；对话 / 生图 / 生视频错误，以及生视频每轮轮询结果会写入。日志不得含密钥明文。',
                       style: TextStyle(
                         fontSize: 13,
                         color: tokens.inkMuted,

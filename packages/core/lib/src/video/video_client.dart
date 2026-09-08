@@ -5,10 +5,14 @@ import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 
 import '../chat/chat_errors.dart';
+import '../logging/app_log_entry.dart';
+import '../logging/app_log_level.dart';
+import '../logging/app_log_repository.dart';
 import '../openai/openai_urls.dart';
 import '../provider/agnes_profile.dart';
 import '../provider/provider_repository.dart';
 import '../provider/provider_type.dart';
+import '../provider/xai_profile.dart';
 import '../security/url_safety.dart';
 import '../util/image_compress.dart';
 import 'video_asset_store.dart';
@@ -46,6 +50,7 @@ class OpenAiCompatibleVideoClient {
     this.pollInterval = defaultVideoPollInterval,
     this.jobTimeout = defaultVideoJobTimeout,
     this.downloadTimeout = defaultVideoDownloadTimeout,
+    this.logs,
   })  : _ownedClient = client == null,
         _client = client ?? http.Client();
 
@@ -55,6 +60,7 @@ class OpenAiCompatibleVideoClient {
   final Duration pollInterval;
   final Duration jobTimeout;
   final Duration downloadTimeout;
+  final AppLogRepository? logs;
 
   bool get ownsClient => _ownedClient;
 
@@ -134,7 +140,11 @@ class OpenAiCompatibleVideoClient {
       throw const ChatApiException('图生视频需要上传参考图');
     }
 
-    final isXai = providerType == ProviderType.xai;
+    final isXai = isXaiVideoProvider(
+      providerType: providerType,
+      baseUrl: baseUrl,
+      videoModel: modelId,
+    );
     final agnes = isAgnesProvider(baseUrl: baseUrl, videoModel: modelId);
     final effectiveClient = client ?? _client;
     final reqTimeout = timeout ?? httpTimeout;
@@ -243,9 +253,15 @@ class OpenAiCompatibleVideoClient {
         timeout: timeout,
         client: client,
       );
-      final job = normalizeVideoJob(data);
+      var job = normalizeVideoJob(data);
       if (job.jobId.isEmpty) {
         throw const ChatApiException('未返回 request_id');
+      }
+      // 中转常在创建响应里写 status=success/completed 却无 video.url；
+      // 无直链时一律按排队处理，避免跳过轮询。
+      if (job.status != VideoJobWireStatus.failed &&
+          (job.videoUrl == null || job.videoUrl!.trim().isEmpty)) {
+        job = job.copyWith(status: VideoJobWireStatus.queued);
       }
       return job;
     }
@@ -353,7 +369,11 @@ class OpenAiCompatibleVideoClient {
       throw const ChatApiException('请先填写 Base URL');
     }
 
-    final isXai = providerType == ProviderType.xai;
+    final isXai = isXaiVideoProvider(
+      providerType: providerType,
+      baseUrl: baseUrl,
+      videoModel: videoModel,
+    );
     final agnes = isAgnesProvider(baseUrl: baseUrl, videoModel: videoModel);
     final effectiveClient = client ?? _client;
     final reqTimeout = timeout ?? httpTimeout;
@@ -388,6 +408,7 @@ class OpenAiCompatibleVideoClient {
     final allowContent = fetchContent &&
         shouldFetchVideoContent(
           isXai: isXai,
+          providerType: providerType,
           baseUrl: baseUrl,
           videoModel: videoModel,
         );
@@ -479,6 +500,7 @@ class OpenAiCompatibleVideoClient {
         : rawInterval.inMilliseconds.clamp(1000, 1 << 30);
     final limit = timeout ?? jobTimeout;
     final startedAt = DateTime.now();
+    var round = 0;
 
     while (true) {
       if (isCancelled?.call() == true) throw toAbortError();
@@ -498,8 +520,17 @@ class OpenAiCompatibleVideoClient {
         materializeId: materializeId,
         client: client,
       );
+      round += 1;
+      _logPollRound(round: round, job: job);
       onProgress?.call(job);
-      if (job.status.isTerminal) return job;
+      if (job.status == VideoJobWireStatus.failed) return job;
+      if (job.status == VideoJobWireStatus.completed) {
+        final hasUrl = resolvePlayableVideoPath(job).isNotEmpty ||
+            (job.videoUrl?.trim().isNotEmpty ?? false);
+        if (hasUrl) return job;
+        // 已尝试 content / 确认无直链：结束；否则继续等晚到的 URL
+        if (job.needsMaterialize) return job;
+      }
 
       // 可取消 sleep：取消后立刻 Abort，无需等满一轮 interval
       await cancellableSleep(
@@ -580,15 +611,21 @@ class OpenAiCompatibleVideoClient {
     );
     onProgress?.call(created);
     final skipContent = !shouldFetchVideoContent(
-      isXai: providerType == ProviderType.xai,
+      isXai: isXaiVideoProvider(
+        providerType: providerType,
+        baseUrl: baseUrl,
+        videoModel: model,
+      ),
+      providerType: providerType,
       baseUrl: baseUrl,
       videoModel: model,
     );
     if (created.status.isTerminal) {
+      // 完成态但无 URL：无论是否 xAI，只要有 jobId 就继续轮询
+      // （中转创建响应常误标 completed/success）。
       if (created.status == VideoJobWireStatus.completed &&
           (created.videoUrl == null || created.videoUrl!.isEmpty) &&
-          created.jobId.isNotEmpty &&
-          !skipContent) {
+          created.jobId.isNotEmpty) {
         return waitJob(
           baseUrl: baseUrl,
           apiKey: apiKey,
@@ -856,6 +893,27 @@ class OpenAiCompatibleVideoClient {
     return _decodeJsonBody(response.statusCode, response.body);
   }
 
+  void _logPollRound({required int round, required VideoJob job}) {
+    final logs = this.logs;
+    if (logs == null) return;
+    final level = switch (job.status) {
+      VideoJobWireStatus.failed => AppLogLevel.error,
+      VideoJobWireStatus.completed =>
+        (resolvePlayableVideoPath(job).isEmpty &&
+                (job.videoUrl == null || job.videoUrl!.trim().isEmpty))
+            ? AppLogLevel.warn
+            : AppLogLevel.info,
+      _ => AppLogLevel.info,
+    };
+    unawaited(
+      logs.append(
+        level: level,
+        source: AppLogSources.video,
+        message: formatVideoPollLog(round: round, job: job),
+      ),
+    );
+  }
+
   Future<String> _readBody(http.StreamedResponse streamed) async {
     try {
       return await streamed.stream.bytesToString();
@@ -942,6 +1000,47 @@ bool isPlayableVideoPath(String? path) {
   return isDirectPlayableVideoUrl(s);
 }
 
+/// 设置日志用：单轮 waitJob 结果（不含 query，避免签名串）。
+String formatVideoPollLog({required int round, required VideoJob job}) {
+  final id = job.jobId.trim().isEmpty ? '-' : job.jobId.trim();
+  final status = switch (job.status) {
+    VideoJobWireStatus.queued => 'queued',
+    VideoJobWireStatus.inProgress => 'in_progress',
+    VideoJobWireStatus.completed => 'completed',
+    VideoJobWireStatus.failed => 'failed',
+  };
+  final progress = job.progress;
+  final progressText = progress == null
+      ? '-'
+      : (progress == progress.roundToDouble()
+          ? progress.round().toString()
+          : progress.toString());
+  final playable = resolvePlayableVideoPath(job);
+  final buf = StringBuffer(
+    '轮询 #$round · job=$id · status=$status · progress=$progressText'
+    ' · url=${redactUrlForLog(job.videoUrl)}'
+    ' · remote=${redactUrlForLog(job.remoteVideoUrl)}'
+    ' · playable=${redactUrlForLog(playable.isEmpty ? null : playable)}'
+    ' · materialize=${job.needsMaterialize}',
+  );
+  final err = job.errorMessage?.trim() ?? '';
+  if (err.isNotEmpty) buf.write(' · error=$err');
+  return buf.toString();
+}
+
+/// 日志 URL：去掉 query / fragment，避免签名与一次性 token。
+String redactUrlForLog(String? raw) {
+  final s = (raw ?? '').trim();
+  if (s.isEmpty) return '-';
+  final q = s.indexOf('?');
+  final h = s.indexOf('#');
+  var cut = s.length;
+  if (q >= 0) cut = q;
+  if (h >= 0 && h < cut) cut = h;
+  final out = s.substring(0, cut).trim();
+  return out.isEmpty ? '-' : out;
+}
+
 /// 轮询中可提前露出的可播地址。
 String earlyPlayableVideoPath(VideoJob job) {
   final v = job.videoUrl ?? '';
@@ -1018,43 +1117,91 @@ String resolveVideoContentUrl(String url, String? baseUrl) {
   return '$base/$src';
 }
 
+Map<String, dynamic>? _asStringKeyedMap(Object? value) {
+  if (value is Map) return Map<String, dynamic>.from(value);
+  return null;
+}
+
+String? _mapUrl(Map<String, dynamic>? map, String key) {
+  if (map == null) return null;
+  final v = map[key];
+  if (v == null) return null;
+  final s = v.toString().trim();
+  return s.isEmpty ? null : s;
+}
+
 String extractVideoUrl(Object? data) {
   if (data is! Map) return '';
   final m = Map<String, dynamic>.from(data);
-  final root = m['data'] is Map && m['data'] is! List
-      ? Map<String, dynamic>.from(m['data'] as Map)
-      : m;
-  final videoObj =
-      root['video'] is Map ? Map<String, dynamic>.from(root['video'] as Map) : null;
+  // 部分中转再包一层 / 两层 data
+  var root = m;
+  for (var i = 0; i < 2; i++) {
+    final nested = root['data'];
+    if (nested is Map && nested is! List) {
+      root = Map<String, dynamic>.from(nested);
+    } else {
+      break;
+    }
+  }
+  final videoObj = _asStringKeyedMap(root['video']) ??
+      _asStringKeyedMap(m['video']);
   final videoArr0 = root['video'] is List && (root['video'] as List).isNotEmpty
       ? (root['video'] as List).first
+      : (m['video'] is List && (m['video'] as List).isNotEmpty
+          ? (m['video'] as List).first
+          : null);
+  final videoArrMap = _asStringKeyedMap(videoArr0);
+  final fileOutput = _asStringKeyedMap(videoObj?['file_output']) ??
+      _asStringKeyedMap(videoObj?['fileOutput']);
+  final videos0 = root['videos'] is List && (root['videos'] as List).isNotEmpty
+      ? _asStringKeyedMap((root['videos'] as List).first)
       : null;
-  final videoArrMap =
-      videoArr0 is Map ? Map<String, dynamic>.from(videoArr0) : null;
+  final output = _asStringKeyedMap(root['output']);
+  final result = _asStringKeyedMap(root['result']);
+  final metadata = _asStringKeyedMap(root['metadata']);
+  final resultVideo = _asStringKeyedMap(result?['video']);
+  final outputVideo = _asStringKeyedMap(output?['video']);
+
+  // video 有时直接是 URL 字符串
+  final videoAsString = root['video'] is String
+      ? (root['video'] as String).trim()
+      : (m['video'] is String ? (m['video'] as String).trim() : '');
 
   final candidates = <String?>[
-    videoObj?['url']?.toString(),
-    videoObj?['download_url']?.toString(),
-    videoObj?['downloadUrl']?.toString(),
-    videoObj?['play_url']?.toString(),
-    videoObj?['playUrl']?.toString(),
-    root['video_url']?.toString(),
-    root['videoUrl']?.toString(),
-    videoArrMap?['url']?.toString(),
-    (root['metadata'] is Map)
-        ? (root['metadata'] as Map)['url']?.toString()
-        : null,
-    (root['output'] is Map) ? (root['output'] as Map)['url']?.toString() : null,
-    (root['result'] is Map) ? (root['result'] as Map)['url']?.toString() : null,
-    root['url']?.toString(),
-    m['url']?.toString(),
-    videoObj?['public_url']?.toString(),
-    videoObj?['publicUrl']?.toString(),
-    root['public_url']?.toString(),
-    root['publicUrl']?.toString(),
-    videoArrMap?['public_url']?.toString(),
+    _mapUrl(videoObj, 'url'),
+    _mapUrl(fileOutput, 'url'),
+    _mapUrl(videoObj, 'download_url'),
+    _mapUrl(videoObj, 'downloadUrl'),
+    _mapUrl(videoObj, 'play_url'),
+    _mapUrl(videoObj, 'playUrl'),
+    _mapUrl(videoObj, 'file_url'),
+    _mapUrl(videoObj, 'fileUrl'),
+    _mapUrl(videoObj, 'uri'),
+    _mapUrl(videoObj, 'src'),
+    videoAsString.isNotEmpty ? videoAsString : null,
+    _mapUrl(root, 'video_url'),
+    _mapUrl(root, 'videoUrl'),
+    _mapUrl(videoArrMap, 'url'),
+    _mapUrl(videos0, 'url'),
+    _mapUrl(resultVideo, 'url'),
+    _mapUrl(outputVideo, 'url'),
+    _mapUrl(metadata, 'url'),
+    _mapUrl(output, 'url'),
+    _mapUrl(result, 'url'),
+    _mapUrl(root, 'url'),
+    _mapUrl(m, 'url'),
+    _mapUrl(videoObj, 'public_url'),
+    _mapUrl(videoObj, 'publicUrl'),
+    _mapUrl(root, 'public_url'),
+    _mapUrl(root, 'publicUrl'),
+    _mapUrl(root, 'file_url'),
+    _mapUrl(root, 'fileUrl'),
+    _mapUrl(root, 'download_url'),
+    _mapUrl(root, 'downloadUrl'),
+    _mapUrl(videoArrMap, 'public_url'),
   ]
-      .map((v) => (v ?? '').trim())
+      .whereType<String>()
+      .map(_normalizeExtractedVideoUrl)
       .where((v) => v.isNotEmpty)
       .toList();
 
@@ -1064,7 +1211,62 @@ String extractVideoUrl(Object? data) {
   for (final u in candidates) {
     if (RegExp(r'^https?://', caseSensitive: false).hasMatch(u)) return u;
   }
+  // 最后兜底：深搜 JSON 里第一个像 mp4/vidgen 的 https
+  final deep = _deepFindPlayableVideoUrl(m);
+  if (deep.isNotEmpty) return deep;
   return candidates.isEmpty ? '' : candidates.first;
+}
+
+String _normalizeExtractedVideoUrl(String raw) {
+  var s = raw.trim();
+  if (s.isEmpty) return '';
+  if (s.startsWith('//')) s = 'https:$s';
+  return s;
+}
+
+/// 递归找可直链播放的 https（中转字段名五花八门时兜底）。
+String _deepFindPlayableVideoUrl(Object? node, {int depth = 0}) {
+  if (node == null || depth > 6) return '';
+  if (node is String) {
+    final s = _normalizeExtractedVideoUrl(node);
+    if (isDirectPlayableVideoUrl(s) &&
+        (s.contains('.mp4') ||
+            s.contains('vidgen') ||
+            s.contains('/video'))) {
+      return s;
+    }
+    return '';
+  }
+  if (node is List) {
+    for (final item in node) {
+      final found = _deepFindPlayableVideoUrl(item, depth: depth + 1);
+      if (found.isNotEmpty) return found;
+    }
+    return '';
+  }
+  if (node is Map) {
+    for (final entry in node.entries) {
+      final found = _deepFindPlayableVideoUrl(entry.value, depth: depth + 1);
+      if (found.isNotEmpty) return found;
+    }
+  }
+  return '';
+}
+
+/// 展开中转常见的 `data` 包层（最多两层），外→内。
+List<Map<String, dynamic>> _videoJobLayers(Map<String, dynamic> root) {
+  final layers = <Map<String, dynamic>>[root];
+  var cur = root;
+  for (var i = 0; i < 2; i++) {
+    final nested = cur['data'];
+    if (nested is Map && nested is! List) {
+      cur = Map<String, dynamic>.from(nested);
+      layers.add(cur);
+    } else {
+      break;
+    }
+  }
+  return layers;
 }
 
 VideoJob normalizeVideoJob(Object? data, {String fallbackId = ''}) {
@@ -1072,23 +1274,55 @@ VideoJob normalizeVideoJob(Object? data, {String fallbackId = ''}) {
     return VideoJob(jobId: fallbackId);
   }
   final m = Map<String, dynamic>.from(data);
-  final root = m['data'] is Map && m['data'] is! List
-      ? Map<String, dynamic>.from(m['data'] as Map)
-      : m;
+  final layers = _videoJobLayers(m);
+  final root = layers.last;
   final jobId = extractVideoJobId(data);
-  final status = VideoJobWireStatus.normalize(root['status']?.toString());
-  final progressRaw = root['progress'] ?? root['percent'] ?? root['percentage'];
+
+  // status：优先最内层非空；若内层无 status 而外层有（如 done + data.video），保留外层。
+  // 若多层都有，优先终态（completed/failed）。
+  String? statusRaw;
+  for (final layer in layers.reversed) {
+    final s = layer['status']?.toString().trim() ?? '';
+    if (s.isEmpty) continue;
+    final norm = VideoJobWireStatus.normalize(s);
+    if (statusRaw == null || norm.isTerminal) {
+      statusRaw = s;
+      if (norm.isTerminal) break;
+    }
+  }
+  // 无 status 但已有可播直链时，视为完成（部分中转只给 url）
+  final videoUrl = extractVideoUrl(data);
+  var status = VideoJobWireStatus.normalize(statusRaw);
+  if ((statusRaw == null || statusRaw.isEmpty) &&
+      videoUrl.isNotEmpty &&
+      isDirectPlayableVideoUrl(videoUrl)) {
+    status = VideoJobWireStatus.completed;
+  }
+
+  Object? progressRaw;
+  for (final layer in layers.reversed) {
+    progressRaw =
+        layer['progress'] ?? layer['percent'] ?? layer['percentage'];
+    if (progressRaw != null) break;
+  }
   double? progress;
   if (progressRaw is num) {
     progress = progressRaw.toDouble();
+  } else if (progressRaw != null) {
+    progress = double.tryParse(progressRaw.toString());
   }
-  final videoUrl = extractVideoUrl(data);
+
   String? errorMessage;
   if (status == VideoJobWireStatus.failed) {
     var msg = extractApiErrorMessage(root['error']);
     if (msg.isEmpty) msg = extractApiErrorMessage(root);
-    if (msg.isEmpty && root['status']?.toString() == 'expired') {
-      msg = '任务已过期';
+    if (msg.isEmpty) {
+      for (final layer in layers) {
+        if (layer['status']?.toString() == 'expired') {
+          msg = '任务已过期';
+          break;
+        }
+      }
     }
     if (msg.isEmpty) msg = '视频生成失败';
     errorMessage = msg;

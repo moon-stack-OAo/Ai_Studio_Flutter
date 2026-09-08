@@ -42,6 +42,18 @@ class VideoQueue extends StatefulWidget {
 }
 
 class _VideoQueueState extends State<VideoQueue> {
+  /// `null` = 全部。
+  VideoItemStatus? _statusFilter;
+
+  static const _filters = <(VideoItemStatus?, String)>[
+    (null, '全部'),
+    (VideoItemStatus.loading, '生成中'),
+    (VideoItemStatus.pendingResume, '待恢复'),
+    (VideoItemStatus.success, '已完成'),
+    (VideoItemStatus.error, '失败'),
+    (VideoItemStatus.abandoned, '已放弃'),
+  ];
+
   @override
   Widget build(BuildContext context) {
     final tokens = fluentTokensOf(context);
@@ -57,34 +69,159 @@ class _VideoQueueState extends State<VideoQueue> {
     final sorted = List<VideoItem>.from(widget.items)
       ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
     final total = sorted.length;
+    final turnById = <String, int>{
+      for (var i = 0; i < sorted.length; i++) sorted[i].id: total - i,
+    };
+    final filtered = _statusFilter == null
+        ? sorted
+        : sorted.where((e) => e.status == _statusFilter).toList();
 
-    final children = <Widget>[];
-    for (var i = 0; i < sorted.length; i++) {
-      final item = sorted[i];
+    final children = <Widget>[
+      _StatusFilterBar(
+        tokens: tokens,
+        filters: _filters,
+        selected: _statusFilter,
+        onChanged: (v) => setState(() => _statusFilter = v),
+      ),
+    ];
+
+    if (filtered.isEmpty) {
       children.add(
-        _TimeSplit(label: _formatTimeSplitLabel(item.createdAt), tokens: tokens),
-      );
-      children.add(
-        _TurnBlock(
-          item: item,
-          turnIndex: total - i,
-          tokens: tokens,
-          selected: widget.selectedId == item.id,
-          onOpen: widget.onOpen,
-          onSave: widget.onSave,
-          onResume: widget.onResume,
-          onAbandon: widget.onAbandon,
-          onPlay: widget.onPlay,
-          onSelect: widget.onSelect,
-          onReload: widget.onReload,
-          isReloading: widget.isReloading,
+        Padding(
+          padding: const EdgeInsets.only(top: 24),
+          child: FluentContentEmpty(
+            hint: '当前筛选无任务',
+            subtitle: '试试切换其他状态，或选「全部」。',
+            illustration: const FluentEmptyIllustration.noVideos(),
+          ),
         ),
       );
+    } else {
+      for (final item in filtered) {
+        children.add(
+          _TimeSplit(
+            label: _formatTimeSplitLabel(item.createdAt),
+            tokens: tokens,
+          ),
+        );
+        children.add(
+          _TurnBlock(
+            item: item,
+            turnIndex: turnById[item.id] ?? 0,
+            tokens: tokens,
+            selected: widget.selectedId == item.id,
+            onOpen: widget.onOpen,
+            onSave: widget.onSave,
+            onResume: widget.onResume,
+            onAbandon: widget.onAbandon,
+            onPlay: widget.onPlay,
+            onSelect: widget.onSelect,
+            onReload: widget.onReload,
+            isReloading: widget.isReloading,
+          ),
+        );
+      }
     }
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(10, 10, 10, 16),
       children: children,
+    );
+  }
+}
+
+class _StatusFilterBar extends StatelessWidget {
+  const _StatusFilterBar({
+    required this.tokens,
+    required this.filters,
+    required this.selected,
+    required this.onChanged,
+  });
+
+  final FluentTokens tokens;
+  final List<(VideoItemStatus?, String)> filters;
+  final VideoItemStatus? selected;
+  final ValueChanged<VideoItemStatus?> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: [
+            for (var i = 0; i < filters.length; i++) ...[
+              if (i > 0) const SizedBox(width: 6),
+              _StatusFilterChip(
+                tokens: tokens,
+                label: filters[i].$2,
+                selected: selected == filters[i].$1,
+                onPressed: () => onChanged(filters[i].$1),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _StatusFilterChip extends StatelessWidget {
+  const _StatusFilterChip({
+    required this.tokens,
+    required this.label,
+    required this.selected,
+    required this.onPressed,
+  });
+
+  final FluentTokens tokens;
+  final String label;
+  final bool selected;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: '筛选状态：$label',
+      excludeSemantics: true,
+      child: HoverButton(
+        onPressed: onPressed,
+        cursor: SystemMouseCursors.click,
+        builder: (context, states) {
+          final focused = states.isFocused;
+          return AnimatedContainer(
+            duration: const Duration(milliseconds: 100),
+            height: 28,
+            padding: const EdgeInsets.symmetric(horizontal: 10),
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: selected
+                  ? tokens.primary.withValues(alpha: 0.14)
+                  : tokens.surfaceMuted,
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(
+                color: focused
+                    ? tokens.primary
+                    : selected
+                        ? Color.lerp(tokens.primary, tokens.border, 0.5)!
+                        : tokens.border,
+                width: focused ? 1.5 : 1,
+              ),
+            ),
+            child: Text(
+              label,
+              style: TextStyle(
+                fontSize: 11,
+                color: selected ? tokens.primaryPressed : tokens.inkSecondary,
+                fontFamily: tokens.fontFamily,
+              ),
+            ),
+          );
+        },
+      ),
     );
   }
 }

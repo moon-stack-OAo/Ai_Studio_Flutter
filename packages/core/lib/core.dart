@@ -29,6 +29,7 @@ export 'src/security/url_safety.dart';
 export 'src/update/minisign_verify.dart';
 export 'src/provider/agnes_profile.dart';
 export 'src/provider/model_classify.dart';
+export 'src/provider/xai_profile.dart';
 export 'src/provider/provider_config.dart';
 export 'src/provider/provider_connection.dart';
 export 'src/provider/provider_presets.dart';

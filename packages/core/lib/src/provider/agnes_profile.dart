@@ -1,5 +1,8 @@
 // Agnes APIHub 视频协议辅助（检测函数，不新增 ProviderType）。
 
+import 'provider_type.dart';
+import 'xai_profile.dart';
+
 /// Agnes Video 2.5：size 档位。
 const List<String> agnesVideoSizes = ['720P', '960P', '2K'];
 
@@ -98,19 +101,35 @@ List<String> agnesVideoSizeOptionsFor(String? videoModel) {
   return List<String>.from(agnesVideoSizes);
 }
 
-/// 完成后是否需要补拉 `/content`（xAI / Agnes 否）。
+/// 完成后是否需要补拉 `/content`。
+///
+/// - 官方 xAI（[isNativeXaiVideoProvider]）/ Agnes：否
+/// - 中转 + `grok-imagine-video`：是（创建走 generations，完成态常只给 `/content`）
+/// - [isXai] 仅作兼容：为 true 且未提供 provider/base 时视为官方跳过
 bool shouldFetchVideoContent({
   required bool isXai,
   String? baseUrl,
   String? imageModel,
   String? videoModel,
+  ProviderType? providerType,
 }) {
-  if (isXai) return false;
   if (isAgnesProvider(
     baseUrl: baseUrl,
     imageModel: imageModel,
     videoModel: videoModel,
   )) {
+    return false;
+  }
+  if (isNativeXaiVideoProvider(
+    providerType: providerType,
+    baseUrl: baseUrl,
+  )) {
+    return false;
+  }
+  // 兼容旧调用：只传 isXai:true、无 base/type 时仍跳过
+  if (isXai &&
+      providerType == null &&
+      (baseUrl == null || baseUrl.trim().isEmpty)) {
     return false;
   }
   return true;

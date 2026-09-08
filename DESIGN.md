@@ -382,7 +382,7 @@ Flutter 落点：`packages/design_fluent` 与 `packages/design_material` 的 `Th
 | `VID-PARAMS`     | 时长、比例等               | `F-VideoParams`：属性窗格                              | `M-VideoParams`：sheet / 折叠                   | 按能力显隐                                             |
 | `VID-PROMPT-REF` | 提示词 + 参考图            | 复用 Prompt/Ref 的 Fluent 变体                         | 复用 Material 变体                               | 同生图                                               |
 | `VID-GENERATE`   | 创建任务 / 取消            | `F-VideoPrimary`                                  | `M-VideoPrimary`                             | 空闲 / 提交中                                          |
-| `VID-QUEUE`      | 任务队列与进度（**按回合时间分隔**） | `F-VideoQueue`：每回合提示词 + 任务卡 + ProgressBar + 放弃/重试 | `M-VideoQueue`：卡片列表 + LinearProgress + 放弃/重试 | queued / running / succeeded / failed / abandoned |
+| `VID-QUEUE`      | 任务队列与进度（**按回合时间分隔**） | `F-VideoQueue`：状态筛选 Chip + 每回合提示词 + 任务卡 + ProgressBar + 放弃/重试 | `M-VideoQueue`：状态筛选 Chip + 卡片列表 + LinearProgress + 放弃/重试 | 筛选：全部 / 生成中 / 待恢复 / 已完成 / 失败 / 已放弃；条目态 loading / pending_resume / success / error / abandoned（规格文案 queued·running·succeeded·failed·abandoned 为对外表述） |
 | `VID-PLAYER`     | 播放完成片                | `F-VideoPlayer`：内嵌播放器 + 下载                        | `M-VideoPlayer`：全屏友好播放 + 下载/相册               | 本地 / 远端 URL；缓冲                                    |
 | `VID-RESUME`     | 启动时恢复未完成             | 静默续跑 + InfoBar 提示                                 | 静默续跑 + Snackbar                              | 无可恢复 / 恢复中                                        |
 
@@ -624,3 +624,4 @@ packages/design_material/
 | 2026-09-07 | P3 无障碍全路径自证：双端补语义/触控48/liveRegion/对比度 token；§7.1 自证清单；不宣称第三方认证                                                                         |
 | 2026-09-07 | P3 主题/密度部分落地：`scrim`、InfoBar/Snackbar token、密度作用到会话/Composer/设置；空态 `illustration` 插槽                                                   |
 | 2026-09-07 | P3 空态插画落地：双端 CustomPainter 简易线稿接入 `illustration`；§9 标注                                                                                 |
+| 2026-09-08 | `VID-QUEUE`：双端任务队列增加按状态筛选（全部 / 生成中 / 待恢复 / 已完成 / 失败 / 已放弃）                                                                          |

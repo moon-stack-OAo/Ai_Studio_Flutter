@@ -7,7 +7,7 @@ import '../../../widgets/empty_illustrations.dart';
 import '../../../widgets/material_empty_states.dart';
 
 /// M-VideoQueue：按回合时间分隔 — 提示词 + 任务卡 + 进度。
-class VideoQueue extends StatelessWidget {
+class VideoQueue extends StatefulWidget {
   const VideoQueue({
     super.key,
     required this.items,
@@ -38,37 +38,106 @@ class VideoQueue extends StatelessWidget {
   final String? emptySubtitle;
 
   @override
+  State<VideoQueue> createState() => _VideoQueueState();
+}
+
+class _VideoQueueState extends State<VideoQueue> {
+  /// `null` = 全部。
+  VideoItemStatus? _statusFilter;
+
+  static const _filters = <(VideoItemStatus?, String)>[
+    (null, '全部'),
+    (VideoItemStatus.loading, '生成中'),
+    (VideoItemStatus.pendingResume, '待恢复'),
+    (VideoItemStatus.success, '已完成'),
+    (VideoItemStatus.error, '失败'),
+    (VideoItemStatus.abandoned, '已放弃'),
+  ];
+
+  @override
   Widget build(BuildContext context) {
-    if (items.isEmpty) {
+    final tokens = materialTokensOf(context);
+    if (widget.items.isEmpty) {
       return MaterialContentEmpty(
-        hint: emptyHint,
-        subtitle: emptySubtitle,
+        hint: widget.emptyHint,
+        subtitle: widget.emptySubtitle,
         illustration: const MaterialEmptyIllustration.noVideos(),
       );
     }
 
-    final sorted = List<VideoItem>.from(items)
+    final sorted = List<VideoItem>.from(widget.items)
       ..sort((a, b) => a.createdAt.compareTo(b.createdAt));
+    final turnById = <String, int>{
+      for (var i = 0; i < sorted.length; i++) sorted[i].id: i + 1,
+    };
+    final filtered = _statusFilter == null
+        ? sorted
+        : sorted.where((e) => e.status == _statusFilter).toList();
 
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        for (var i = 0; i < sorted.length; i++)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 12),
-            child: _TurnCard(
-              item: sorted[i],
-              turnIndex: i + 1,
-              onOpen: onOpen,
-              onSave: onSave,
-              onResume: onResume,
-              onAbandon: onAbandon,
-              onPlay: onPlay,
-              onReload: onReload,
-              isReloading: isReloading,
-              onSaveAlbum: onSaveAlbum,
-              onShare: onShare,
-            ),
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.only(bottom: 12),
+          child: Row(
+            children: [
+              for (var i = 0; i < _filters.length; i++) ...[
+                if (i > 0) const SizedBox(width: 8),
+                FilterChip(
+                  label: Text(_filters[i].$2),
+                  selected: _statusFilter == _filters[i].$1,
+                  showCheckmark: false,
+                  onSelected: (_) =>
+                      setState(() => _statusFilter = _filters[i].$1),
+                  visualDensity: VisualDensity.compact,
+                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  labelStyle: TextStyle(
+                    fontSize: 12,
+                    fontFamily: tokens.fontFamily,
+                    color: _statusFilter == _filters[i].$1
+                        ? tokens.primary
+                        : tokens.inkSecondary,
+                  ),
+                  selectedColor: tokens.primary.withValues(alpha: 0.14),
+                  side: BorderSide(
+                    color: _statusFilter == _filters[i].$1
+                        ? tokens.primary
+                        : tokens.border,
+                  ),
+                  backgroundColor: tokens.surface,
+                ),
+              ],
+            ],
           ),
+        ),
+        if (filtered.isEmpty)
+          Padding(
+            padding: const EdgeInsets.only(top: 16),
+            child: MaterialContentEmpty(
+              hint: '当前筛选无任务',
+              subtitle: '试试切换其他状态，或选「全部」。',
+              illustration: const MaterialEmptyIllustration.noVideos(),
+            ),
+          )
+        else
+          for (final item in filtered)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: _TurnCard(
+                item: item,
+                turnIndex: turnById[item.id] ?? 0,
+                onOpen: widget.onOpen,
+                onSave: widget.onSave,
+                onResume: widget.onResume,
+                onAbandon: widget.onAbandon,
+                onPlay: widget.onPlay,
+                onReload: widget.onReload,
+                isReloading: widget.isReloading,
+                onSaveAlbum: widget.onSaveAlbum,
+                onShare: widget.onShare,
+              ),
+            ),
       ],
     );
   }

@@ -303,6 +303,157 @@ void main() {
     );
   });
 
+  test('xai_profile：模型名/中转仍识别为 xAI 视频协议', () {
+    expect(
+      isXaiVideoProvider(
+        providerType: ProviderType.openaiCompatible,
+        videoModel: 'grok-imagine-video',
+      ),
+      isTrue,
+    );
+    expect(
+      isXaiVideoProvider(
+        providerType: ProviderType.openaiCompatible,
+        videoModel: 'grok-imagine-video-1.5',
+      ),
+      isTrue,
+    );
+    expect(
+      isXaiVideoProvider(
+        providerType: ProviderType.openaiCompatible,
+        baseUrl: 'https://api.x.ai/v1',
+        videoModel: 'sora-2',
+      ),
+      isTrue,
+    );
+    expect(
+      isXaiVideoProvider(
+        providerType: ProviderType.openaiCompatible,
+        videoModel: 'sora-2',
+      ),
+      isFalse,
+    );
+    expect(
+      shouldFetchVideoContent(
+        isXai: false,
+        providerType: ProviderType.openaiCompatible,
+        videoModel: 'grok-imagine-video',
+      ),
+      isTrue,
+    );
+    expect(
+      shouldFetchVideoContent(
+        isXai: true,
+        providerType: ProviderType.xai,
+        baseUrl: 'https://api.x.ai/v1',
+        videoModel: 'grok-imagine-video',
+      ),
+      isFalse,
+    );
+    expect(
+      isNativeXaiVideoProvider(
+        providerType: ProviderType.openaiCompatible,
+        baseUrl: 'https://relay.example.com/v1',
+      ),
+      isFalse,
+    );
+  });
+
+  test('OpenAI 兼容 + grok-imagine-video 仍走 /videos/generations', () async {
+    Map? captured;
+    Uri? uri;
+    final client = MockClient((request) async {
+      uri = request.url;
+      captured = jsonDecode(request.body) as Map;
+      return http.Response(
+        jsonEncode({
+          'request_id': 'req_relay_1',
+          'status': 'pending',
+        }),
+        200,
+      );
+    });
+    final api = OpenAiCompatibleVideoClient(client: client);
+    final job = await api.createJob(
+      baseUrl: 'https://relay.example.com/v1',
+      apiKey: 'sk-relay',
+      model: 'grok-imagine-video',
+      prompt: 'moon',
+      duration: 8,
+      aspectRatio: '16:9',
+      resolution: '720p',
+      providerType: ProviderType.openaiCompatible,
+    );
+    expect(uri!.path, endsWith('/videos/generations'));
+    expect(captured!['duration'], 8);
+    expect(captured!['aspect_ratio'], '16:9');
+    expect(captured!['resolution'], '720p');
+    expect(captured!.containsKey('seconds'), isFalse);
+    expect(job.jobId, 'req_relay_1');
+  });
+
+  test('OpenAI 兼容 + grok-imagine-video 有直链时不拉 /content', () async {
+    final paths = <String>[];
+    final client = MockClient((request) async {
+      paths.add(request.url.path);
+      return http.Response(
+        jsonEncode({
+          'request_id': 'req_done',
+          'status': 'done',
+          'video': {'url': 'https://vidgen.x.ai/clip.mp4'},
+        }),
+        200,
+      );
+    });
+    final api = OpenAiCompatibleVideoClient(client: client);
+    final job = await api.getJob(
+      baseUrl: 'https://relay.example.com/v1',
+      apiKey: 'sk-relay',
+      jobId: 'req_done',
+      providerType: ProviderType.openaiCompatible,
+      videoModel: 'grok-imagine-video',
+      assetStore: MemoryVideoAssetStore(),
+    );
+    expect(paths.any((p) => p.endsWith('/content')), isFalse);
+    expect(job.status, VideoJobWireStatus.completed);
+    expect(job.videoUrl, 'https://vidgen.x.ai/clip.mp4');
+    expect(job.needsMaterialize, isFalse);
+  });
+
+  test('OpenAI 兼容 + grok-imagine-video 无直链时回退 /content', () async {
+    final paths = <String>[];
+    final fakeMp4 = Uint8List.fromList([0, 0, 0, 0, 0x66, 0x74, 0x79, 0x70]);
+    final store = MemoryVideoAssetStore();
+    final client = MockClient((request) async {
+      paths.add(request.url.path);
+      if (request.url.path.endsWith('/content')) {
+        return http.Response.bytes(fakeMp4, 200);
+      }
+      return http.Response(
+        jsonEncode({
+          'request_id': 'req_content',
+          'status': 'completed',
+          'progress': 100,
+        }),
+        200,
+      );
+    });
+    final api = OpenAiCompatibleVideoClient(client: client);
+    final job = await api.getJob(
+      baseUrl: 'https://relay.example.com/v1',
+      apiKey: 'sk-relay',
+      jobId: 'req_content',
+      providerType: ProviderType.openaiCompatible,
+      videoModel: 'grok-imagine-video',
+      assetStore: store,
+      materializeId: 'item_content',
+    );
+    expect(paths.any((p) => p.endsWith('/content')), isTrue);
+    expect(job.status, VideoJobWireStatus.completed);
+    expect(job.localPath, startsWith('memory://'));
+    expect(job.needsMaterialize, isFalse);
+  });
+
   test('getJob 轮询 normalize + OpenAI content 落盘', () async {
     var poll = 0;
     final store = MemoryVideoAssetStore();
@@ -402,6 +553,83 @@ void main() {
       ),
       throwsA(isA<ChatAbortException>()),
     );
+  });
+
+  test('formatVideoPollLog / redactUrlForLog', () {
+    expect(redactUrlForLog(null), '-');
+    expect(redactUrlForLog(''), '-');
+    expect(
+      redactUrlForLog('https://cdn.example/v.mp4?sig=abc#frag'),
+      'https://cdn.example/v.mp4',
+    );
+    final text = formatVideoPollLog(
+      round: 2,
+      job: const VideoJob(
+        jobId: 'w1',
+        status: VideoJobWireStatus.inProgress,
+        progress: 40,
+        videoUrl: 'https://cdn.example/v.mp4?token=sk-secret',
+        remoteVideoUrl: 'https://api.example/v1/videos/w1/content?key=xai-abc',
+      ),
+    );
+    expect(text, contains('轮询 #2'));
+    expect(text, contains('job=w1'));
+    expect(text, contains('status=in_progress'));
+    expect(text, contains('progress=40'));
+    expect(text, contains('url=https://cdn.example/v.mp4'));
+    expect(text, contains('remote=https://api.example/v1/videos/w1/content'));
+    expect(text, isNot(contains('sk-secret')));
+    expect(text, isNot(contains('xai-abc')));
+  });
+
+  test('waitJob 每轮写入运行日志', () async {
+    var n = 0;
+    final httpClient = MockClient((request) async {
+      n++;
+      if (n < 3) {
+        return http.Response(
+          jsonEncode({
+            'id': 'log1',
+            'status': 'in_progress',
+            'progress': n * 20,
+          }),
+          200,
+        );
+      }
+      return http.Response(
+        jsonEncode({
+          'id': 'log1',
+          'status': 'completed',
+          'progress': 100,
+          'url': 'https://cdn.example/done.mp4?sig=secret',
+        }),
+        200,
+      );
+    });
+    final logs = AppLogRepository(storage: MemoryAppLogStorage());
+    await logs.load();
+    final api = OpenAiCompatibleVideoClient(
+      client: httpClient,
+      pollInterval: const Duration(milliseconds: 5),
+      logs: logs,
+    );
+    await api.waitJob(
+      baseUrl: 'https://api.example.com/v1',
+      apiKey: 'sk',
+      jobId: 'log1',
+      providerType: ProviderType.xai,
+      fetchContent: false,
+      interval: const Duration(milliseconds: 5),
+    );
+    await Future<void>.delayed(Duration.zero);
+    final videoLogs = logs.query(source: AppLogSources.video);
+    expect(videoLogs.length, greaterThanOrEqualTo(3));
+    expect(videoLogs.last.message, contains('轮询 #1'));
+    expect(videoLogs.last.message, contains('status=in_progress'));
+    expect(videoLogs.first.message, contains('status=completed'));
+    expect(videoLogs.first.message, contains('url=https://cdn.example/done.mp4'));
+    expect(videoLogs.first.message, isNot(contains('sig=secret')));
+    expect(videoLogs.first.level, AppLogLevel.info);
   });
 
   test('waitJob 可取消 sleep：取消后快速 Abort，不等满 pollInterval', () async {
@@ -562,12 +790,119 @@ void main() {
     expect(j.status, VideoJobWireStatus.completed);
     expect(j.videoUrl, 'https://cdn.x.ai/a.mp4');
 
+    expect(
+      extractVideoUrl({
+        'data': {
+          'status': 'done',
+          'video': {
+            'file_output': {'url': 'https://vidgen.x.ai/file.mp4'},
+          },
+        },
+      }),
+      'https://vidgen.x.ai/file.mp4',
+    );
+    expect(
+      extractVideoUrl({
+        'videos': [
+          {'url': 'https://cdn.example/arr.mp4'},
+        ],
+      }),
+      'https://cdn.example/arr.mp4',
+    );
+
+    // 外层 status=done，内层 data 只有 video（中转常见）
+    final wrapped = normalizeVideoJob({
+      'request_id': '7e7f9c2a-daf3-96e8-872d-d20e164c6106',
+      'status': 'done',
+      'progress': '100',
+      'data': {
+        'video': {
+          'url':
+              'https://vidgen.x.ai/xai-vidgen-bucket/xai-video-7e7f9c2a.mp4',
+        },
+      },
+    });
+    expect(wrapped.status, VideoJobWireStatus.completed);
+    expect(wrapped.progress, 100);
+    expect(
+      wrapped.videoUrl,
+      'https://vidgen.x.ai/xai-vidgen-bucket/xai-video-7e7f9c2a.mp4',
+    );
+
+    expect(
+      extractVideoUrl({
+        'status': 'done',
+        'video':
+            'https://vidgen.x.ai/xai-vidgen-bucket/xai-video-string.mp4',
+      }),
+      'https://vidgen.x.ai/xai-vidgen-bucket/xai-video-string.mp4',
+    );
+
+    expect(
+      extractVideoUrl({
+        'payload': {
+          'result': {
+            'clip':
+                'https://vidgen.x.ai/xai-vidgen-bucket/deep-find.mp4',
+          },
+        },
+      }),
+      'https://vidgen.x.ai/xai-vidgen-bucket/deep-find.mp4',
+    );
+
     expect(isDirectPlayableVideoUrl('https://cdn/a.mp4'), isTrue);
     expect(
       isDirectPlayableVideoUrl('https://api/v1/videos/x/content'),
       isFalse,
     );
     expect(isVideoContentPath('/v1/videos/abc/content'), isTrue);
+  });
+
+  test('xAI 创建响应误标 completed 且无 url 时强制排队并继续轮询', () async {
+    var n = 0;
+    final client = MockClient((request) async {
+      if (request.method == 'POST') {
+        return http.Response(
+          jsonEncode({
+            'request_id': 'req_fake_done',
+            'status': 'success',
+          }),
+          200,
+        );
+      }
+      n++;
+      if (n == 1) {
+        return http.Response(
+          jsonEncode({
+            'request_id': 'req_fake_done',
+            'status': 'pending',
+          }),
+          200,
+        );
+      }
+      return http.Response(
+        jsonEncode({
+          'request_id': 'req_fake_done',
+          'status': 'done',
+          'video': {'url': 'https://vidgen.x.ai/ok.mp4'},
+        }),
+        200,
+      );
+    });
+    final api = OpenAiCompatibleVideoClient(
+      client: client,
+      pollInterval: const Duration(milliseconds: 5),
+    );
+    final job = await api.generate(
+      baseUrl: 'https://relay.example.com/v1',
+      apiKey: 'sk-relay',
+      model: 'grok-imagine-video',
+      prompt: 'moon',
+      providerType: ProviderType.openaiCompatible,
+    );
+    expect(job.status, VideoJobWireStatus.completed);
+    expect(job.videoUrl, 'https://vidgen.x.ai/ok.mp4');
+    expect(job.needsMaterialize, isFalse);
   });
 
   test('img2video 允许空提示词', () async {

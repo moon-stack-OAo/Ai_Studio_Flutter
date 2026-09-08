@@ -55,7 +55,7 @@ Future<void> main() async {
   final generation = GenerationRuntime();
   final chatClient = OpenAiCompatibleChatClient();
   final imageClient = OpenAiCompatibleImageClient();
-  final videoClient = OpenAiCompatibleVideoClient();
+  final videoClient = OpenAiCompatibleVideoClient(logs: appLogs);
 
   final navigatorKey = GlobalKey<NavigatorState>();
   final closeCoordinator = WindowCloseCoordinator(
