@@ -2,13 +2,15 @@ import 'package:core/core.dart';
 import 'package:design_material/design_material.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:flutter_native_splash/flutter_native_splash.dart';
 
 import 'app/theme_controller.dart';
 import 'shell/app_shell.dart';
 import 'update/mobile_update_controller.dart';
 
 Future<void> main() async {
-  WidgetsFlutterBinding.ensureInitialized();
+  final widgetsBinding = WidgetsFlutterBinding.ensureInitialized();
+  FlutterNativeSplash.preserve(widgetsBinding: widgetsBinding);
 
   final providers = ProviderRepository(storage: SecureProviderStorage());
   await providers.load();
@@ -82,6 +84,7 @@ Future<void> main() async {
       updateController: updateController,
     ),
   );
+  FlutterNativeSplash.remove();
 }
 
 class AiStudioApp extends StatelessWidget {

@@ -13,7 +13,7 @@ import '../update/mobile_update_controller.dart';
 import 'app_section.dart';
 import 'update_banner.dart';
 
-/// Material 壳：Scaffold + 四入口 NavigationBar；IME 可见时隐藏底栏。
+/// Material 壳：Scaffold + 四入口 NavigationBar；IME 升起时随 viewInsets 收起底栏。
 class AppShell extends StatefulWidget {
   const AppShell({
     super.key,
@@ -188,12 +188,20 @@ class _AppShellState extends State<AppShell> {
   @override
   Widget build(BuildContext context) {
     final tokens = materialTokensOf(context);
-    final imeVisible = MediaQuery.viewInsetsOf(context).bottom > 0;
+    final density =
+        UiDensity.fromVisualDensity(Theme.of(context).visualDensity);
+    final viewInsetsBottom = MediaQuery.viewInsetsOf(context).bottom;
+    final navHeight = density.navigationBarHeight;
+    // 与键盘高度同相位收起，避免 bottomNavigationBar: null 瞬时跳变。
+    final navVisibleFactor =
+        (1.0 - (viewInsetsBottom / navHeight).clamp(0.0, 1.0)).toDouble();
     final selectedIndex = AppSection.values.indexOf(_section);
     final bannerVersion = _bannerVersion;
 
     return Scaffold(
       backgroundColor: tokens.canvas,
+      // 键盘抬起只由内页 Scaffold 负责，避免双层 resize 叠跳。
+      resizeToAvoidBottomInset: false,
       body: SafeArea(
         bottom: false,
         child: Column(
@@ -267,20 +275,30 @@ class _AppShellState extends State<AppShell> {
           ],
         ),
       ),
-      bottomNavigationBar: imeVisible
-          ? null
-          : NavigationBar(
-              selectedIndex: selectedIndex,
-              onDestinationSelected: _onDestinationSelected,
-              destinations: [
-                for (final section in _sections)
-                  NavigationDestination(
-                    icon: _navIcon(section, selected: false),
-                    selectedIcon: _navIcon(section, selected: true),
-                    label: section.label,
-                  ),
-              ],
+      bottomNavigationBar: ClipRect(
+        child: Align(
+          alignment: Alignment.topCenter,
+          heightFactor: navVisibleFactor,
+          child: IgnorePointer(
+            ignoring: navVisibleFactor < 0.05,
+            child: SizedBox(
+              height: navHeight,
+              child: NavigationBar(
+                selectedIndex: selectedIndex,
+                onDestinationSelected: _onDestinationSelected,
+                destinations: [
+                  for (final section in _sections)
+                    NavigationDestination(
+                      icon: _navIcon(section, selected: false),
+                      selectedIcon: _navIcon(section, selected: true),
+                      label: section.label,
+                    ),
+                ],
+              ),
             ),
+          ),
+        ),
+      ),
     );
   }
 }

@@ -27,6 +27,7 @@ dependencies:
   video_player: ^2.14.0
   video_player_win: ^3.2.2
   desktop_drop: ^0.8.4
+  flutter_native_splash: ^2.4.8
 
 dev_dependencies:
   flutter_test:
@@ -40,3 +41,19 @@ flutter:
     - assets/tray_icon.ico
     - assets/tray_icon.png
     - assets/logo.png
+
+flutter_native_splash:
+  color: "#faf9f5"
+  color_dark: "#0a0a0a"
+  image: assets/logo.png
+  image_dark: assets/logo.png
+  android: true
+  ios: true
+  web: false
+  android_12:
+    color: "#faf9f5"
+    color_dark: "#0a0a0a"
+    image: assets/logo.png
+    image_dark: assets/logo.png
+    icon_background_color: "#faf9f5"
+    icon_background_color_dark: "#0a0a0a"

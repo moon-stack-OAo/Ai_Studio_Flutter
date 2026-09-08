@@ -4,6 +4,7 @@ import 'package:core/core.dart';
 import 'package:design_fluent/design_fluent.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter/foundation.dart' show kDebugMode;
+import 'package:flutter_native_splash/flutter_native_splash.dart';
 
 import 'app/theme_controller.dart';
 import 'shell/app_shell.dart';
@@ -12,7 +13,8 @@ import 'shell/window_close_coordinator.dart';
 import 'update/update_controller.dart';
 
 Future<void> main() async {
-  WidgetsFlutterBinding.ensureInitialized();
+  final widgetsBinding = WidgetsFlutterBinding.ensureInitialized();
+  FlutterNativeSplash.preserve(widgetsBinding: widgetsBinding);
   await bootstrapDesktopWindow();
 
   final providers = ProviderRepository(storage: SecureProviderStorage());
@@ -103,6 +105,7 @@ Future<void> main() async {
     app = ExcludeSemantics(child: app);
   }
   runApp(app);
+  FlutterNativeSplash.remove();
 }
 
 class AiStudioApp extends StatelessWidget {

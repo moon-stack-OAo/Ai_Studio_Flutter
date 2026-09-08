@@ -29,6 +29,7 @@ dependencies:
   gal: ^2.3.3
   share_plus: ^13.1.0
   video_player: ^2.14.0
+  flutter_native_splash: ^2.4.8
 
 dev_dependencies:
   flutter_test:
@@ -37,3 +38,21 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  assets:
+    - assets/logo.png
+
+flutter_native_splash:
+  color: "#faf9f5"
+  color_dark: "#0a0a0a"
+  image: assets/logo.png
+  image_dark: assets/logo.png
+  android: true
+  ios: true
+  web: false
+  android_12:
+    color: "#faf9f5"
+    color_dark: "#0a0a0a"
+    image: assets/logo.png
+    image_dark: assets/logo.png
+    icon_background_color: "#faf9f5"
+    icon_background_color_dark: "#0a0a0a"

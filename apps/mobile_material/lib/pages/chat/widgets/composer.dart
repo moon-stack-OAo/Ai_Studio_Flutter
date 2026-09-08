@@ -51,14 +51,20 @@ class _ComposerState extends State<Composer> {
         UiDensity.fromVisualDensity(Theme.of(context).visualDensity);
     final canType = widget.enabled && !widget.streaming;
     final isDark = tokens.brightness == Brightness.dark;
-    final imeVisible = MediaQuery.viewInsetsOf(context).bottom > 0;
+    final viewInsetsBottom = MediaQuery.viewInsetsOf(context).bottom;
     final bottomSafe = MediaQuery.paddingOf(context).bottom;
     final basePad = density.composerPadding;
+    final safeExtra = bottomSafe * 0.15;
+    // 与键盘同相位淡出底安全区余量，避免布尔硬切。
+    final safeFade =
+        (1.0 - (viewInsetsBottom / (safeExtra + 1.0)).clamp(0.0, 1.0))
+            .toDouble();
     final padBottom =
-        (density == UiDensity.comfortable ? 10.0 : 8.0) +
-        (imeVisible ? 0.0 : bottomSafe * 0.15);
+        (density == UiDensity.comfortable ? 10.0 : 8.0) + safeExtra * safeFade;
 
-    return Container(
+    return AnimatedContainer(
+      duration: MaterialMotion.micro,
+      curve: MaterialMotion.standard,
       padding: EdgeInsets.fromLTRB(
         basePad.left,
         basePad.top,
