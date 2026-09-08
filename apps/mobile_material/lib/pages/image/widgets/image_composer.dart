@@ -116,61 +116,85 @@ class _ImageComposerState extends State<ImageComposer> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(14, 12, 8, 12),
+            padding: const EdgeInsets.fromLTRB(12, 6, 4, 6),
             child: Row(
               children: [
-                Expanded(
-                  child: InkWell(
-                    onTap: () => setState(() => _expanded = !_expanded),
-                    borderRadius: BorderRadius.circular(8),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 2),
-                      child: Text(
-                        '参数',
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          color: tokens.ink,
-                          fontFamily: tokens.fontFamily,
-                        ),
+                InkWell(
+                  onTap: () => setState(() => _expanded = !_expanded),
+                  borderRadius: BorderRadius.circular(8),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 2,
+                      vertical: 6,
+                    ),
+                    child: Text(
+                      '参数',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: tokens.ink,
+                        fontFamily: tokens.fontFamily,
                       ),
                     ),
                   ),
                 ),
-                if (widget.modelLabel.isNotEmpty)
-                  Flexible(
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Align(
+                    alignment: Alignment.centerRight,
                     child: InkWell(
                       onTap: canPickModel ? widget.onPickModel : null,
                       borderRadius: BorderRadius.circular(8),
                       child: Padding(
                         padding: const EdgeInsets.symmetric(
                           horizontal: 6,
-                          vertical: 4,
+                          vertical: 6,
                         ),
-                        child: Text(
-                          widget.modelLabel,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          textAlign: TextAlign.end,
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: canPickModel
-                                ? tokens.inkSecondary
-                                : tokens.inkMuted,
-                            fontFamily: tokens.fontFamily,
-                          ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Flexible(
+                              child: Text(
+                                widget.modelLabel.isEmpty
+                                    ? '未配置模型'
+                                    : widget.modelLabel,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                textAlign: TextAlign.end,
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: canPickModel
+                                      ? tokens.inkSecondary
+                                      : tokens.inkMuted,
+                                  fontFamily: tokens.fontFamily,
+                                ),
+                              ),
+                            ),
+                            if (canPickModel) ...[
+                              const SizedBox(width: 2),
+                              Icon(
+                                Icons.expand_more,
+                                size: 16,
+                                color: tokens.inkMuted,
+                              ),
+                            ],
+                          ],
                         ),
                       ),
                     ),
                   ),
+                ),
                 IconButton(
                   tooltip: _expanded ? '收起参数' : '展开参数',
+                  visualDensity: VisualDensity.compact,
                   style: IconButton.styleFrom(
-                    minimumSize: const Size(48, 48),
+                    minimumSize: const Size(40, 40),
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                   ),
                   onPressed: () => setState(() => _expanded = !_expanded),
                   icon: Icon(
                     _expanded ? Icons.expand_less : Icons.expand_more,
+                    size: 22,
                     color: tokens.inkMuted,
                   ),
                 ),
@@ -180,59 +204,10 @@ class _ImageComposerState extends State<ImageComposer> {
           if (_expanded) ...[
             const Divider(height: 1),
             Padding(
-              padding: const EdgeInsets.fromLTRB(14, 12, 14, 4),
+              padding: const EdgeInsets.fromLTRB(12, 10, 12, 2),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  _fieldLabel(tokens, '模型'),
-                  const SizedBox(height: 6),
-                  Material(
-                    color: tokens.surfaceMuted,
-                    borderRadius: BorderRadius.circular(10),
-                    child: InkWell(
-                      onTap: canPickModel ? widget.onPickModel : null,
-                      borderRadius: BorderRadius.circular(10),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 10,
-                        ),
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(color: tokens.border),
-                        ),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                widget.modelLabel.isEmpty
-                                    ? '未配置'
-                                    : widget.modelLabel,
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  color: canPickModel
-                                      ? tokens.ink
-                                      : tokens.inkMuted,
-                                  fontFamily: tokens.fontFamily,
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 4),
-                            Icon(
-                              Icons.expand_more,
-                              size: 18,
-                              color: canPickModel
-                                  ? tokens.inkSecondary
-                                  : tokens.inkMuted,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
                   Row(
                     children: [
                       Expanded(
@@ -260,7 +235,7 @@ class _ImageComposerState extends State<ImageComposer> {
                                 onChanged: widget.onSizeChanged,
                               ),
                       ),
-                      const SizedBox(width: 10),
+                      const SizedBox(width: 8),
                       Expanded(
                         child: _dropdown<int>(
                           tokens: tokens,
@@ -272,35 +247,43 @@ class _ImageComposerState extends State<ImageComposer> {
                           onChanged: widget.onNChanged,
                         ),
                       ),
+                      if (widget.supportsQuality) ...[
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: _dropdown<String>(
+                            tokens: tokens,
+                            label: '质量',
+                            value: widget.qualityOptions
+                                    .any((o) => o.value == widget.quality)
+                                ? widget.quality
+                                : defaultImageQuality,
+                            items: [
+                              for (final o in widget.qualityOptions) o.value,
+                            ],
+                            labelOf: (v) {
+                              for (final o in widget.qualityOptions) {
+                                if (o.value == v) return o.label;
+                              }
+                              return v;
+                            },
+                            enabled: !widget.generating,
+                            onChanged: (v) => widget.onQualityChanged?.call(v),
+                          ),
+                        ),
+                      ],
                     ],
                   ),
-                  if (widget.supportsQuality) ...[
-                    const SizedBox(height: 12),
-                    _dropdown<String>(
-                      tokens: tokens,
-                      label: '质量',
-                      value: widget.qualityOptions
-                              .any((o) => o.value == widget.quality)
-                          ? widget.quality
-                          : defaultImageQuality,
-                      items: [
-                        for (final o in widget.qualityOptions) o.value,
-                      ],
-                      labelOf: (v) {
-                        for (final o in widget.qualityOptions) {
-                          if (o.value == v) return o.label;
-                        }
-                        return v;
-                      },
-                      enabled: !widget.generating,
-                      onChanged: (v) => widget.onQualityChanged?.call(v),
-                    ),
-                  ],
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 8),
                   Row(
                     children: [
                       Expanded(child: _fieldLabel(tokens, '提示词')),
                       TextButton(
+                        style: TextButton.styleFrom(
+                          visualDensity: VisualDensity.compact,
+                          minimumSize: const Size(0, 32),
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
                         onPressed: widget.generating
                             ? null
                             : widget.onPromptAssist,
@@ -308,7 +291,7 @@ class _ImageComposerState extends State<ImageComposer> {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 6),
+                  const SizedBox(height: 4),
                   Semantics(
                     textField: true,
                     label: '提示词',
@@ -317,71 +300,60 @@ class _ImageComposerState extends State<ImageComposer> {
                       onChanged:
                           widget.generating ? null : widget.onPromptChanged,
                       enabled: !widget.generating,
-                      maxLines: 4,
-                      minLines: 3,
+                      maxLines: 3,
+                      minLines: 2,
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontFamily: tokens.fontFamily,
+                      ),
                       decoration: InputDecoration(
                         hintText: '描述你想生成的画面…',
+                        isDense: true,
                         filled: true,
                         fillColor: tokens.surfaceMuted,
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 10,
+                        ),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(10),
                         ),
                       ),
                     ),
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 8),
                   _fieldLabel(tokens, '参考图'),
-                  const SizedBox(height: 6),
+                  const SizedBox(height: 4),
                   if (hasRef)
-                    Stack(
-                      children: [
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(10),
-                          child: AspectRatio(
-                            aspectRatio: 16 / 9,
-                            child: Image.memory(
-                              widget.refBytes!,
-                              fit: BoxFit.cover,
-                            ),
-                          ),
-                        ),
-                        Positioned(
-                          top: 6,
-                          right: 6,
-                          child: Material(
-                            color: tokens.surface.withValues(alpha: 0.9),
-                            shape: const CircleBorder(),
-                            child: IconButton(
-                              tooltip: '清除参考图',
-                              icon: const Icon(Icons.close, size: 18),
-                              style: IconButton.styleFrom(
-                                minimumSize: const Size(48, 48),
-                                tapTargetSize: MaterialTapTargetSize.padded,
-                              ),
-                              onPressed: widget.generating
-                                  ? null
-                                  : widget.onClearRef,
-                            ),
-                          ),
-                        ),
-                      ],
+                    _RefThumbRow(
+                      tokens: tokens,
+                      bytes: widget.refBytes!,
+                      enabled: !widget.generating,
+                      onClear: widget.onClearRef,
+                      onReplace: widget.onPickRef,
                     )
                   else
                     OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        visualDensity: VisualDensity.compact,
+                        minimumSize: const Size.fromHeight(40),
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                      ),
                       onPressed:
                           widget.generating ? null : widget.onPickRef,
-                      icon: const Icon(Icons.add_photo_alternate_outlined),
+                      icon: const Icon(Icons.add_photo_alternate_outlined,
+                          size: 18),
                       label: const Text('从相册选择参考图'),
                     ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 8),
                 ],
               ),
             ),
           ],
           Padding(
-            padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
             child: SizedBox(
-              height: 48,
+              height: 44,
               child: widget.generating
                   ? Semantics(
                       button: true,
@@ -391,7 +363,7 @@ class _ImageComposerState extends State<ImageComposer> {
                         style: FilledButton.styleFrom(
                           backgroundColor: tokens.danger,
                           foregroundColor: tokens.onPrimary,
-                          minimumSize: const Size.fromHeight(48),
+                          minimumSize: const Size.fromHeight(44),
                         ),
                         onPressed: widget.onStop,
                         child: const Text('停止生成'),
@@ -403,7 +375,7 @@ class _ImageComposerState extends State<ImageComposer> {
                       excludeSemantics: true,
                       child: FilledButton(
                         style: FilledButton.styleFrom(
-                          minimumSize: const Size.fromHeight(48),
+                          minimumSize: const Size.fromHeight(44),
                         ),
                         onPressed: widget.enabled ? widget.onGenerate : null,
                         child: Text(hasRef ? '图生图' : '生成'),
@@ -420,7 +392,7 @@ class _ImageComposerState extends State<ImageComposer> {
     return Text(
       text,
       style: TextStyle(
-        fontSize: 12,
+        fontSize: 11,
         fontWeight: FontWeight.w600,
         color: tokens.inkSecondary,
         fontFamily: tokens.fontFamily,
@@ -441,13 +413,14 @@ class _ImageComposerState extends State<ImageComposer> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         _fieldLabel(tokens, label),
-        const SizedBox(height: 6),
+        const SizedBox(height: 4),
         InputDecorator(
           decoration: InputDecoration(
+            isDense: true,
             filled: true,
             fillColor: tokens.surfaceMuted,
             contentPadding:
-                const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(10),
             ),
@@ -456,6 +429,12 @@ class _ImageComposerState extends State<ImageComposer> {
             child: DropdownButton<T>(
               value: value,
               isExpanded: true,
+              isDense: true,
+              style: TextStyle(
+                fontSize: 13,
+                color: tokens.ink,
+                fontFamily: tokens.fontFamily,
+              ),
               items: [
                 for (final e in items)
                   DropdownMenuItem(
@@ -472,6 +451,89 @@ class _ImageComposerState extends State<ImageComposer> {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _RefThumbRow extends StatelessWidget {
+  const _RefThumbRow({
+    required this.tokens,
+    required this.bytes,
+    required this.enabled,
+    this.onClear,
+    this.onReplace,
+  });
+
+  final MaterialTokens tokens;
+  final Uint8List bytes;
+  final bool enabled;
+  final VoidCallback? onClear;
+  final VoidCallback? onReplace;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: tokens.surfaceMuted,
+      borderRadius: BorderRadius.circular(10),
+      child: InkWell(
+        onTap: enabled ? onReplace : null,
+        borderRadius: BorderRadius.circular(10),
+        child: Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: tokens.border),
+          ),
+          child: Row(
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: SizedBox(
+                  width: 56,
+                  height: 56,
+                  child: Image.memory(bytes, fit: BoxFit.cover),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '已设为参考',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                        color: tokens.inkSecondary,
+                        fontFamily: tokens.fontFamily,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      enabled ? '点击可更换' : '生成中',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: tokens.inkMuted,
+                        fontFamily: tokens.fontFamily,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              IconButton(
+                tooltip: '清除参考图',
+                visualDensity: VisualDensity.compact,
+                style: IconButton.styleFrom(
+                  minimumSize: const Size(40, 40),
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+                icon: Icon(Icons.close, size: 18, color: tokens.inkMuted),
+                onPressed: enabled ? onClear : null,
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
