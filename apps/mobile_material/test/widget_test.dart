@@ -464,4 +464,20 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('尚未配置提供商'), findsOneWidget);
   });
+
+  testWidgets('root back shows exit confirm snackbar', (tester) async {
+    await _pumpApp(tester);
+
+    await tester.binding.handlePopRoute();
+    await tester.pump();
+    expect(find.text('再按一次退出'), findsOneWidget);
+    expect(find.text('对话'), findsWidgets);
+
+    // 窗口过期后再按，应再次提示而非立刻离页。
+    await tester.pump(const Duration(seconds: 3));
+    await tester.binding.handlePopRoute();
+    await tester.pump();
+    expect(find.text('再按一次退出'), findsOneWidget);
+    expect(find.text('对话'), findsWidgets);
+  });
 }

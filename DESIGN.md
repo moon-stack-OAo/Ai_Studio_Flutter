@@ -335,7 +335,7 @@ Flutter 落点：`packages/design_fluent` 与 `packages/design_material` 的 `Th
 |---------------|------------|-------------------------------------------------------------------|-------------------------------------------|---------------------------------|
 | `NAV-ROOT`    | 四能力入口切换    | `F-NavView`：左侧 NavigationView，**常驻 compact ~56px**（不可展开/折叠）；当前项高亮 | `M-NavBar`：底部 NavigationBar 四项；IME 可见时可隐藏 | 对话 / 生图 / 生视频 / 设置              |
 | `NAV-TITLE`   | 当前区标题与全局动作 | `F-TitleBar` + 可选窗口控点；内容区 `F-CommandBar`                          | `M-TopAppBar`：标题 + 溢出 `More`；可叠搜索         | 普通 / 选择模式（若有）                   |
-| `NAV-BACK`    | 关闭层、返回上一级  | 无系统返回；Esc 关 Dialog/Flyout；窗格关闭按钮                                  | `M-BackHost`：系统返回 / 边缘滑动先 pop 层再离页        | 无层 / 有层栈                        |
+| `NAV-BACK`    | 关闭层、返回上一级  | 无系统返回；Esc 关 Dialog/Flyout；窗格关闭按钮                                  | `M-BackHost`：系统返回 / 边缘滑动先 pop 层；根页「再按一次退出」进最近任务（不清数据） | 无层 / 有层栈 / 待确认退出 |
 | `SHELL-SAFE`  | 避让系统 UI    | 窗口边距即可                                                            | `M-SafeArea`：顶底 inset；不遮挡 NavBar/Composer | 竖屏 / 横屏 / 刘海                    |
 | `SHELL-TRAY`  | 托盘与关闭（仅桌面） | `F-TrayMenu` + `F-CloseConfirm`（退出 / 托盘 / 询问）                     | —（不适用）                                    | Ask / Quit / Tray               |
 | `SHELL-THEME` | 亮暗切换入口     | `F-ThemeToggle`（设置内 + 可选 CommandBar）                              | `M-ThemePref`（设置内）                        | **light / dark only**（无 system） |
@@ -625,3 +625,4 @@ packages/design_material/
 | 2026-09-07 | P3 主题/密度部分落地：`scrim`、InfoBar/Snackbar token、密度作用到会话/Composer/设置；空态 `illustration` 插槽                                                   |
 | 2026-09-07 | P3 空态插画落地：双端 CustomPainter 简易线稿接入 `illustration`；§9 标注                                                                                 |
 | 2026-09-08 | `VID-QUEUE`：双端任务队列增加按状态筛选（全部 / 生成中 / 待恢复 / 已完成 / 失败 / 已放弃）                                                                          |
+| 2026-09-08 | Material 根页返回：`NAV-BACK` 增加「再按一次退出」确认（约 2s），确认后进最近任务、不清数据；键盘可见时优先收 IME                                                      |
