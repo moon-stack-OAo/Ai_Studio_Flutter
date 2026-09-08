@@ -64,6 +64,7 @@ Future<void> main() async {
   final closeCoordinator = WindowCloseCoordinator(
     appearanceRepository: appearance,
     navigatorKey: navigatorKey,
+    onBeforeQuit: () => generation.abort(),
   );
 
   final updateController = UpdateController(

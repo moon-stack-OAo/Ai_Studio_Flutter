@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io' show exit;
 
 import 'package:core/core.dart';
 import 'package:fluent_ui/fluent_ui.dart';
@@ -13,12 +14,15 @@ class WindowCloseCoordinator with WindowListener {
   WindowCloseCoordinator({
     required AppearanceRepository appearanceRepository,
     required this._navigatorKey,
+    this.onBeforeQuit,
     this.onOpenSettings,
     this.onCheckUpdate,
   }) : _appearance = appearanceRepository;
 
   final AppearanceRepository _appearance;
   final GlobalKey<NavigatorState> _navigatorKey;
+  /// 真正退出前回调（如 [GenerationRuntime.abort]）；最小化到托盘不触发。
+  final VoidCallback? onBeforeQuit;
   VoidCallback? onOpenSettings;
   VoidCallback? onCheckUpdate;
 
@@ -157,11 +161,8 @@ class WindowCloseCoordinator with WindowListener {
 
       if (remember &&
           AppearanceSettings.closeBehaviorValues.contains(action)) {
-        try {
-          await _appearance.update(closeBehavior: action);
-        } catch (e, st) {
-          debugPrint('记住关闭行为失败: $e\n$st');
-        }
+        // 不阻塞窗口消失 / 退出路径；失败仍可观察。
+        unawaited(_rememberCloseBehavior(action));
       }
 
       if (action == 'quit') {
@@ -171,6 +172,14 @@ class WindowCloseCoordinator with WindowListener {
       }
     } finally {
       _asking = false;
+    }
+  }
+
+  Future<void> _rememberCloseBehavior(String action) async {
+    try {
+      await _appearance.update(closeBehavior: action);
+    } catch (e, st) {
+      debugPrint('记住关闭行为失败: $e\n$st');
     }
   }
 
@@ -200,8 +209,34 @@ class WindowCloseCoordinator with WindowListener {
     if (_quitting) return;
     _quitting = true;
     try {
-      await _tray?.dispose();
+      // 1. 尽快让窗口消失，避免 destroy 拆 IndexedStack 时的体感卡顿。
+      if (supportsCustomTitleBar) {
+        try {
+          await windowManager.hide();
+        } catch (e, st) {
+          debugPrint('退出前隐藏窗口失败: $e\n$st');
+        }
+      }
+
+      // 2. 仅真正退出时 abort 生成（托盘隐藏不走此路径）。
+      try {
+        onBeforeQuit?.call();
+      } catch (e, st) {
+        debugPrint('退出前 abort 失败: $e\n$st');
+      }
+
+      // 3. 托盘销毁放在窗口消失之后，不挡用户体感。
+      final tray = _tray;
       _tray = null;
+      if (tray != null) {
+        try {
+          await tray.dispose();
+        } catch (e, st) {
+          debugPrint('退出时销毁托盘失败: $e\n$st');
+        }
+      }
+
+      // 4. 放行关闭并销毁窗口。
       if (supportsCustomTitleBar) {
         try {
           await windowManager.setPreventClose(false);
@@ -210,7 +245,12 @@ class WindowCloseCoordinator with WindowListener {
       }
     } catch (e, st) {
       debugPrint('退出失败: $e\n$st');
-      _quitting = false;
+      // 与更新安装后退出同策略：destroy 失败时强制结束进程。
+      try {
+        exit(0);
+      } catch (_) {
+        _quitting = false;
+      }
     }
   }
 }
