@@ -13,8 +13,7 @@
 
 ### Added
 
-- **ImageSessionFacade 最小下沉**：generate / stop、参数状态 / `canGenerate` / `ProviderModelsCache` / `resolveImageBytes` 进 `packages/core`；双端 `ImageController` 仅保留平台参考图 IO、banner 与 session CRUD
-- **VideoJobFacade 分阶段下沉完成（Step1–3）**：generate / stop / resume* / abandon、参数与能力探测 / `canGenerate` / `ProviderModelsCache`、`reloadVideo` / `isReloading` / `resolveVideoBytes` 均在 `packages/core`；双端 `VideoController` 仅保留平台 IO、banner 与转发
+（暂无）
 
 ### Changed
 
@@ -58,13 +57,13 @@
 - OpenDesign 双系统原型（`design/opendesign/`）与品牌图标源（`design/brand/`）
 - 产品规格 `DESIGN.md`、安全说明 `SECURITY.md`、助手约定 `AGENTS.md`
 - **CI / 发版**：`.github/workflows`（`ci` / `build` / `release`）、Windows Inno 脚本 `packaging/windows/ai-studio.iss`、清单与签名脚本（`.github/scripts/`）
-- `ProviderModelsCache`、生成门闩（`canSend` / `canGenerate*`）与 `ChatSessionFacade` 下沉 `packages/core`；双端 chat / image / video controller 调用 core
-- **VideoJobFacade**：generate / stop / resume* / abandon、参数与能力、`reloadVideo` 下沉 `packages/core`（见 Unreleased Step1–3）
+- `ProviderModelsCache`、生成门闩（`canSend` / `canGenerate*`）与会话 facade 下沉 `packages/core`；双端 controller 仅保留平台 IO、banner 与 session CRUD
+- **ChatSessionFacade**、**ImageSessionFacade**（generate / stop、参数 / `canGenerate` / `resolveImageBytes`）、**VideoJobFacade**（generate / stop / resume* / abandon、参数与能力、`reloadVideo` / `resolveVideoBytes`）均在 core
 
 #### packages/core
 
 - **对话**：OpenAI 兼容 SSE、会话持久化、上下文裁剪、`GenerationRuntime`、`ChatSessionFacade`、生成门闩
-- **生图 / 生视频**：客户端、会话与资产落盘、pending 恢复、图片压缩；`VideoJobFacade`（generate / stop / resume / abandon / reload）
+- **生图 / 生视频**：客户端、会话与资产落盘、pending 恢复、图片压缩；`ImageSessionFacade`、`VideoJobFacade`（generate / stop / resume / abandon / reload）
 - **提供商**：CRUD、预设、三模型分类、连通性探测、`ProviderModelsCache`、密钥 `flutter_secure_storage`（含旧明文迁移）
 - **设置**：外观、对话默认、备份导入导出与清理、存储占用估算
 - **更新**：桌面清单 / minisign；Android 侧载清单 / sha256；更新横幅偏好
