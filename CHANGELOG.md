@@ -25,7 +25,7 @@
 
 ---
 
-## [1.0.0] — 2026-09-07
+## [1.0.0] — 2026-09-08
 
 首个正式可交付版本：双端独立 UI + 共享 `packages/core`，覆盖对话 / 生图 / 生视频 / 设置与更新主路径。
 
@@ -35,7 +35,7 @@
 - **核心能力**：流式对话、文生/图生图、文生/图生视频、多提供商与本机密钥、外观与日志、数据备份
 - **直链更新**：桌面 `latest.json`（minisign）· Android `android-latest.json`（sha256 侧载）；更新源指向本仓 Releases
 - **安装显示名**：安装后桌面快捷方式 / 开始菜单 / 移动桌面图标统一为 **AI Studio**
-- **分发产物**：`AI.Studio_<version>_x64-setup.exe`（Inno）· `AI.Studio_<version>.apk`
+- **分发产物**：`AI.Studio_<version>_x64-setup.exe`（Inno）· `AI.Studio_<version>_aarch64.zip` / `_x64.zip`（macOS）· `AI.Studio_<version>_<abi>.apk`（Android 按 ABI 分包）
 
 ### Added
 
@@ -77,6 +77,9 @@
 - Windows Inno 安装向导支持 **English / 简体中文**；CI / release 钉 Inno Setup **6.7.3**（GitHub Releases `is-6_7_3`；旧 `files.jrsoftware.org` 直链已 404）
 - 关于页文案产品化（弱化「本仓 / latest.json / minisign / sha256」等术语；桌面注明中英安装向导）
 - CI：release / build 增加 Gradle 与 Inno Setup 安装包缓存，缩短重复构建时间
+- **Android 分包**：发版改为 `flutter build apk --split-per-abi`；产物 `AI.Studio_<ver>_<abi>.apk`（arm64-v8a / armeabi-v7a / x86_64）；`android-latest.json` 按 ABI 分条目，客户端按设备 ABI 选包
+- **macOS 发版**：Release / 预览构建增加按芯片分包：`AI.Studio_<ver>_aarch64.zip`（Apple Silicon）与 `_x64.zip`（Intel）；`latest.json` 写入 `darwin-aarch64` / `darwin-x86_64`；未做 Apple 公证（自用侧载，首次打开可能需右键「打开」）
+- **Release 下载说明**：发版正文自动附带按平台/芯片/ABI 选择安装包的对照表
 
 ### Removed
 
@@ -101,4 +104,5 @@
 - 不上架应用商店；Linux 桌面不在首期验收范围
 - Release 需配置 Secrets：`TAURI_SIGNING_PRIVATE_KEY`（必填）；可选 `ANDROID_KEY_*`
 - Android 走侧载清单更新；iOS 仅提供非 Store 分发说明（无应用内自动安装更新）
+- macOS 安装包为未公证 zip；Intel 构建依赖 `macos-15-intel` runner（官方计划约用至 2027-08）
 - `docs/architecture.md` 部分描述可能滞后于实现，以代码与本 Changelog 为准

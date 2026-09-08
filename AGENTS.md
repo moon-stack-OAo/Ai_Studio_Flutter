@@ -44,7 +44,7 @@
 - 应用版本以 `apps/desktop_fluent` 与 `apps/mobile_material` 的 `pubspec.yaml` 为准（当前 `1.0.0+1`）；共享包 `0.0.1` 不单独发版叙事。
 - 发版入口：推送 `v*` tag → `.github/workflows/release.yml`（draft → 双端产物 + `latest.json` / `android-latest.json`）。
 - Secrets：`TAURI_SIGNING_PRIVATE_KEY`（必填）、`TAURI_SIGNING_PRIVATE_KEY_PASSWORD`；可选 `ANDROID_KEY_*`。助手不创建、不回显、不提交私钥。
-- 产物命名：`AI.Studio_<ver>_x64-setup.exe` · `AI.Studio_<ver>.apk`；默认更新源指向本仓 Releases。
+- 产物命名：`AI.Studio_<ver>_x64-setup.exe` · `AI.Studio_<ver>_aarch64.zip` / `_x64.zip`（macOS，zip 内 `.app`）· `AI.Studio_<ver>_<abi>.apk`（`arm64-v8a` / `armeabi-v7a` / `x86_64`）；默认更新源指向本仓 Releases。
 - 未 push 前的多次本地修改视为同一版本演进；未明确要求 TAG 前不随意改版本号。
 
 ## OpenDesign 原型

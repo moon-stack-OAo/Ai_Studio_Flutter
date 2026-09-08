@@ -1,4 +1,4 @@
-# 手动预览构建：Windows 安装包 + Android APK（上传 artifact，不发 Release）
+# 手动预览构建：Windows 安装包 + macOS zip（按芯片）+ Android APK（上传 artifact，不发 Release）
 # 正式分发走 release.yml（推送 v* tag）；日常校验走 ci.yml。
 name: build
 
@@ -79,6 +79,56 @@ jobs:
           path: packaging/windows/output/*.exe
           if-no-files-found: error
 
+  macos:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-latest
+            suffix: aarch64
+            label: Apple Silicon
+          - runner: macos-15-intel
+            suffix: x64
+            label: Intel
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Pub get
+        run: flutter pub get
+
+      - name: Build macOS release (${{ matrix.label }})
+        working-directory: apps/desktop_fluent
+        run: flutter build macos --release
+
+      - name: Package zip
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="$(grep -E '^version:' apps/desktop_fluent/pubspec.yaml | head -1 | sed -E 's/^version:[[:space:]]*//; s/\+.*//')"
+          APP_DIR="apps/desktop_fluent/build/macos/Build/Products/Release"
+          APP_PATH="$(find "$APP_DIR" -maxdepth 1 -name '*.app' -print | head -n 1)"
+          test -n "$APP_PATH"
+          test -d "$APP_PATH"
+          mkdir -p dist
+          OUT="dist/AI.Studio_${VERSION}_${{ matrix.suffix }}.zip"
+          ditto -c -k --sequesterRsrc --keepParent "$APP_PATH" "$OUT"
+          ls -lh dist/
+
+      - name: Upload macOS artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-${{ matrix.suffix }}
+          path: dist/*.zip
+          if-no-files-found: error
+
   android:
     runs-on: ubuntu-latest
     steps:
@@ -112,18 +162,26 @@ jobs:
       - name: Pub get
         run: flutter pub get
 
-      - name: Build APK release
+      - name: Build APK release (split per ABI)
         working-directory: apps/mobile_material
-        run: flutter build apk --release
+        run: flutter build apk --release --split-per-abi
 
-      - name: Rename APK
+      - name: Rename APKs
         shell: bash
         run: |
           VERSION="$(grep -E '^version:' apps/mobile_material/pubspec.yaml | head -1 | sed -E 's/^version:[[:space:]]*//; s/\+.*//')"
-          SRC="apps/mobile_material/build/app/outputs/flutter-apk/app-release.apk"
-          test -f "$SRC"
+          OUT_DIR="apps/mobile_material/build/app/outputs/flutter-apk"
           mkdir -p dist
-          cp -f "$SRC" "dist/AI.Studio_${VERSION}.apk"
+          declare -A ABI_SRC=(
+            ["arm64-v8a"]="app-arm64-v8a-release.apk"
+            ["armeabi-v7a"]="app-armeabi-v7a-release.apk"
+            ["x86_64"]="app-x86_64-release.apk"
+          )
+          for abi in arm64-v8a armeabi-v7a x86_64; do
+            SRC="${OUT_DIR}/${ABI_SRC[$abi]}"
+            test -f "$SRC"
+            cp -f "$SRC" "dist/AI.Studio_${VERSION}_${abi}.apk"
+          done
           ls -lh dist/
 
       - name: Upload Android artifact

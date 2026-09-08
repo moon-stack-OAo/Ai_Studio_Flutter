@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 /**
- * 生成 android-latest.json（Android 侧载应用内更新）
- * 用法: node .github/scripts/generate-android-latest.mjs v1.0.0 [apkPath]
+ * 生成 android-latest.json（Android 侧载应用内更新，按 ABI 分包）
+ * 用法:
+ *   node .github/scripts/generate-android-latest.mjs v1.0.0 [distDir]
+ *   node .github/scripts/generate-android-latest.mjs v1.0.0 apk1.apk apk2.apk ...
  * 环境变量可选: GITHUB_REPOSITORY（默认 moon-stack-OAo/Ai_Studio_Flutter）
  */
 import crypto from 'node:crypto'
@@ -18,77 +20,118 @@ if (!version) {
 const repo =
   String(process.env.GITHUB_REPOSITORY || 'moon-stack-OAo/Ai_Studio_Flutter').trim() ||
   'moon-stack-OAo/Ai_Studio_Flutter'
-const assetName = `AI.Studio_${version}.apk`
-const apkArg = process.argv[3]
+const releaseTag = tag.startsWith('v') ? tag : `v${version}`
+const extraArgs = process.argv.slice(3)
 
-function scoreApk(filePath) {
-  const name = path.basename(filePath).toLowerCase()
-  let score = 0
-  if (name.includes('unsigned')) score -= 100
-  if (name.includes('debug')) score -= 50
-  if (name.includes('arm64')) score += 40
-  if (name.includes('release')) score += 10
-  if (filePath.includes(`${path.sep}apk${path.sep}`)) score += 5
-  return score
+/** @type {{ abi: string, suffixes: string[], platformKeys: string[] }[]} */
+const ABI_SPECS = [
+  {
+    abi: 'arm64-v8a',
+    suffixes: ['arm64-v8a', 'arm64'],
+    platformKeys: ['aarch64-linux-android', 'arm64-v8a'],
+  },
+  {
+    abi: 'armeabi-v7a',
+    suffixes: ['armeabi-v7a', 'armeabi', 'armv7'],
+    platformKeys: ['armeabi-v7a', 'armv7-linux-androideabi'],
+  },
+  {
+    abi: 'x86_64',
+    suffixes: ['x86_64', 'x86-64'],
+    platformKeys: ['x86_64', 'x86_64-linux-android'],
+  },
+]
+
+function assetNameForAbi(abi) {
+  return `AI.Studio_${version}_${abi}.apk`
 }
 
-function findApk() {
-  if (apkArg && fs.existsSync(apkArg)) return apkArg
-
-  const preferred = [
-    path.join(
-      process.cwd(),
-      'apps',
-      'mobile_material',
-      'build',
-      'app',
-      'outputs',
-      'flutter-apk',
-      'app-release.apk',
-    ),
-    path.join(
-      process.cwd(),
-      'apps',
-      'mobile_material',
-      'build',
-      'app',
-      'outputs',
-      'apk',
-      'release',
-      'app-release.apk',
-    ),
-  ]
-  for (const p of preferred) {
-    if (fs.existsSync(p)) return p
-  }
-
-  const root = path.join(process.cwd(), 'apps', 'mobile_material', 'build')
-  if (!fs.existsSync(root)) return null
-  const found = []
-  const stack = [root]
-  while (stack.length) {
-    const dir = stack.pop()
-    let entries = []
-    try {
-      entries = fs.readdirSync(dir, { withFileTypes: true })
-    } catch {
-      continue
+function detectAbi(filePath) {
+  const name = path.basename(filePath).toLowerCase()
+  for (const spec of ABI_SPECS) {
+    for (const suffix of spec.suffixes) {
+      if (name.includes(suffix.toLowerCase())) return spec.abi
     }
-    for (const ent of entries) {
-      const full = path.join(dir, ent.name)
-      if (ent.isDirectory()) {
-        if (ent.name === '.gradle' || ent.name === 'intermediates' || ent.name === 'tmp') {
-          continue
+  }
+  return null
+}
+
+function collectCandidateFiles() {
+  /** @type {string[]} */
+  const files = []
+  if (!extraArgs.length) {
+    const defaults = [
+      path.join(process.cwd(), 'dist'),
+      path.join(
+        process.cwd(),
+        'apps',
+        'mobile_material',
+        'build',
+        'app',
+        'outputs',
+        'flutter-apk',
+      ),
+    ]
+    for (const dir of defaults) {
+      if (!fs.existsSync(dir) || !fs.statSync(dir).isDirectory()) continue
+      for (const name of fs.readdirSync(dir)) {
+        if (name.toLowerCase().endsWith('.apk')) {
+          files.push(path.join(dir, name))
         }
-        stack.push(full)
-      } else if (ent.isFile() && ent.name.endsWith('.apk')) {
-        found.push(full)
       }
     }
+    return files
   }
-  if (!found.length) return null
-  found.sort((a, b) => scoreApk(b) - scoreApk(a))
-  return found[0]
+
+  for (const arg of extraArgs) {
+    if (!fs.existsSync(arg)) continue
+    const st = fs.statSync(arg)
+    if (st.isDirectory()) {
+      for (const name of fs.readdirSync(arg)) {
+        if (name.toLowerCase().endsWith('.apk')) {
+          files.push(path.join(arg, name))
+        }
+      }
+    } else if (st.isFile() && arg.toLowerCase().endsWith('.apk')) {
+      files.push(arg)
+    }
+  }
+  return files
+}
+
+function preferApk(a, b, abi) {
+  const an = path.basename(a).toLowerCase()
+  const bn = path.basename(b).toLowerCase()
+  const expected = assetNameForAbi(abi).toLowerCase()
+  const aExact = an === expected ? 1 : 0
+  const bExact = bn === expected ? 1 : 0
+  if (aExact !== bExact) return bExact - aExact
+  const aRelease = an.includes('release') ? 1 : 0
+  const bRelease = bn.includes('release') ? 1 : 0
+  if (aRelease !== bRelease) return bRelease - aRelease
+  const aUnsigned = an.includes('unsigned') ? 1 : 0
+  const bUnsigned = bn.includes('unsigned') ? 1 : 0
+  return aUnsigned - bUnsigned
+}
+
+function resolveAbiApks() {
+  const files = collectCandidateFiles()
+  /** @type {Map<string, string>} */
+  const byAbi = new Map()
+
+  for (const spec of ABI_SPECS) {
+    const expected = path.join(process.cwd(), 'dist', assetNameForAbi(spec.abi))
+    if (fs.existsSync(expected)) {
+      byAbi.set(spec.abi, expected)
+      continue
+    }
+    const matched = files.filter((f) => detectAbi(f) === spec.abi)
+    if (!matched.length) continue
+    matched.sort((a, b) => preferApk(a, b, spec.abi))
+    byAbi.set(spec.abi, matched[0])
+  }
+
+  return byAbi
 }
 
 function extractNotes() {
@@ -118,42 +161,54 @@ function extractNotes() {
     .replace(/\s+$/, '')
 }
 
-const apkPath = findApk()
-if (!apkPath) {
-  console.error(`未找到 APK（期望 ${assetName}）`)
+const byAbi = resolveAbiApks()
+if (!byAbi.size) {
+  console.error(
+    `未找到按 ABI 拆分的 APK（期望如 ${assetNameForAbi('arm64-v8a')}）`,
+  )
   process.exit(1)
 }
 
-const buf = fs.readFileSync(apkPath)
-const sha256 = crypto.createHash('sha256').update(buf).digest('hex')
-const size = buf.length
-const releaseTag = tag.startsWith('v') ? tag : `v${version}`
-const url = `https://github.com/${repo}/releases/download/${releaseTag}/${assetName}`
+const required = ABI_SPECS.map((s) => s.abi)
+const missing = required.filter((abi) => !byAbi.has(abi))
+if (missing.length) {
+  console.error(`缺少 ABI 分包: ${missing.join(', ')}`)
+  for (const [abi, file] of byAbi.entries()) {
+    console.error(`  已找到 ${abi}: ${file}`)
+  }
+  process.exit(1)
+}
+
+/** @type {Record<string, { url: string, sha256: string, size: number }>} */
+const platforms = {}
+
+for (const spec of ABI_SPECS) {
+  const apkPath = byAbi.get(spec.abi)
+  const buf = fs.readFileSync(apkPath)
+  const sha256 = crypto.createHash('sha256').update(buf).digest('hex')
+  const size = buf.length
+  const name = assetNameForAbi(spec.abi)
+  const url = `https://github.com/${repo}/releases/download/${releaseTag}/${name}`
+  const entry = { url, sha256, size }
+  for (const key of spec.platformKeys) {
+    platforms[key] = entry
+  }
+  console.log(`  ${spec.abi}: ${apkPath}`)
+  console.log(`    asset=${name}`)
+  console.log(`    sha256=${sha256}`)
+  console.log(`    size=${size}`)
+}
 
 const manifest = {
   version,
   notes: extractNotes(),
   pub_date: new Date().toISOString(),
   product: 'ai-studio-flutter',
-  platforms: {
-    'aarch64-linux-android': {
-      url,
-      sha256,
-      size,
-    },
-    'arm64-v8a': {
-      url,
-      sha256,
-      size,
-    },
-  },
+  platforms,
 }
 
 const outPath = path.join(process.cwd(), 'android-latest.json')
 fs.writeFileSync(outPath, `${JSON.stringify(manifest, null, 2)}\n`, 'utf8')
 console.log(`已写入 ${outPath}`)
 console.log(`  version=${version}`)
-console.log(`  apk=${apkPath}`)
-console.log(`  sha256=${sha256}`)
-console.log(`  size=${size}`)
-console.log(`  url=${url}`)
+console.log(`  abis=${[...byAbi.keys()].join(',')}`)

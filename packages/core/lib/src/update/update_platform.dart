@@ -1,3 +1,4 @@
+import 'dart:ffi' show Abi;
 import 'dart:io' show Platform;
 
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -55,14 +56,59 @@ List<String> desktopUpdatePlatformCandidates({
   return const [];
 }
 
+/// 将运行时 ABI / 字符串归一为 Android ABI 提示（如 `arm64-v8a`）。
+String? normalizeAndroidAbiHint([String? raw]) {
+  final hint = (raw ?? currentAndroidAbiHint() ?? '').trim().toLowerCase();
+  if (hint.isEmpty) return null;
+  if (hint.contains('armeabi-v7a') ||
+      hint.contains('armeabi') ||
+      hint.contains('armv7') ||
+      hint == 'android_arm' ||
+      hint == 'arm') {
+    return 'armeabi-v7a';
+  }
+  if (hint.contains('x86_64') ||
+      hint.contains('x86-64') ||
+      hint == 'android_x64' ||
+      hint == 'x64') {
+    return 'x86_64';
+  }
+  if (hint.contains('arm64') ||
+      hint.contains('aarch64') ||
+      hint == 'android_arm64') {
+    return 'arm64-v8a';
+  }
+  return null;
+}
+
+/// 当前进程对应的 Android ABI 提示；非 Android 或无法识别时返回 null。
+String? currentAndroidAbiHint() {
+  if (kIsWeb) return null;
+  try {
+    if (!Platform.isAndroid) return null;
+  } catch (_) {
+    return null;
+  }
+  switch (Abi.current()) {
+    case Abi.androidArm64:
+      return 'arm64-v8a';
+    case Abi.androidArm:
+      return 'armeabi-v7a';
+    case Abi.androidX64:
+      return 'x86_64';
+    default:
+      return null;
+  }
+}
+
 /// Android 侧载清单平台键候选（按优先级）。
 ///
-/// 默认：`aarch64-linux-android` → `arm64-v8a` → …
+/// 未传 [abiHint] 时优先用 [currentAndroidAbiHint]；仍未知则默认 arm64。
 List<String> androidUpdatePlatformCandidates({
   String? abiHint,
 }) {
-  final hint = (abiHint ?? '').trim().toLowerCase();
-  if (hint.contains('armeabi') || hint.contains('armv7') || hint == 'armeabi-v7a') {
+  final normalized = normalizeAndroidAbiHint(abiHint);
+  if (normalized == 'armeabi-v7a') {
     return const [
       'armeabi-v7a',
       'armv7-linux-androideabi',
@@ -72,7 +118,7 @@ List<String> androidUpdatePlatformCandidates({
       'x86_64-linux-android',
     ];
   }
-  if (hint.contains('x86_64') || hint.contains('x86-64')) {
+  if (normalized == 'x86_64') {
     return const [
       'x86_64',
       'x86_64-linux-android',
@@ -80,7 +126,7 @@ List<String> androidUpdatePlatformCandidates({
       'arm64-v8a',
     ];
   }
-  // 默认优先 64-bit ARM（主流真机）。
+  // 默认 / arm64-v8a：优先 64-bit ARM（主流真机）。
   return const [
     'aarch64-linux-android',
     'arm64-v8a',

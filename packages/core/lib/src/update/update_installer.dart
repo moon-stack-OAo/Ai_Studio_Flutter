@@ -32,9 +32,42 @@ class FakeAndroidApkInstaller implements AndroidApkInstaller {
   }
 }
 
-/// 使用 `Process.start` 拉起 .exe / .msi / .dmg 等。
+/// 使用 `Process.start` 拉起 .exe / .msi / .dmg / .zip（macOS）等。
 class DesktopUpdateInstaller implements UpdateInstaller {
   const DesktopUpdateInstaller();
+
+  Future<void> _launchMacZip(File zipFile) async {
+    final extractRoot = await Directory.systemTemp.createTemp(
+      'ai_studio_mac_update_',
+    );
+    final unzip = await Process.run(
+      'ditto',
+      ['-x', '-k', zipFile.path, extractRoot.path],
+    );
+    if (unzip.exitCode != 0) {
+      throw UpdateException(
+        '无法解压 macOS 更新包：${unzip.stderr}'.trim(),
+      );
+    }
+    final apps = <Directory>[];
+    await for (final entity in extractRoot.list(
+      recursive: true,
+      followLinks: false,
+    )) {
+      if (entity is Directory && entity.path.toLowerCase().endsWith('.app')) {
+        apps.add(entity);
+      }
+    }
+    if (apps.isEmpty) {
+      throw const UpdateException('更新包中未找到 .app');
+    }
+    apps.sort((a, b) => a.path.length.compareTo(b.path.length));
+    await Process.start(
+      'open',
+      [apps.first.path],
+      mode: ProcessStartMode.detached,
+    );
+  }
 
   @override
   Future<void> launch(File installerFile) async {
@@ -63,11 +96,15 @@ class DesktopUpdateInstaller implements UpdateInstaller {
         return;
       }
       if (Platform.isMacOS) {
-        await Process.start(
-          'open',
-          [path],
-          mode: ProcessStartMode.detached,
-        );
+        if (lower.endsWith('.zip')) {
+          await _launchMacZip(installerFile);
+        } else {
+          await Process.start(
+            'open',
+            [path],
+            mode: ProcessStartMode.detached,
+          );
+        }
         return;
       }
       if (Platform.isLinux) {

@@ -661,7 +661,7 @@ class _SettingsAboutTabState extends State<SettingsAboutTab> {
                 if (_isAndroid) ...[
                   const SizedBox(height: 6),
                   Text(
-                    '不上架应用商店；安装包为 AI.Studio_*.apk，需允许「安装未知应用」。',
+                    '不上架应用商店；安装包为按 ABI 分包的 AI.Studio_*_<abi>.apk，需允许「安装未知应用」。',
                     style: TextStyle(fontSize: 12, color: tokens.inkMuted),
                   ),
                 ],

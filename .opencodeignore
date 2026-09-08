@@ -1,0 +1,120 @@
+# =============================================================================
+# Ai_Studio_Flutter — .opencodeignore
+# 语法同 .gitignore；缩小 OpenCode 上下文，排除噪声 / 密钥 / 生成物。
+# 规格与业务真相仍以 DESIGN.md / CHANGELOG.md / 源码为准。
+# =============================================================================
+
+# ----- 依赖与工具缓存 -----
+.dart_tool/
+.pub-cache/
+.pub/
+.fvm/
+.melos_tool/
+.packages
+.flutter-plugins
+.flutter-plugins-dependencies
+
+# ----- 构建产物 -----
+build/
+**/build/
+coverage/
+*.lcov
+.test_coverage.dart
+coverage_badge.svg
+**/doc/api/
+*.apk
+*.aab
+*.ap_
+*.dex
+*.ipa
+*.dSYM
+*.dSYM.zip
+app.*.symbols
+app.*.map.json
+
+# ----- 平台生成 / 临时目录 -----
+**/Pods/
+**/DerivedData/
+**/xcuserdata/
+**/*.xcuserstate
+**/Flutter/ephemeral/
+**/Flutter/Generated.xcconfig
+**/Flutter/flutter_export_environment.sh
+**/windows/flutter/ephemeral/
+**/ios/Flutter/.last_build_id
+**/ServiceDefinitions.json
+.android/
+.ios/
+
+# ----- IDE / 本机态 -----
+.idea/
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+.history
+.atom/
+.cache/
+.claude/
+.cursor/
+.opencode/
+*.iml
+*.ipr
+*.iws
+*.swp
+*.swo
+*~
+
+# ----- 操作系统杂物 -----
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# ----- 密钥与本地配置（双保险；勿纳入 AI 上下文） -----
+.env
+.env.*
+!.env.example
+!.env.*.example
+*.pem
+*.p12
+*.pfx
+*.keystore
+*.jks
+secrets/
+**/secrets.json
+**/credentials.json
+**/key.properties
+**/local.properties
+**/google-services.json
+**/GoogleService-Info.plist
+
+# ----- 日志与临时文件 -----
+*.log
+*.tmp
+*.temp
+*.bak
+*.orig
+*.class
+*.pyc
+__pycache__/
+
+# ----- OpenDesign 内部产物（权威源是 HTML；artifact 默不同步） -----
+design/opendesign/**/*.artifact.json
+**/*.artifact.json
+
+# ----- 打包中间产物（按需查看时再显式打开） -----
+packaging/**/dist/
+packaging/**/out/
+packaging/**/*.exe
+packaging/**/*.msi
+packaging/**/*.zip
+
+# ----- 锁文件体积大且少改业务逻辑时不必默认灌入（需要排依赖冲突时可 ! 取消） -----
+# pubspec.lock

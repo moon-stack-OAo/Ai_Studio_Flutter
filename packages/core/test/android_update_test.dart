@@ -51,6 +51,18 @@ void main() {
       final keys = androidUpdatePlatformCandidates(abiHint: 'armeabi-v7a');
       expect(keys.first, 'armeabi-v7a');
     });
+
+    test('abiHint x86_64 prefers emulator abi first', () {
+      final keys = androidUpdatePlatformCandidates(abiHint: 'x86_64');
+      expect(keys.first, 'x86_64');
+      expect(keys, contains('x86_64-linux-android'));
+    });
+
+    test('normalizeAndroidAbiHint maps common aliases', () {
+      expect(normalizeAndroidAbiHint('android_arm64'), 'arm64-v8a');
+      expect(normalizeAndroidAbiHint('armeabi-v7a'), 'armeabi-v7a');
+      expect(normalizeAndroidAbiHint('android_x64'), 'x86_64');
+    });
   });
 
   group('sha256 util', () {

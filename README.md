@@ -99,11 +99,11 @@ Windows 使用 `flutter_secure_storage` 时需 VS Build Tools 的 **C++ ATL**（
 
 ## CI / 发版
 
-| Workflow                        | 触发                     | 作用                                           |
-|---------------------------------|------------------------|----------------------------------------------|
-| `.github/workflows/ci.yml`      | PR / push 主分支          | `dart analyze` + 各包 / 应用测试                   |
-| `.github/workflows/build.yml`   | 手动 `workflow_dispatch` | Windows Inno 安装包 + Android APK（artifact，预览用） |
-| `.github/workflows/release.yml` | 推送 `v*` tag            | 独立构建 → draft Release → 双端产物 + 清单 → 正式发布      |
+| Workflow                        | 触发                     | 作用                                                               |
+|---------------------------------|------------------------|------------------------------------------------------------------|
+| `.github/workflows/ci.yml`      | PR / push 主分支          | `dart analyze` + 各包 / 应用测试                                       |
+| `.github/workflows/build.yml`   | 手动 `workflow_dispatch` | Windows Inno + macOS zip（aarch64/x64）+ Android APK（artifact，预览用） |
+| `.github/workflows/release.yml` | 推送 `v*` tag            | 独立构建 → draft Release → Win/macOS/Android 产物 + 清单 → 正式发布          |
 
 发版前配置 Secrets：`TAURI_SIGNING_PRIVATE_KEY`（必填）、`TAURI_SIGNING_PRIVATE_KEY_PASSWORD`；可选 `ANDROID_KEY_*`。清单与签名脚本在 `.github/scripts/`。
 

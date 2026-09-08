@@ -1,7 +1,7 @@
-# 推送 v* tag：构建 Windows Inno 安装包 + Android APK，生成清单并发布 GitHub Release
+# 推送 v* tag：构建 Windows Inno + macOS zip（按芯片）+ Android APK，生成清单并发布 GitHub Release
 # 示例：git tag v1.0.0 && git push origin v1.0.0
 #
-# 流程：先创建 draft → Windows / Android 并行上传 → 校验资产后正式发布
+# 流程：先创建 draft → Windows / macOS / Android 并行上传 → 汇总 latest.json → 校验资产后正式发布
 #
 # Secrets（本仓）：
 # - TAURI_SIGNING_PRIVATE_KEY / TAURI_SIGNING_PRIVATE_KEY_PASSWORD（桌面 updater 签名，复用现网密钥）
@@ -145,21 +145,6 @@ jobs:
           if (-not (Test-Path -LiteralPath $exe)) { throw "安装包不存在: $exe" }
           .\.github\scripts\sign-tauri.ps1 -File $exe
 
-      - name: Generate latest.json
-        shell: bash
-        env:
-          GITHUB_REPOSITORY: ${{ github.repository }}
-        run: |
-          VERSION="${{ needs.create-draft.outputs.version }}"
-          EXE="packaging/windows/output/AI.Studio_${VERSION}_x64-setup.exe"
-          node .github/scripts/generate-desktop-latest.mjs "${{ github.ref_name }}" --exe "$EXE" --sig "${EXE}.sig"
-          test -f latest.json
-          if grep -q 'api.github.com/.*/releases/assets/' latest.json; then
-            echo "::error::latest.json 含 API 资产 URL"
-            cat latest.json
-            exit 1
-          fi
-
       - name: Upload Windows assets to draft
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -168,7 +153,132 @@ jobs:
           TAG="${{ github.ref_name }}"
           VERSION="${{ needs.create-draft.outputs.version }}"
           EXE="packaging/windows/output/AI.Studio_${VERSION}_x64-setup.exe"
-          gh release upload "$TAG" "$EXE" "${EXE}.sig" latest.json --clobber
+          gh release upload "$TAG" "$EXE" "${EXE}.sig" --clobber
+
+  publish-macos:
+    needs: create-draft
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-latest
+            suffix: aarch64
+            label: Apple Silicon
+          - runner: macos-15-intel
+            suffix: x64
+            label: Intel
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Pub get
+        run: flutter pub get
+
+      - name: Build macOS release (${{ matrix.label }})
+        working-directory: apps/desktop_fluent
+        run: flutter build macos --release
+
+      - name: Package zip + sign
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="${{ needs.create-draft.outputs.version }}"
+          SUFFIX="${{ matrix.suffix }}"
+          APP_DIR="apps/desktop_fluent/build/macos/Build/Products/Release"
+          APP_PATH="$(find "$APP_DIR" -maxdepth 1 -name '*.app' -print | head -n 1)"
+          test -n "$APP_PATH"
+          test -d "$APP_PATH"
+          mkdir -p dist
+          OUT="dist/AI.Studio_${VERSION}_${SUFFIX}.zip"
+          ditto -c -k --sequesterRsrc --keepParent "$APP_PATH" "$OUT"
+          ls -lh "$OUT"
+          bash .github/scripts/sign-tauri.sh "$OUT"
+
+      - name: Upload macOS assets to draft
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          TAG="${{ github.ref_name }}"
+          VERSION="${{ needs.create-draft.outputs.version }}"
+          SUFFIX="${{ matrix.suffix }}"
+          ZIP="dist/AI.Studio_${VERSION}_${SUFFIX}.zip"
+          gh release upload "$TAG" "$ZIP" "${ZIP}.sig" --clobber
+
+  publish-desktop-manifest:
+    needs: [create-draft, publish-windows, publish-macos]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Download desktop assets from draft
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG="${{ github.ref_name }}"
+          VERSION="${{ needs.create-draft.outputs.version }}"
+          mkdir -p dist
+          gh release download "$TAG" \
+            --pattern "AI.Studio_${VERSION}_x64-setup.exe" \
+            --pattern "AI.Studio_${VERSION}_x64-setup.exe.sig" \
+            --pattern "AI.Studio_${VERSION}_aarch64.zip" \
+            --pattern "AI.Studio_${VERSION}_aarch64.zip.sig" \
+            --pattern "AI.Studio_${VERSION}_x64.zip" \
+            --pattern "AI.Studio_${VERSION}_x64.zip.sig" \
+            --dir dist
+          ls -lh dist/
+
+      - name: Generate latest.json
+        env:
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="${{ needs.create-draft.outputs.version }}"
+          node .github/scripts/generate-desktop-latest.mjs "${{ github.ref_name }}" \
+            --windows-exe "dist/AI.Studio_${VERSION}_x64-setup.exe" \
+            --windows-sig "dist/AI.Studio_${VERSION}_x64-setup.exe.sig" \
+            --darwin-arm64 "dist/AI.Studio_${VERSION}_aarch64.zip" \
+            --darwin-arm64-sig "dist/AI.Studio_${VERSION}_aarch64.zip.sig" \
+            --darwin-x64 "dist/AI.Studio_${VERSION}_x64.zip" \
+            --darwin-x64-sig "dist/AI.Studio_${VERSION}_x64.zip.sig"
+          test -f latest.json
+          if grep -q 'api.github.com/.*/releases/assets/' latest.json; then
+            echo "::error::latest.json 含 API 资产 URL"
+            cat latest.json
+            exit 1
+          fi
+          cat latest.json
+
+      - name: Upload latest.json to draft
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          gh release upload "${{ github.ref_name }}" latest.json --clobber
 
   publish-android:
     needs: create-draft
@@ -278,23 +388,32 @@ jobs:
           print('patched release signing')
           PY
 
-      - name: Build APK release
+      - name: Build APK release (split per ABI)
         working-directory: apps/mobile_material
-        run: flutter build apk --release
+        run: flutter build apk --release --split-per-abi
 
-      - name: Package APK + android-latest.json
+      - name: Package APKs + android-latest.json
         env:
           GITHUB_REPOSITORY: ${{ github.repository }}
         shell: bash
         run: |
           VERSION="${{ needs.create-draft.outputs.version }}"
           TAG="${{ github.ref_name }}"
-          SRC="apps/mobile_material/build/app/outputs/flutter-apk/app-release.apk"
-          test -f "$SRC"
+          OUT_DIR="apps/mobile_material/build/app/outputs/flutter-apk"
           mkdir -p dist
-          OUT="dist/AI.Studio_${VERSION}.apk"
-          cp -f "$SRC" "$OUT"
-          node .github/scripts/generate-android-latest.mjs "$TAG" "$OUT"
+          declare -A ABI_SRC=(
+            ["arm64-v8a"]="app-arm64-v8a-release.apk"
+            ["armeabi-v7a"]="app-armeabi-v7a-release.apk"
+            ["x86_64"]="app-x86_64-release.apk"
+          )
+          for abi in arm64-v8a armeabi-v7a x86_64; do
+            SRC="${OUT_DIR}/${ABI_SRC[$abi]}"
+            test -f "$SRC"
+            OUT="dist/AI.Studio_${VERSION}_${abi}.apk"
+            cp -f "$SRC" "$OUT"
+            ls -lh "$OUT"
+          done
+          node .github/scripts/generate-android-latest.mjs "$TAG" dist
           test -f android-latest.json
 
       - name: Upload Android assets to draft
@@ -305,12 +424,14 @@ jobs:
           TAG="${{ github.ref_name }}"
           VERSION="${{ needs.create-draft.outputs.version }}"
           gh release upload "$TAG" \
-            "dist/AI.Studio_${VERSION}.apk" \
+            "dist/AI.Studio_${VERSION}_arm64-v8a.apk" \
+            "dist/AI.Studio_${VERSION}_armeabi-v7a.apk" \
+            "dist/AI.Studio_${VERSION}_x86_64.apk" \
             android-latest.json \
             --clobber
 
   publish-release:
-    needs: [create-draft, publish-windows, publish-android]
+    needs: [create-draft, publish-windows, publish-macos, publish-desktop-manifest, publish-android]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -341,7 +462,13 @@ jobs:
 
           require '_x64-setup\.exe$' "Windows Inno installer"
           require '_x64-setup\.exe\.sig$' "Windows installer signature"
-          require '\.apk$' "Android APK"
+          require '_aarch64\.zip$' "macOS Apple Silicon zip"
+          require '_aarch64\.zip\.sig$' "macOS Apple Silicon signature"
+          require '_x64\.zip$' "macOS Intel zip"
+          require '_x64\.zip\.sig$' "macOS Intel signature"
+          require '_arm64-v8a\.apk$' "Android APK (arm64-v8a)"
+          require '_armeabi-v7a\.apk$' "Android APK (armeabi-v7a)"
+          require '_x86_64\.apk$' "Android APK (x86_64)"
           require '^latest\.json$' "Desktop updater latest.json"
           require '^android-latest\.json$' "Android updater android-latest.json"
 
