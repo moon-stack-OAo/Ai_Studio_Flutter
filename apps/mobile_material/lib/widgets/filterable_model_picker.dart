@@ -63,9 +63,16 @@ class _FilterableModelPickerState extends State<FilterableModelPicker> {
   }
 
   void _onControllerTick() {
-    final next = widget.controller.text.trim();
-    if (next == _tagText) return;
-    setState(() => _tagText = next);
+    // 外部改 controller.text（如切换提供商）时须同步 _query，
+    // 否则再次展开会按旧搜索词过滤。用户键入时 raw 即输入内容，
+    // 与 onChanged 写入一致，不会误覆盖搜索态。
+    final raw = widget.controller.text;
+    final next = raw.trim();
+    if (next == _tagText && raw == _query) return;
+    setState(() {
+      _tagText = next;
+      _query = raw;
+    });
   }
 
   void _onFocusChanged() {
