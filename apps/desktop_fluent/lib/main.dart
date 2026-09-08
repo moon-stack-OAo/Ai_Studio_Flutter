@@ -8,6 +8,7 @@ import 'package:flutter_native_splash/flutter_native_splash.dart';
 
 import 'app/theme_controller.dart';
 import 'shell/app_shell.dart';
+import 'shell/brand_intro_gate.dart';
 import 'shell/window_bootstrap.dart';
 import 'shell/window_close_coordinator.dart';
 import 'update/update_controller.dart';
@@ -127,6 +128,7 @@ class AiStudioApp extends StatelessWidget {
     this.navigatorKey,
     this.closeCoordinator,
     this.startupUpdateCheckDelay = const Duration(milliseconds: 800),
+    this.showBrandIntro = true,
   });
 
   final ThemeController themeController;
@@ -145,6 +147,7 @@ class AiStudioApp extends StatelessWidget {
   final GlobalKey<NavigatorState>? navigatorKey;
   final WindowCloseCoordinator? closeCoordinator;
   final Duration startupUpdateCheckDelay;
+  final bool showBrandIntro;
 
   @override
   Widget build(BuildContext context) {
@@ -153,6 +156,23 @@ class AiStudioApp extends StatelessWidget {
       builder: (context, _) {
         final scale = themeController.fontScale;
         final dens = themeController.density;
+        final shell = AppShell(
+          themeController: themeController,
+          providerRepository: providerRepository,
+          sessionRepository: sessionRepository,
+          imageSessionRepository: imageSessionRepository,
+          videoSessionRepository: videoSessionRepository,
+          chatDefaultsRepository: chatDefaultsRepository,
+          appLogRepository: appLogRepository,
+          dataBackupService: dataBackupService,
+          generation: generation,
+          chatClient: chatClient,
+          imageClient: imageClient,
+          videoClient: videoClient,
+          updateController: updateController,
+          closeCoordinator: closeCoordinator,
+          startupUpdateCheckDelay: startupUpdateCheckDelay,
+        );
         return FluentApp(
           title: 'AI Studio',
           navigatorKey: navigatorKey,
@@ -165,23 +185,7 @@ class AiStudioApp extends StatelessWidget {
             Locale('zh', 'CN'),
             Locale('en'),
           ],
-          home: AppShell(
-            themeController: themeController,
-            providerRepository: providerRepository,
-            sessionRepository: sessionRepository,
-            imageSessionRepository: imageSessionRepository,
-            videoSessionRepository: videoSessionRepository,
-            chatDefaultsRepository: chatDefaultsRepository,
-            appLogRepository: appLogRepository,
-            dataBackupService: dataBackupService,
-            generation: generation,
-            chatClient: chatClient,
-            imageClient: imageClient,
-            videoClient: videoClient,
-            updateController: updateController,
-            closeCoordinator: closeCoordinator,
-            startupUpdateCheckDelay: startupUpdateCheckDelay,
-          ),
+          home: showBrandIntro ? BrandIntroGate(child: shell) : shell,
         );
       },
     );

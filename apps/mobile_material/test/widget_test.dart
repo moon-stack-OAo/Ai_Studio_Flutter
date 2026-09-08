@@ -6,7 +6,9 @@ import 'package:mobile_material/main.dart';
 import 'package:mobile_material/pages/chat/session_list_page.dart';
 import 'package:mobile_material/pages/image/widgets/image_composer.dart';
 import 'package:mobile_material/pages/settings/settings_providers_tab.dart';
+import 'package:mobile_material/shell/brand_intro_gate.dart';
 import 'package:mobile_material/shell/update_banner.dart';
+import 'package:design_material/design_material.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
 void _noop() {}
@@ -80,6 +82,7 @@ Future<void> _pumpApp(
       dataBackupService: dataBackup,
       generation: GenerationRuntime(),
       startupUpdateCheckDelay: Duration.zero,
+      showBrandIntro: false,
     ),
   );
   await tester.pumpAndSettle();
@@ -490,5 +493,30 @@ void main() {
     await tester.pump();
     expect(find.text('再按一次退出'), findsOneWidget);
     expect(find.text('对话'), findsWidgets);
+  });
+
+  testWidgets('brand intro shows then dismisses on tap', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: buildMaterialLightTheme(),
+        home: BrandIntroGate(
+          displayDuration: const Duration(seconds: 30),
+          fadeDuration: const Duration(milliseconds: 50),
+          child: const Center(child: Text('shell-ready')),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.text('AI Studio'), findsOneWidget);
+    expect(find.text('对话 · 生图 · 生视频'), findsOneWidget);
+    expect(find.text('shell-ready'), findsOneWidget);
+
+    await tester.tap(find.text('AI Studio'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 60));
+
+    expect(find.text('对话 · 生图 · 生视频'), findsNothing);
+    expect(find.text('shell-ready'), findsOneWidget);
   });
 }

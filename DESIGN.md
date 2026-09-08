@@ -206,6 +206,8 @@ Flutter 落点：`packages/design_fluent` 与 `packages/design_material` 的 `Th
 
 ### 3.1 首次使用
 
+**冷启动视觉序**（与功能引导无关）：原生静图 splash（`flutter_native_splash`，对齐 canvas `#faf9f5` / `#0a0a0a`）→ Flutter 短品牌首屏（`SHELL-BRAND-INTRO`，可跳过，≠ onboarding）→ `AppShell`。每次冷启动都播；与下方「首次配置提供商」划清。
+
 1. 进入默认能力（建议：对话空态）
 2. CTA：**添加提供商 / 填写 API Key**
 3. 测试连接 → 拉取模型 → 可发送首条消息
@@ -336,9 +338,10 @@ Flutter 落点：`packages/design_fluent` 与 `packages/design_material` 的 `Th
 | `NAV-ROOT`    | 四能力入口切换    | `F-NavView`：左侧 NavigationView，**常驻 compact ~56px**（不可展开/折叠）；当前项高亮 | `M-NavBar`：底部 NavigationBar 四项；IME 可见时可隐藏 | 对话 / 生图 / 生视频 / 设置              |
 | `NAV-TITLE`   | 当前区标题与全局动作 | `F-TitleBar` + 可选窗口控点；内容区 `F-CommandBar`                          | `M-TopAppBar`：标题 + 溢出 `More`；可叠搜索         | 普通 / 选择模式（若有）                   |
 | `NAV-BACK`    | 关闭层、返回上一级  | 无系统返回；Esc 关 Dialog/Flyout；窗格关闭按钮                                  | `M-BackHost`：系统返回 / 边缘滑动先 pop 层；根页「再按一次退出」进最近任务（不清数据） | 无层 / 有层栈 / 待确认退出 |
-| `SHELL-SAFE`  | 避让系统 UI    | 窗口边距即可                                                            | `M-SafeArea`：顶底 inset；不遮挡 NavBar/Composer | 竖屏 / 横屏 / 刘海                    |
-| `SHELL-TRAY`  | 托盘与关闭（仅桌面） | `F-TrayMenu` + `F-CloseConfirm`（退出 / 托盘 / 询问）                     | —（不适用）                                    | Ask / Quit / Tray               |
-| `SHELL-THEME` | 亮暗切换入口     | `F-ThemeToggle`（设置内 + 可选 CommandBar）                              | `M-ThemePref`（设置内）                        | **light / dark only**（无 system） |
+| `SHELL-SAFE`         | 避让系统 UI    | 窗口边距即可                                                            | `M-SafeArea`：顶底 inset；不遮挡 NavBar/Composer | 竖屏 / 横屏 / 刘海                    |
+| `SHELL-TRAY`         | 托盘与关闭（仅桌面） | `F-TrayMenu` + `F-CloseConfirm`（退出 / 托盘 / 询问）                     | —（不适用）                                    | Ask / Quit / Tray               |
+| `SHELL-THEME`        | 亮暗切换入口     | `F-ThemeToggle`（设置内 + 可选 CommandBar）                              | `M-ThemePref`（设置内）                        | **light / dark only**（无 system） |
+| `SHELL-BRAND-INTRO`  | 冷启动品牌首屏   | `F-BrandIntro`（可跳过短覆层）                                           | `M-BrandIntro`（可跳过短覆层）                  | 原生静图→短品牌→壳                     |
 
 ---
 
@@ -528,7 +531,7 @@ Flutter 落点：`packages/design_fluent` 与 `packages/design_material` 的 `Th
 
 | 范围                              | 结论                                                                      |
 |---------------------------------|-------------------------------------------------------------------------|
-| §5.3–5.7 壳 / 对话 / 生图 / 生视频 / 设置 | 双端 ✅（Material `NAV-BACK`：`BackHost` / `M-BackHost` 统一托管全屏层）             |
+| §5.3–5.7 壳 / 对话 / 生图 / 生视频 / 设置 | 双端 ✅（含 `SHELL-BRAND-INTRO`；Material `NAV-BACK`：`BackHost` / `M-BackHost`） |
 | §5.8 反馈与系统力                     | ✅（含 Material `SYS-SHARE`）；`FB-UPDATE`：冷启动壳层横幅 + 关于页/托盘入口；「稍后」按版本记 prefs |
 | 易漏项                             | 耗时自适应、用户末条撤回、回合时间分隔、IME 藏底栏、关闭嵌关于、三模型可搜索、托盘三态均已落地                       |
 

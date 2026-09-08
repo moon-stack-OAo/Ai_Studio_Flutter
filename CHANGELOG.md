@@ -13,6 +13,7 @@
 
 ### Added
 
+- **开屏**：原生静图 splash 保持；双端冷启动短品牌首屏（可跳过，`F-BrandIntro` / `M-BrandIntro`）；OpenDesign 四套开屏静态参考
 - **移动（Material）**：根页系统返回 / 手势返回「再按一次退出」确认（约 2s），确认后进最近任务、不清本地数据；键盘可见时优先收起 IME
 
 ### Changed

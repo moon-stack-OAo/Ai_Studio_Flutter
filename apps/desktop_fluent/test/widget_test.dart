@@ -3,7 +3,9 @@ import 'package:desktop_fluent/app/theme_controller.dart';
 import 'package:desktop_fluent/main.dart';
 import 'package:desktop_fluent/pages/chat/widgets/composer.dart';
 import 'package:desktop_fluent/shell/app_section.dart';
+import 'package:desktop_fluent/shell/brand_intro_gate.dart';
 import 'package:desktop_fluent/shell/update_banner.dart';
+import 'package:design_fluent/design_fluent.dart';
 import 'package:desktop_fluent/widgets/session_list_pane.dart';
 import 'package:desktop_fluent/pages/settings/settings_about_page.dart';
 import 'package:desktop_fluent/pages/settings/settings_shell.dart';
@@ -94,6 +96,7 @@ void main() {
         ),
         generation: GenerationRuntime(),
         startupUpdateCheckDelay: Duration.zero,
+        showBrandIntro: false,
       ),
     );
     await tester.pumpAndSettle();
@@ -158,6 +161,7 @@ void main() {
         ),
         generation: GenerationRuntime(),
         startupUpdateCheckDelay: Duration.zero,
+        showBrandIntro: false,
       ),
     );
     await tester.pumpAndSettle();
@@ -226,6 +230,7 @@ void main() {
         ),
         generation: GenerationRuntime(),
         startupUpdateCheckDelay: Duration.zero,
+        showBrandIntro: false,
       ),
     );
     await tester.pumpAndSettle();
@@ -395,6 +400,7 @@ void main() {
         ),
         generation: GenerationRuntime(),
         startupUpdateCheckDelay: Duration.zero,
+        showBrandIntro: false,
       ),
     );
     await tester.pumpAndSettle();
@@ -610,5 +616,30 @@ void main() {
       find.bySemanticsLabel(RegExp(r'发现新版本 1\.2\.3')),
       findsWidgets,
     );
+  });
+
+  testWidgets('brand intro shows then dismisses on tap', (tester) async {
+    await tester.pumpWidget(
+      FluentApp(
+        theme: buildFluentLightTheme(),
+        home: BrandIntroGate(
+          displayDuration: const Duration(seconds: 30),
+          fadeDuration: const Duration(milliseconds: 50),
+          child: const Center(child: Text('shell-ready')),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.text('AI Studio'), findsOneWidget);
+    expect(find.text('对话 · 生图 · 生视频'), findsOneWidget);
+    expect(find.text('shell-ready'), findsOneWidget);
+
+    await tester.tap(find.text('AI Studio'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 60));
+
+    expect(find.text('对话 · 生图 · 生视频'), findsNothing);
+    expect(find.text('shell-ready'), findsOneWidget);
   });
 }

@@ -6,6 +6,7 @@ import 'package:flutter_native_splash/flutter_native_splash.dart';
 
 import 'app/theme_controller.dart';
 import 'shell/app_shell.dart';
+import 'shell/brand_intro_gate.dart';
 import 'update/mobile_update_controller.dart';
 
 Future<void> main() async {
@@ -105,6 +106,7 @@ class AiStudioApp extends StatelessWidget {
     this.videoClient,
     this.updateController,
     this.startupUpdateCheckDelay = const Duration(milliseconds: 800),
+    this.showBrandIntro = true,
   });
 
   final ThemeController themeController;
@@ -122,6 +124,7 @@ class AiStudioApp extends StatelessWidget {
   final OpenAiCompatibleVideoClient? videoClient;
   final MobileUpdateController? updateController;
   final Duration startupUpdateCheckDelay;
+  final bool showBrandIntro;
 
   @override
   Widget build(BuildContext context) {
@@ -130,6 +133,23 @@ class AiStudioApp extends StatelessWidget {
       builder: (context, _) {
         final scale = themeController.fontScale;
         final dens = themeController.density;
+        final shell = AppShell(
+          themeController: themeController,
+          providerRepository: providerRepository,
+          sessionRepository: sessionRepository,
+          imageSessionRepository: imageSessionRepository,
+          videoSessionRepository: videoSessionRepository,
+          chatDefaultsRepository: chatDefaultsRepository,
+          appearanceRepository: appearanceRepository,
+          appLogRepository: appLogRepository,
+          dataBackupService: dataBackupService,
+          generation: generation,
+          chatClient: chatClient,
+          imageClient: imageClient,
+          videoClient: videoClient,
+          updateController: updateController,
+          startupUpdateCheckDelay: startupUpdateCheckDelay,
+        );
         return MaterialApp(
           title: 'AI Studio',
           debugShowCheckedModeBanner: false,
@@ -146,23 +166,7 @@ class AiStudioApp extends StatelessWidget {
             GlobalWidgetsLocalizations.delegate,
             GlobalCupertinoLocalizations.delegate,
           ],
-          home: AppShell(
-            themeController: themeController,
-            providerRepository: providerRepository,
-            sessionRepository: sessionRepository,
-            imageSessionRepository: imageSessionRepository,
-            videoSessionRepository: videoSessionRepository,
-            chatDefaultsRepository: chatDefaultsRepository,
-            appearanceRepository: appearanceRepository,
-            appLogRepository: appLogRepository,
-            dataBackupService: dataBackupService,
-            generation: generation,
-            chatClient: chatClient,
-            imageClient: imageClient,
-            videoClient: videoClient,
-            updateController: updateController,
-            startupUpdateCheckDelay: startupUpdateCheckDelay,
-          ),
+          home: showBrandIntro ? BrandIntroGate(child: shell) : shell,
         );
       },
     );
