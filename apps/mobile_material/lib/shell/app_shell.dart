@@ -191,10 +191,14 @@ class _AppShellState extends State<AppShell> {
     final density =
         UiDensity.fromVisualDensity(Theme.of(context).visualDensity);
     final viewInsetsBottom = MediaQuery.viewInsetsOf(context).bottom;
+    // 全面屏手势条 / 三键导航：NavigationBar 自身 SafeArea 会叠在 theme height 之下，
+    // 槽位必须含 viewPadding，否则收起键盘时底栏提前弹出并可能裁切手势区。
+    final systemBottom = MediaQuery.viewPaddingOf(context).bottom;
     final navHeight = density.navigationBarHeight;
+    final navSlotHeight = navHeight + systemBottom;
     // 与键盘高度同相位收起，避免 bottomNavigationBar: null 瞬时跳变。
     final navVisibleFactor =
-        (1.0 - (viewInsetsBottom / navHeight).clamp(0.0, 1.0)).toDouble();
+        (1.0 - (viewInsetsBottom / navSlotHeight).clamp(0.0, 1.0)).toDouble();
     final selectedIndex = AppSection.values.indexOf(_section);
     final bannerVersion = _bannerVersion;
 
@@ -282,7 +286,7 @@ class _AppShellState extends State<AppShell> {
           child: IgnorePointer(
             ignoring: navVisibleFactor < 0.05,
             child: SizedBox(
-              height: navHeight,
+              height: navSlotHeight,
               child: NavigationBar(
                 selectedIndex: selectedIndex,
                 onDestinationSelected: _onDestinationSelected,

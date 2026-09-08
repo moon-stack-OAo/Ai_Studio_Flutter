@@ -52,10 +52,11 @@ class _ComposerState extends State<Composer> {
     final canType = widget.enabled && !widget.streaming;
     final isDark = tokens.brightness == Brightness.dark;
     final viewInsetsBottom = MediaQuery.viewInsetsOf(context).bottom;
-    final bottomSafe = MediaQuery.paddingOf(context).bottom;
+    // IME 升起时 padding.bottom 常被清零，用 viewPadding 保留全面屏底 inset。
+    final bottomSafe = MediaQuery.viewPaddingOf(context).bottom;
     final basePad = density.composerPadding;
+    // Composer 在 NavBar 之上时只需少量余量；Nav 收起后仍跟键盘同相位淡出。
     final safeExtra = bottomSafe * 0.15;
-    // 与键盘同相位淡出底安全区余量，避免布尔硬切。
     final safeFade =
         (1.0 - (viewInsetsBottom / (safeExtra + 1.0)).clamp(0.0, 1.0))
             .toDouble();
