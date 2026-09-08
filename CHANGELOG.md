@@ -13,8 +13,7 @@
 
 ### Added
 
-- **开屏**：原生静图 splash 保持；双端冷启动短品牌首屏（可跳过，`F-BrandIntro` / `M-BrandIntro`）；OpenDesign 四套开屏静态参考
-- **移动（Material）**：根页系统返回 / 手势返回「再按一次退出」确认（约 2s），确认后进最近任务、不清本地数据；键盘可见时优先收起 IME
+（暂无）
 
 ### Changed
 
@@ -47,7 +46,8 @@
 - **生视频**：文生 / 图生、任务进度与恢复、播放与另存；任务队列按状态筛选（全部 / 生成中 / 待恢复 / 已完成 / 失败 / 已放弃）；移动端分享
 - **设置**：提供商 / 对话默认 / 外观 / 日志 / 关于五分类；日志可记录生视频 `waitJob` 轮询明细（来源 `video`）
 - **桌面（Fluent）**：NavigationView 四入口、会话列表窗格、自绘无边框标题栏、系统托盘、关闭三态（Ask · Quit · Tray）、冷启动更新横幅、关于页检查更新
-- **移动（Material）**：NavigationBar 四入口、会话列表页 + 全屏二级、IME 时隐藏底栏、返回托管（`BackHost`）、冷启动更新横幅；Android 侧载更新；iOS 非 Store 分发说明
+- **移动（Material）**：NavigationBar 四入口、会话列表页 + 全屏二级、IME 时隐藏底栏、返回托管（`BackHost`）、根页「再按一次退出」、冷启动更新横幅；Android 侧载更新；iOS 非 Store 分发说明
+- **开屏**：原生静图 splash；双端冷启动短品牌首屏（可跳过，`F-BrandIntro` / `M-BrandIntro`）；OpenDesign 四套开屏静态参考
 - **无障碍与抛光（P3）**：双端空态插画与短动效、scrim 与密度间距；Semantics / tooltip / 焦点 / liveRegion；移动触控目标 ≥48；WCAG 2.2 AA 自证（非第三方认证）
 
 #### 工程与架构
@@ -92,6 +92,8 @@
 - 生视频：中转提供商类型为「OpenAI 兼容」但模型为 `grok-imagine-video` 时，自动走 xAI `/videos/generations` 创建协议
 - 生视频：创建/轮询响应误标 `completed`/`success` 却无 `video.url` 时继续轮询；中转无直链时回退鉴权拉 `/content`，避免「未返回可播放地址」
 - 桌面设置「关于与更新」：默认 1280×820 下收紧间距并合并多余说明，避免右侧常显滚动条
+- 移动：IME 底栏收起计入全面屏系统 inset；提供商编辑改为 BottomSheet；生图/生视频参数面板竖向占用压缩
+- 桌面：直接退出先藏窗再 abort/销毁，改善关闭体感；去掉切页淡入避免叠动画感
 
 ### Security
 
