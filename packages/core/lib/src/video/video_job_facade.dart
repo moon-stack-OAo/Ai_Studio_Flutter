@@ -357,7 +357,7 @@ class VideoJobFacade {
       if (!local.startsWith('memory://')) {
         try {
           final f = File(local);
-          if (await f.exists()) return f.readAsBytes();
+          if (await f.exists()) return await f.readAsBytes();
         } catch (_) {}
       }
     }

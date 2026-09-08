@@ -118,7 +118,6 @@ void main() {
   test('busy 门闩：其它会话占用时 generate 直接返回', () async {
     final mock = MockClient((request) async {
       fail('不应发请求');
-      return http.Response('{}', 500);
     });
     final facade = facadeWith(mock);
     generation.begin('other-busy', () {});
@@ -202,7 +201,6 @@ void main() {
         );
       }
       fail('应走 edits 而非 generations');
-      return http.Response('{}', 500);
     });
 
     final facade = facadeWith(mock);
