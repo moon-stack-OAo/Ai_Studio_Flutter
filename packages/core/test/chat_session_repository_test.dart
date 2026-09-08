@@ -131,11 +131,13 @@ void main() {
     var cancelled = 0;
     final t1 = rt.begin('s1', () => cancelled++);
     expect(rt.busy, isTrue);
+    // 第二次 begin 会先 abort 第一次。
     final t2 = rt.begin('s2', () => cancelled++);
+    expect(cancelled, 1);
     rt.end('s1', t1);
     expect(rt.sessionId, 's2');
     rt.abort('s2');
-    expect(cancelled, 1);
+    expect(cancelled, 2);
     rt.end('s2', t2);
     expect(rt.busy, isFalse);
   });

@@ -8,6 +8,7 @@ import '../chat/chat_errors.dart';
 import '../openai/openai_urls.dart';
 import '../provider/provider_repository.dart';
 import '../provider/provider_type.dart';
+import '../security/safe_http_client.dart';
 import '../security/url_safety.dart';
 import 'image_models.dart';
 
@@ -20,7 +21,7 @@ class OpenAiCompatibleImageClient {
     http.Client? client,
     this.timeout = defaultImageTimeout,
   })  : _ownedClient = client == null,
-        _client = client ?? http.Client();
+        _client = client ?? createSafeHttpClient();
 
   final http.Client _client;
   final bool _ownedClient;

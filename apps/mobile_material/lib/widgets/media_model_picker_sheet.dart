@@ -4,8 +4,6 @@ import 'package:core/core.dart';
 import 'package:design_material/design_material.dart';
 import 'package:flutter/material.dart';
 
-import 'provider_models_cache.dart';
-
 /// 生图 / 生视频页内模型选择 BottomSheet。
 Future<void> showMediaModelPickerSheet({
   required BuildContext context,

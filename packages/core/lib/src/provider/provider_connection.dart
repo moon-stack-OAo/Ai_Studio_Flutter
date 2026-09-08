@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
+import '../security/safe_http_client.dart';
 import '../security/url_safety.dart';
 import 'provider_config.dart';
 
@@ -39,7 +40,7 @@ class OpenAiCompatibleConnectionTester implements ProviderConnectionTester {
   OpenAiCompatibleConnectionTester({
     http.Client? client,
     this.timeout = const Duration(seconds: 20),
-  }) : _client = client ?? http.Client();
+  }) : _client = client ?? createSafeHttpClient();
 
   final http.Client _client;
   final Duration timeout;

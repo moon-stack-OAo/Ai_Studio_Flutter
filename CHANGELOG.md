@@ -13,7 +13,8 @@
 
 ### Added
 
-（暂无）
+- **ImageSessionFacade 最小下沉**：generate / stop、参数状态 / `canGenerate` / `ProviderModelsCache` / `resolveImageBytes` 进 `packages/core`；双端 `ImageController` 仅保留平台参考图 IO、banner 与 session CRUD
+- **VideoJobFacade 分阶段下沉完成（Step1–3）**：generate / stop / resume* / abandon、参数与能力探测 / `canGenerate` / `ProviderModelsCache`、`reloadVideo` / `isReloading` / `resolveVideoBytes` 均在 `packages/core`；双端 `VideoController` 仅保留平台 IO、banner 与转发
 
 ### Changed
 
@@ -27,7 +28,7 @@
 
 ## [1.0.0] — 2026-09-07
 
-首个可交付基线：双端独立 UI + 共享 `core`，覆盖对话 / 生图 / 生视频 / 设置与更新主路径（对应 `DESIGN.md` P0–P2；P3 抛光含 a11y 全路径自证）。
+首个正式可交付版本：双端独立 UI + 共享 `packages/core`，覆盖对话 / 生图 / 生视频 / 设置与更新主路径。
 
 ### 发版摘要
 
@@ -39,54 +40,49 @@
 
 ### Added
 
-#### 用户可见
+#### 用户功能
 
-- 对话：SSE 流式、停止 / 撤回、Markdown、会话参数覆盖、可搜索模型选择
-- 生图：文生 / 图生、时间线、灯箱、另存；移动端相册与系统分享
-- 生视频：任务进度、恢复、播放与另存；移动端分享
-- 生视频：任务队列支持按状态筛选（全部 / 生成中 / 待恢复 / 已完成 / 失败 / 已放弃），双端一致
-- 设置五分类：提供商 / 对话默认 / 外观 / 日志 / 关于
-- 设置日志：生视频 `waitJob` 每轮写入 status / progress / URL（来源 `video`），便于排查轮询
-- 桌面：托盘、关闭三态（Ask · Quit · Tray）、无边框标题栏、冷启动更新横幅
-- 移动：底栏四入口、IME 时隐藏底栏、返回托管（`BackHost`）、冷启动更新横幅
-- Android 侧载更新；iOS 非 Store 分发说明
+- **对话**：OpenAI 兼容 SSE 流式、停止 / 撤回、Markdown、会话参数覆盖、可搜索模型选择
+- **生图**：文生 / 图生、时间线、灯箱、另存；移动端相册与系统分享（`share_plus`）
+- **生视频**：文生 / 图生、任务进度与恢复、播放与另存；任务队列按状态筛选（全部 / 生成中 / 待恢复 / 已完成 / 失败 / 已放弃）；移动端分享
+- **设置**：提供商 / 对话默认 / 外观 / 日志 / 关于五分类；日志可记录生视频 `waitJob` 轮询明细（来源 `video`）
+- **桌面（Fluent）**：NavigationView 四入口、会话列表窗格、自绘无边框标题栏、系统托盘、关闭三态（Ask · Quit · Tray）、冷启动更新横幅、关于页检查更新
+- **移动（Material）**：NavigationBar 四入口、会话列表页 + 全屏二级、IME 时隐藏底栏、返回托管（`BackHost`）、冷启动更新横幅；Android 侧载更新；iOS 非 Store 分发说明
+- **无障碍与抛光（P3）**：双端空态插画与短动效、scrim 与密度间距；Semantics / tooltip / 焦点 / liveRegion；移动触控目标 ≥48；WCAG 2.2 AA 自证（非第三方认证）
 
-#### 工程与设计系统
+#### 工程与架构
 
+- 交付分期对照 `DESIGN.md`：P0–P2 主路径已满足；P3 抛光已落地（含 a11y 全路径自证，非第三方 WCAG 认证）
 - Dart workspace：`apps/desktop_fluent`、`apps/mobile_material`、`packages/core`、`packages/design_fluent`、`packages/design_material`
 - Fluent / Material 分栈 token 与 Theme（亮色 Claude 向、暗色 Cursor 向；字号五档；密度 comfortable / compact）
-- OpenDesign 双系统原型副本（`design/opendesign/`）与品牌图标源（`design/brand/`）
+- OpenDesign 双系统原型（`design/opendesign/`）与品牌图标源（`design/brand/`）
 - 产品规格 `DESIGN.md`、安全说明 `SECURITY.md`、助手约定 `AGENTS.md`
-- **CI / 发版**：`.github/workflows`（`ci` / `build` / `release`）、Inno 脚本 `packaging/windows/ai-studio.iss`、清单与签名脚本（`.github/scripts/`）
+- **CI / 发版**：`.github/workflows`（`ci` / `build` / `release`）、Windows Inno 脚本 `packaging/windows/ai-studio.iss`、清单与签名脚本（`.github/scripts/`）
+- `ProviderModelsCache`、生成门闩（`canSend` / `canGenerate*`）与 `ChatSessionFacade` 下沉 `packages/core`；双端 chat / image / video controller 调用 core
+- **VideoJobFacade**：generate / stop / resume* / abandon、参数与能力、`reloadVideo` 下沉 `packages/core`（见 Unreleased Step1–3）
 
-#### packages/core（业务层）
+#### packages/core
 
-- **对话**：OpenAI 兼容 SSE、会话持久化、上下文裁剪、`GenerationRuntime`
-- **生图 / 生视频**：客户端、会话与资产落盘、pending 恢复、图片压缩
-- **提供商**：CRUD、预设、三模型分类、连通性探测、密钥 `flutter_secure_storage`（含旧明文迁移）
+- **对话**：OpenAI 兼容 SSE、会话持久化、上下文裁剪、`GenerationRuntime`、`ChatSessionFacade`、生成门闩
+- **生图 / 生视频**：客户端、会话与资产落盘、pending 恢复、图片压缩；`VideoJobFacade`（generate / stop / resume / abandon / reload）
+- **提供商**：CRUD、预设、三模型分类、连通性探测、`ProviderModelsCache`、密钥 `flutter_secure_storage`（含旧明文迁移）
 - **设置**：外观、对话默认、备份导入导出与清理、存储占用估算
 - **更新**：桌面清单 / minisign；Android 侧载清单 / sha256；更新横幅偏好
 - **安全 / 日志 / 提示词**：`url_safety`、应用日志、维度构建与 LLM 润色
-- 核心单测覆盖 SSE、会话、安全存储、更新验签、备份、URL 安全等
-
-#### 桌面 Fluent（实现要点）
-
-- NavigationView 四入口 + 自绘标题栏；会话列表窗格；关于页检查更新
-- P3：空态插画与文案、短动效、scrim 与密度间距；**a11y 全路径**（Semantics/tooltip/焦点/liveRegion；WCAG 2.2 AA 自证）
-
-#### 移动 Material（实现要点）
-
-- NavigationBar 四入口；会话列表页 + 全屏二级；`share_plus` 系统分享
-- P3：同桌面语义的空态 / 动效；**a11y 全路径**（触控 ≥48、会话行 Semantics、liveRegion；WCAG 2.2 AA 自证，非第三方认证）
+- 核心单测覆盖 SSE、会话、安全存储、更新验签、备份、URL 安全、生成门闩与模型缓存等
 
 ### Changed
 
 - 默认更新清单 URL 指向本仓 `moon-stack-OAo/Ai_Studio_Flutter` Releases
 - 安装后显示名统一为 **AI Studio**（Windows 资源信息、macOS `PRODUCT_NAME`、Android `label`、iOS `CFBundleDisplayName`）；exe / `applicationId` / Dart 包名未改
-- Windows Inno 安装向导支持 **English / 简体中文**；CI / release 钉 Inno Setup **6.7.3**（GitHub Releases）
+- Windows Inno 安装向导支持 **English / 简体中文**；CI / release 钉 Inno Setup **6.7.3**（GitHub Releases `is-6_7_3`；旧 `files.jrsoftware.org` 直链已 404）
 - 关于页文案产品化（弱化「本仓 / latest.json / minisign / sha256」等术语；桌面注明中英安装向导）
 - CI：release / build 增加 Gradle 与 Inno Setup 安装包缓存，缩短重复构建时间
-- CI：Inno Setup 下载源改为 GitHub Releases（`is-6_7_3`）；`files.jrsoftware.org` 旧直链已 404
+
+### Removed
+
+- 删除未使用 Placeholder 页（桌面 `placeholder_page` / `settings_placeholder_page`，移动 `placeholder_page`）
+- 移除移动端未使用的 `cupertino_icons`；桌面保留 `uses-material-design`（`flutter_markdown` 等依赖需 Material Icons）
 
 ### Fixed
 
@@ -96,12 +92,14 @@
 
 ### Security
 
-- API Key 与元数据分离；日志脱敏；备份默认不含密钥
-- 更新包失败安全：缺签名 / 验签失败删除临时文件并阻断安装
+- API Key 与元数据分离；密钥存 OS 凭据库（`flutter_secure_storage`）；备份默认不含密钥
+- 日志脱敏加强（`applySecretRedaction`）：query/fragment 的 `key`/`token`/`api_key`/`access_token`/`secret` 等、`Authorization` header、常见厂商 token 前缀；`sanitizeLogMessage` 与 `sanitizeErrorText` 共用同一套规则
+- 更新包失败安全：缺签名 / 验签失败删除临时文件并阻断安装（桌面 minisign；Android sha256）
 - 出站 URL 硬拦云元数据与明显 SSRF 靶点（详见 `SECURITY.md`）
 
-### Notes
+### Notes / Known Issues
 
 - 不上架应用商店；Linux 桌面不在首期验收范围
 - Release 需配置 Secrets：`TAURI_SIGNING_PRIVATE_KEY`（必填）；可选 `ANDROID_KEY_*`
+- Android 走侧载清单更新；iOS 仅提供非 Store 分发说明（无应用内自动安装更新）
 - `docs/architecture.md` 部分描述可能滞后于实现，以代码与本 Changelog 为准

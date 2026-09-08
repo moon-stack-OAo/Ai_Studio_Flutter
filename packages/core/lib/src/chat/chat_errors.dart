@@ -1,4 +1,6 @@
-/// 对话 / SSE 相关错误与文案（中文、脱敏，禁止泄露 apiKey）。
+import '../util/secret_sanitize.dart';
+
+// 对话 / SSE 相关错误与文案（中文、脱敏，禁止泄露 apiKey）。
 
 const int _maxErrorTextLen = 240;
 
@@ -54,28 +56,7 @@ String sanitizeErrorText(String? text, [String fallback = '']) {
       RegExp(r'Bearer\s+sk-|x-api-key', caseSensitive: false).hasMatch(s)) {
     return fallback.isNotEmpty ? fallback : '请求失败，请稍后重试';
   }
-  s = s
-      .replaceAllMapped(
-        RegExp(r'Bearer\s+[A-Za-z0-9._\-]+', caseSensitive: false),
-        (_) => 'Bearer ***',
-      )
-      .replaceAllMapped(
-        RegExp(r'(api[_-]?key["'']?\s*[:=]\s*["'']?)[A-Za-z0-9._\-]+',
-            caseSensitive: false),
-        (m) => '${m[1]}***',
-      )
-      .replaceAllMapped(
-        RegExp(r'\bsk-[A-Za-z0-9_-]{10,}\b'),
-        (_) => '***',
-      )
-      .replaceAllMapped(
-        RegExp(r'\bxai-[A-Za-z0-9_-]{10,}\b'),
-        (_) => '***',
-      )
-      .replaceAllMapped(
-        RegExp(r'\bgsk_[A-Za-z0-9_-]{10,}\b'),
-        (_) => '***',
-      );
+  s = applySecretRedaction(s);
   if (s.length > _maxErrorTextLen) {
     s = '${s.substring(0, _maxErrorTextLen)}…';
   }

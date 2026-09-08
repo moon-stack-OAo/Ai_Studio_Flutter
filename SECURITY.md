@@ -85,6 +85,11 @@
 - 运行日志、错误文案、导出预览、调试打印均须脱敏。
 - 清日志（`AppLogRepository.clear`）不恢复密钥；清密钥与清日志独立。
 
-## 待补
+## Redirect 二次校验
 
-- Redirect 目标二次校验（当前仅校验初始请求 URL，与现网一致）
+实现：`packages/core/lib/src/security/safe_http_client.dart`（`createSafeHttpClient` / `SafeRedirectHttpClient`）。
+
+- 默认出站 Client（更新下载、对话 / 生图 / 生视频、连通性探测等）关闭底层自动跟随，改为手动跟随 30x。
+- **每一跳** Location 解析后再次走 `assertSafeHttpUrl`（与初始 URL 同一套硬拦）；不安全则中止并抛 `UrlSafetyException`。
+- 跟随规则对齐 `dart:io`：GET/HEAD 跟 301/302/303/307/308；POST 仅跟 303（下一跳改 GET）。
+- 自动化：`packages/core/test/safe_http_client_test.dart`。

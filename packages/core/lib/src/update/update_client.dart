@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 
+import '../security/safe_http_client.dart';
 import '../security/url_safety.dart';
 import 'minisign_verify.dart';
 import 'update_models.dart';
@@ -20,7 +21,7 @@ class UpdateClient {
     this.minisignPubkey = kDesktopUpdaterMinisignPubkey,
     this.requireSignature = true,
   })  : _ownedClient = client == null,
-        _client = client ?? http.Client();
+        _client = client ?? createSafeHttpClient();
 
   /// 测试可注入下载目录；生产为 null 时用系统临时目录。
   final Directory? downloadDirectory;

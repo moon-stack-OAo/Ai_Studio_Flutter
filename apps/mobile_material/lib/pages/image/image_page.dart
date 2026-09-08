@@ -4,7 +4,6 @@ import 'dart:typed_data';
 import 'package:core/core.dart';
 import 'package:design_material/design_material.dart';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 
 import '../../platform/gallery_saver.dart';
@@ -267,8 +266,9 @@ class _ImagePageState extends State<ImagePage> {
         if (!RegExp(r'^https?://', caseSensitive: false).hasMatch(url)) {
           return GallerySaveResult.failure('无效的图片地址');
         }
+        final client = createSafeHttpClient();
         try {
-          final res = await http.get(Uri.parse(url));
+          final res = await client.get(Uri.parse(url));
           if (res.statusCode < 200 || res.statusCode >= 300) {
             return GallerySaveResult.failure('下载图片失败：HTTP ${res.statusCode}');
           }
@@ -292,6 +292,8 @@ class _ImagePageState extends State<ImagePage> {
           }
         } catch (e) {
           return GallerySaveResult.failure('下载图片失败：$e');
+        } finally {
+          client.close();
         }
     }
   }

@@ -1,6 +1,9 @@
 import 'package:flutter/foundation.dart';
 
 /// 轻量生成运行时：begin / abort / end，防止旧 finally 清掉新任务。
+///
+/// 全局单例跨对话 / 生图 / 生视频共用；[begin] 若已有进行中任务，
+/// 会先调用旧 [cancelFn] 再接管，避免旧请求无法 abort。
 class GenerationRuntime extends ChangeNotifier {
   String? _sessionId;
   Object? _token;
@@ -14,12 +17,17 @@ class GenerationRuntime extends ChangeNotifier {
       _sessionId != null && _sessionId == activeId;
 
   /// 开始一路生成；[cancelFn] 用于 abort（如 close http.Client）。
-  /// 返回本任务 token，供 [end] 校验。
+  ///
+  /// 若当前已 busy，先调用旧 cancel（此时新 token 已安装，旧 [end]
+  /// 不会清掉新任务），再接管。返回本任务 token，供 [end] 校验。
   Object begin(String sessionId, VoidCallback cancelFn) {
+    final previousCancel = _cancelFn;
     final token = Object();
     _sessionId = sessionId;
     _token = token;
     _cancelFn = cancelFn;
+    // 先安装新 token，再 abort 旧任务，避免旧 finally 误清新状态。
+    previousCancel?.call();
     notifyListeners();
     return token;
   }

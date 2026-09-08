@@ -143,7 +143,7 @@ class _PromptAssistPanelState extends State<PromptAssistPanel> {
     final defaults =
         widget.chatDefaultsRepository?.defaults ?? ChatDefaults.recommended;
     final client = widget.chatClient ?? OpenAiCompatibleChatClient();
-    final ownedHttp = http.Client();
+    final ownedHttp = createSafeHttpClient();
     _enhanceHttp = ownedHttp;
 
     setState(() {

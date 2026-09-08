@@ -7,7 +7,6 @@ import 'package:design_fluent/design_fluent.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 
 import '../../../widgets/media_model_combo.dart';
-import '../../../widgets/provider_models_cache.dart';
 
 /// F-VideoParams + F-PromptBox + F-VideoPrimary（右侧参数窗格，宽 300）。
 class VideoComposer extends StatefulWidget {

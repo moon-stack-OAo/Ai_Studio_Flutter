@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 
+import '../util/secret_sanitize.dart';
 import 'app_log_entry.dart';
 import 'app_log_level.dart';
 import 'app_log_storage.dart';
@@ -131,32 +132,11 @@ class AppLogRepository extends ChangeNotifier {
   }
 
   /// 脱敏密钥并截断至 [AppLogEntry.maxMessageLength]。
-  /// 思路对齐 [sanitizeErrorText]，但保留消息主体、放宽长度。
+  /// 与 [sanitizeErrorText] 共用 [applySecretRedaction]，保留消息主体、放宽长度。
   static String sanitizeLogMessage(String? text) {
     var s = (text ?? '').trim();
     if (s.isEmpty) return '';
-    s = s
-        .replaceAllMapped(
-          RegExp(r'Bearer\s+[A-Za-z0-9._\-]+', caseSensitive: false),
-          (_) => 'Bearer ***',
-        )
-        .replaceAllMapped(
-          RegExp(r'(api[_-]?key["'']?\s*[:=]\s*["'']?)[A-Za-z0-9._\-]+',
-              caseSensitive: false),
-          (m) => '${m[1]}***',
-        )
-        .replaceAllMapped(
-          RegExp(r'\bsk-[A-Za-z0-9_-]{10,}\b'),
-          (_) => '***',
-        )
-        .replaceAllMapped(
-          RegExp(r'\bxai-[A-Za-z0-9_-]{10,}\b'),
-          (_) => '***',
-        )
-        .replaceAllMapped(
-          RegExp(r'\bgsk_[A-Za-z0-9_-]{10,}\b'),
-          (_) => '***',
-        );
+    s = applySecretRedaction(s);
     if (s.length > AppLogEntry.maxMessageLength) {
       s = '${s.substring(0, AppLogEntry.maxMessageLength)}…';
     }

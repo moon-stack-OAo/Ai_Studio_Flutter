@@ -1,9 +1,12 @@
 import 'dart:async';
 
-import 'package:core/core.dart';
 import 'package:flutter/foundation.dart';
 
-/// 提供商模型列表 TTL 缓存（生图 / 生视频共用）。
+import 'provider_config.dart';
+import 'provider_connection.dart';
+import 'provider_repository.dart';
+
+/// 提供商模型列表 TTL 缓存（对话 / 生图 / 生视频共用）。
 ///
 /// 自身为 [ChangeNotifier]；可选再回调宿主 [onChanged]（供页面 Listenable 合并）。
 class ProviderModelsCache extends ChangeNotifier {

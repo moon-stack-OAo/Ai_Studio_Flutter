@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 
 import '../chat/chat_errors.dart';
 import '../provider/provider_repository.dart';
+import '../security/safe_http_client.dart';
 import '../security/url_safety.dart';
 import 'openai_urls.dart';
 import 'sse_parser.dart';
@@ -21,7 +22,7 @@ class OpenAiCompatibleChatClient {
     http.Client? client,
     this.timeout = defaultChatTimeout,
   })  : _ownedClient = client == null,
-        _client = client ?? http.Client();
+        _client = client ?? createSafeHttpClient();
 
   final http.Client _client;
   final bool _ownedClient;

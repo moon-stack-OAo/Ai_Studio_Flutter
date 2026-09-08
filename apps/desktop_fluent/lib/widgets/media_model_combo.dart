@@ -4,8 +4,6 @@ import 'package:core/core.dart';
 import 'package:design_fluent/design_fluent.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 
-import 'provider_models_cache.dart';
-
 /// 生图 / 生视频侧栏模型下拉（可搜索 + 刷新）。
 ///
 /// 交互对齐 [ChatModelCombo]：Flyout + TTL 缓存，打开不阻塞 UI。

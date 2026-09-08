@@ -13,6 +13,7 @@ import '../provider/agnes_profile.dart';
 import '../provider/provider_repository.dart';
 import '../provider/provider_type.dart';
 import '../provider/xai_profile.dart';
+import '../security/safe_http_client.dart';
 import '../security/url_safety.dart';
 import '../util/image_compress.dart';
 import 'video_asset_store.dart';
@@ -52,7 +53,7 @@ class OpenAiCompatibleVideoClient {
     this.downloadTimeout = defaultVideoDownloadTimeout,
     this.logs,
   })  : _ownedClient = client == null,
-        _client = client ?? http.Client();
+        _client = client ?? createSafeHttpClient();
 
   final http.Client _client;
   final bool _ownedClient;

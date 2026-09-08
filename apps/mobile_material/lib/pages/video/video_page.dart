@@ -3,7 +3,6 @@ import 'dart:io';
 import 'package:core/core.dart';
 import 'package:design_material/design_material.dart';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
 
 import '../../platform/gallery_saver.dart';
 import '../../platform/share_helper.dart';
@@ -254,8 +253,9 @@ class _VideoPageState extends State<VideoPage> {
 
     final remote = (item.remoteVideoUrl ?? item.videoUrl ?? '').trim();
     if (RegExp(r'^https?://', caseSensitive: false).hasMatch(remote)) {
+      final client = createSafeHttpClient();
       try {
-        final res = await http.get(Uri.parse(remote));
+        final res = await client.get(Uri.parse(remote));
         if (res.statusCode < 200 || res.statusCode >= 300) {
           return GallerySaveResult.failure(
             '下载视频失败：HTTP ${res.statusCode}',
@@ -267,6 +267,8 @@ class _VideoPageState extends State<VideoPage> {
         return await _gallerySaver.saveVideoBytes(res.bodyBytes);
       } catch (e) {
         return GallerySaveResult.failure('下载视频失败：$e');
+      } finally {
+        client.close();
       }
     }
 

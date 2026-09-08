@@ -117,6 +117,68 @@ void main() {
     expect(e3.message.endsWith('…'), isTrue);
   });
 
+  test('sanitizeLogMessage covers query / Authorization / vendor tokens', () {
+    expect(
+      AppLogRepository.sanitizeLogMessage(
+        'GET https://api.example/v1?api_key=abc123&token=tok-xyz#secret=frag',
+      ),
+      allOf([
+        isNot(contains('abc123')),
+        isNot(contains('tok-xyz')),
+        isNot(contains('frag')),
+        contains('api_key=***'),
+        contains('token=***'),
+        contains('secret=***'),
+      ]),
+    );
+    expect(
+      AppLogRepository.sanitizeLogMessage(
+        'x-api-key: live_abcdef012345 access_token=at_secrettoken99',
+      ),
+      allOf([
+        isNot(contains('live_abcdef012345')),
+        isNot(contains('at_secrettoken99')),
+        contains('x-api-key: ***'),
+        contains('access_token=***'),
+      ]),
+    );
+    expect(
+      AppLogRepository.sanitizeLogMessage(
+        'Authorization: Basic dXNlcjpwYXNz Bearer standalone_token_value',
+      ),
+      allOf([
+        isNot(contains('dXNlcjpwYXNz')),
+        isNot(contains('standalone_token_value')),
+        contains('Authorization: Basic ***'),
+        contains('Bearer ***'),
+      ]),
+    );
+    expect(
+      AppLogRepository.sanitizeLogMessage(
+        'keys gsk_abcdefghijklmnopqrst xai-abcdefghij AIzaSyA-abcdefghijklmnopqrstuv',
+      ),
+      allOf([
+        isNot(contains('gsk_abcdefghijklmnopqrst')),
+        isNot(contains('xai-abcdefghij')),
+        isNot(contains('AIzaSyA-abcdefghijklmnopqrstuv')),
+      ]),
+    );
+  });
+
+  test('sanitizeLogMessage keeps ordinary prose', () {
+    const prose =
+        'Failed to fetch keyboard layout; token economy note; the key to retry';
+    expect(AppLogRepository.sanitizeLogMessage(prose), prose);
+    expect(
+      AppLogRepository.sanitizeLogMessage('poll status=ok progress=40'),
+      'poll status=ok progress=40',
+    );
+    expect(
+      applySecretRedaction('https://cdn.example/v.mp4?sig=abc&expiry=1'),
+      'https://cdn.example/v.mp4?sig=abc&expiry=1',
+    );
+  });
+
   test('MemoryAppLogStorage roundtrip via repository', () async {
     final storage = MemoryAppLogStorage();
     final repo = AppLogRepository(storage: storage);

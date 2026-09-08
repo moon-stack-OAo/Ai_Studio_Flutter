@@ -125,7 +125,7 @@ class _PromptBuilderPanelState extends State<PromptBuilderPanel> {
     final defaults =
         widget.chatDefaultsRepository?.defaults ?? ChatDefaults.recommended;
     final client = widget.chatClient ?? OpenAiCompatibleChatClient();
-    final ownedHttp = http.Client();
+    final ownedHttp = createSafeHttpClient();
     _enhanceHttp = ownedHttp;
 
     setState(() {
