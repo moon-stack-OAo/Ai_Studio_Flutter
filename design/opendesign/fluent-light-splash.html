@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AI Studio · Fluent 亮色 · 开屏</title>
+  <style>
+    :root {
+      --canvas: #faf9f5;
+      --surface: #ffffff;
+      --surface-muted: #efeeeb;
+      --ink: #141413;
+      --ink-secondary: #3d3d3a;
+      --ink-muted: #6c6a64;
+      --border: #e7e6e1;
+      --primary: #d97757;
+      --primary-pressed: #a9583e;
+      --font: system-ui, "Segoe UI Variable", "Segoe UI", -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: var(--font);
+      background: #d8d4cb;
+      color: var(--ink);
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      padding: 24px;
+    }
+    .window {
+      width: min(1280px, 100%);
+      height: min(820px, 92vh);
+      background: var(--canvas);
+      border: 1px solid color-mix(in oklch, var(--border) 70%, #b8b2a6);
+      border-radius: 12px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 24px 64px rgba(40, 30, 20, 0.18);
+      position: relative;
+    }
+    .titlebar {
+      height: 36px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 12px 0 14px;
+      background: color-mix(in oklch, var(--surface) 70%, var(--surface-muted));
+      border-bottom: 1px solid var(--border);
+      user-select: none;
+      flex-shrink: 0;
+      z-index: 2;
+    }
+    .titlebar-left { display: flex; align-items: center; gap: 10px; font-size: 12px; color: var(--ink-secondary); }
+    .app-mark{width:16px;height:16px;border-radius:4px;background:center/contain no-repeat url("assets/logo.png");flex-shrink:0}
+    .win-controls { display: flex; gap: 8px; }
+    .win-dot {
+      width: 12px; height: 12px; border-radius: 50%;
+      border: 1px solid color-mix(in oklch, var(--border) 80%, #999);
+      background: #eceae4;
+    }
+    .splash {
+      flex: 1;
+      display: grid;
+      place-items: center;
+      background: var(--canvas);
+      position: relative;
+    }
+    .splash::before {
+      content: "";
+      position: absolute;
+      inset: 18% 22%;
+      border-radius: 48%;
+      background: radial-gradient(ellipse at center, color-mix(in oklch, var(--primary) 10%, transparent), transparent 70%);
+      pointer-events: none;
+    }
+    .brand {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 18px;
+      z-index: 1;
+      text-align: center;
+    }
+    .logo {
+      width: 96px;
+      height: 96px;
+      border-radius: 22px;
+      background: var(--surface) center/72% no-repeat url("assets/logo.png");
+      border: 1px solid var(--border);
+      box-shadow: 0 12px 32px rgba(40, 30, 20, 0.10);
+    }
+    .name {
+      font-size: 22px;
+      font-weight: 650;
+      letter-spacing: -0.02em;
+      color: var(--ink);
+    }
+    .tag {
+      font-size: 13px;
+      color: var(--ink-muted);
+      letter-spacing: 0.02em;
+    }
+    .hint {
+      position: absolute;
+      left: 20px;
+      bottom: 16px;
+      font-size: 11px;
+      color: var(--ink-muted);
+      opacity: 0.85;
+    }
+    .theme-switch {
+      position: absolute;
+      right: 20px;
+      bottom: 14px;
+      display: flex;
+      gap: 8px;
+    }
+    .theme-switch a {
+      font-size: 11px;
+      color: var(--ink-muted);
+      text-decoration: none;
+      padding: 4px 8px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+    }
+    .theme-switch a:hover { color: var(--primary-pressed); border-color: color-mix(in oklch, var(--primary) 35%, var(--border)); }
+    * { scrollbar-width: thin; scrollbar-color: color-mix(in oklch, var(--ink-muted) 55%, transparent) transparent; }
+    *::-webkit-scrollbar { width: 6px; height: 6px; }
+    *::-webkit-scrollbar-button { display: none; width: 0; height: 0; }
+    *::-webkit-scrollbar-track { background: transparent; }
+    *::-webkit-scrollbar-thumb {
+      background: color-mix(in oklch, var(--ink-muted) 45%, transparent);
+      border-radius: 999px;
+      border: 1px solid transparent;
+      background-clip: padding-box;
+    }
+  </style>
+</head>
+<body>
+  <div class="window">
+    <div class="titlebar">
+      <div class="titlebar-left"><span class="app-mark"></span><span>AI Studio · 开屏参考</span></div>
+      <div class="win-controls"><span class="win-dot"></span><span class="win-dot"></span><span class="win-dot"></span></div>
+    </div>
+    <div class="splash">
+      <div class="brand">
+        <div class="logo" role="img" aria-label="AI Studio logo"></div>
+        <div class="name">AI Studio</div>
+        <div class="tag">对话 · 生图 · 生视频</div>
+      </div>
+      <div class="hint">静态构图参考 · 非实现源 · 对齐 #faf9f5</div>
+      <div class="theme-switch">
+        <a href="fluent-dark-splash.html">深色</a>
+        <a href="fluent-light-chat.html">进入对话</a>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

@@ -62,7 +62,6 @@ class AppShell extends StatefulWidget {
 class _AppShellState extends State<AppShell> {
   AppSection _section = AppSection.chat;
   SettingsCategory _settingsCategory = SettingsCategory.providers;
-  double _paneOpacity = 1;
   late final AppearanceRepository _fallbackAppearance =
       AppearanceRepository(storage: MemoryAppearanceStorage());
   late final List<Widget> _sectionPages;
@@ -309,14 +308,7 @@ class _AppShellState extends State<AppShell> {
       _ => AppSection.settings,
     };
     if (next == _section) return;
-    setState(() {
-      _section = next;
-      _paneOpacity = 0.72;
-    });
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      setState(() => _paneOpacity = 1);
-    });
+    setState(() => _section = next);
   }
 
   @override
@@ -355,35 +347,30 @@ class _AppShellState extends State<AppShell> {
             child: NavigationView(
               // fluent_ui 默认 body 用 ValueKey(selected) 换页，切走即 dispose；
               // paneBodyBuilder + IndexedStack 对齐移动端/现网：切页保活、不中断生成。
-              // 关闭 NavigationView 自带换页动画，改由 IndexedStack 外层短淡入。
+              // 关闭 NavigationView 自带换页动画；IndexedStack 直切保活，无淡入以免闪烁。
               transitionBuilder: (child, animation) => child,
               paneBodyBuilder: (item, body) {
-                return AnimatedOpacity(
+                return IndexedStack(
                   key: const ValueKey('desktop_section_host'),
-                  opacity: _paneOpacity,
-                  duration: FluentMotion.sectionSwitch,
-                  curve: FluentMotion.standard,
-                  child: IndexedStack(
-                    index: _selectedIndex,
-                    sizing: StackFit.expand,
-                    children: [
-                      ..._sectionPages,
-                      SettingsShell(
-                        category: _settingsCategory,
-                        onCategoryChanged: (value) {
-                          setState(() => _settingsCategory = value);
-                        },
-                        themeController: widget.themeController,
-                        appearanceRepository: _appearanceRepository,
-                        providerRepository: widget.providerRepository,
-                        chatDefaultsRepository: widget.chatDefaultsRepository,
-                        appLogRepository: widget.appLogRepository,
-                        dataBackupService: widget.dataBackupService,
-                        generation: widget.generation,
-                        updateController: widget.updateController,
-                      ),
-                    ],
-                  ),
+                  index: _selectedIndex,
+                  sizing: StackFit.expand,
+                  children: [
+                    ..._sectionPages,
+                    SettingsShell(
+                      category: _settingsCategory,
+                      onCategoryChanged: (value) {
+                        setState(() => _settingsCategory = value);
+                      },
+                      themeController: widget.themeController,
+                      appearanceRepository: _appearanceRepository,
+                      providerRepository: widget.providerRepository,
+                      chatDefaultsRepository: widget.chatDefaultsRepository,
+                      appLogRepository: widget.appLogRepository,
+                      dataBackupService: widget.dataBackupService,
+                      generation: widget.generation,
+                      updateController: widget.updateController,
+                    ),
+                  ],
                 );
               },
               pane: NavigationPane(

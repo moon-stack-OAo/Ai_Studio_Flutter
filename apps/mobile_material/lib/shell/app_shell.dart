@@ -64,7 +64,6 @@ class AppShell extends StatefulWidget {
 class _AppShellState extends State<AppShell> {
   AppSection _section = AppSection.chat;
   int _settingsTabIndex = 0;
-  double _paneOpacity = 1;
   late final UpdateBannerPrefs _bannerPrefs;
   late final MobileUpdateController _updater;
   late final bool _ownsUpdater;
@@ -145,14 +144,7 @@ class _AppShellState extends State<AppShell> {
   void _onDestinationSelected(int index) {
     final next = AppSection.values[index];
     if (next == _section) return;
-    setState(() {
-      _section = next;
-      _paneOpacity = 0.72;
-    });
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      setState(() => _paneOpacity = 1);
-    });
+    setState(() => _section = next);
   }
 
   void _scheduleStartupUpdateCheck() {
@@ -254,66 +246,57 @@ class _AppShellState extends State<AppShell> {
                   onLater: () => unawaited(_dismissBanner()),
                 ),
               Expanded(
-                child: AnimatedOpacity(
-                  opacity: _paneOpacity,
-                  duration: MaterialMotion.sectionSwitch,
-                  curve: MaterialMotion.standard,
-                  child: IndexedStack(
-                    index: selectedIndex,
-                    children: [
-                      for (final section in AppSection.values)
-                        if (section == AppSection.chat)
-                          ChatPage(
-                            providerRepository: widget.providerRepository,
-                            sessionRepository: widget.sessionRepository,
-                            chatDefaultsRepository:
-                                widget.chatDefaultsRepository,
-                            appLogRepository: widget.appLogRepository,
-                            generation: widget.generation,
-                            chatClient: widget.chatClient,
-                            onOpenProviders: _openProviders,
-                          )
-                        else if (section == AppSection.image)
-                          ImagePage(
-                            providerRepository: widget.providerRepository,
-                            sessionRepository: widget.imageSessionRepository,
-                            chatDefaultsRepository:
-                                widget.chatDefaultsRepository,
-                            appLogRepository: widget.appLogRepository,
-                            generation: widget.generation,
-                            chatClient: widget.chatClient,
-                            imageClient: widget.imageClient,
-                            onOpenProviders: _openProviders,
-                          )
-                        else if (section == AppSection.video)
-                          VideoPage(
-                            providerRepository: widget.providerRepository,
-                            sessionRepository: widget.videoSessionRepository,
-                            chatDefaultsRepository:
-                                widget.chatDefaultsRepository,
-                            appLogRepository: widget.appLogRepository,
-                            generation: widget.generation,
-                            chatClient: widget.chatClient,
-                            videoClient: widget.videoClient,
-                            onOpenProviders: _openProviders,
-                          )
-                        else if (section == AppSection.settings)
-                          SettingsPage(
-                            themeController: widget.themeController,
-                            providerRepository: widget.providerRepository,
-                            chatDefaultsRepository:
-                                widget.chatDefaultsRepository,
-                            appearanceRepository: widget.appearanceRepository,
-                            appLogRepository: widget.appLogRepository,
-                            dataBackupService: widget.dataBackupService,
-                            generation: widget.generation,
-                            initialTabIndex: _settingsTabIndex,
-                            updateController: _updater,
-                          )
-                        else
-                          const SizedBox.shrink(),
-                    ],
-                  ),
+                child: IndexedStack(
+                  index: selectedIndex,
+                  children: [
+                    for (final section in AppSection.values)
+                      if (section == AppSection.chat)
+                        ChatPage(
+                          providerRepository: widget.providerRepository,
+                          sessionRepository: widget.sessionRepository,
+                          chatDefaultsRepository: widget.chatDefaultsRepository,
+                          appLogRepository: widget.appLogRepository,
+                          generation: widget.generation,
+                          chatClient: widget.chatClient,
+                          onOpenProviders: _openProviders,
+                        )
+                      else if (section == AppSection.image)
+                        ImagePage(
+                          providerRepository: widget.providerRepository,
+                          sessionRepository: widget.imageSessionRepository,
+                          chatDefaultsRepository: widget.chatDefaultsRepository,
+                          appLogRepository: widget.appLogRepository,
+                          generation: widget.generation,
+                          chatClient: widget.chatClient,
+                          imageClient: widget.imageClient,
+                          onOpenProviders: _openProviders,
+                        )
+                      else if (section == AppSection.video)
+                        VideoPage(
+                          providerRepository: widget.providerRepository,
+                          sessionRepository: widget.videoSessionRepository,
+                          chatDefaultsRepository: widget.chatDefaultsRepository,
+                          appLogRepository: widget.appLogRepository,
+                          generation: widget.generation,
+                          chatClient: widget.chatClient,
+                          videoClient: widget.videoClient,
+                          onOpenProviders: _openProviders,
+                        )
+                      else if (section == AppSection.settings)
+                        SettingsPage(
+                          themeController: widget.themeController,
+                          providerRepository: widget.providerRepository,
+                          chatDefaultsRepository: widget.chatDefaultsRepository,
+                          appearanceRepository: widget.appearanceRepository,
+                          appLogRepository: widget.appLogRepository,
+                          dataBackupService: widget.dataBackupService,
+                          generation: widget.generation,
+                          initialTabIndex: _settingsTabIndex,
+                          updateController: _updater,
+                        )
+                      else
+                        const SizedBox.shrink(),
+                  ],
                 ),
               ),
             ],
