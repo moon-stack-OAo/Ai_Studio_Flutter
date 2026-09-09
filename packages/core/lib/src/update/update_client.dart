@@ -315,7 +315,7 @@ class UpdateClient {
       }
       await sink.flush();
       _throwIfDownloadCancelled(shouldCancel);
-    } on UpdateException catch (e) {
+    } on UpdateException {
       await sink.close();
       try {
         if (await file.exists()) await file.delete();
