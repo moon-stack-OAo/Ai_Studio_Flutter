@@ -1,19 +1,27 @@
 import 'dart:async';
 
 import 'package:design_material/design_material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 /// M-BrandIntro（SHELL-BRAND-INTRO）：冷启动短品牌首屏，可跳过。
+///
+/// [ready] 为 false 时保持覆层（可点按标记跳过，但等就绪后再淡出），
+/// 避免底下壳层未挂载时过早拆除。
 class BrandIntroGate extends StatefulWidget {
   const BrandIntroGate({
     super.key,
     required this.child,
+    this.ready,
     this.displayDuration = const Duration(milliseconds: 900),
     this.fadeDuration = const Duration(milliseconds: 280),
   });
 
   final Widget child;
+
+  /// `null` 视为已就绪。为 `false` 时不拆除品牌覆层。
+  final ValueListenable<bool>? ready;
   final Duration displayDuration;
   final Duration fadeDuration;
 
@@ -26,21 +34,49 @@ class _BrandIntroGateState extends State<BrandIntroGate> {
   double _opacity = 1;
   Timer? _autoTimer;
   bool _dismissing = false;
+  bool _minElapsed = false;
+  bool _userSkip = false;
+
+  bool get _isReady => widget.ready?.value ?? true;
 
   @override
   void initState() {
     super.initState();
-    _autoTimer = Timer(widget.displayDuration, _dismiss);
+    widget.ready?.addListener(_onReadyChanged);
+    _autoTimer = Timer(widget.displayDuration, () {
+      _minElapsed = true;
+      _tryDismiss();
+    });
+  }
+
+  @override
+  void didUpdateWidget(BrandIntroGate oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.ready != widget.ready) {
+      oldWidget.ready?.removeListener(_onReadyChanged);
+      widget.ready?.addListener(_onReadyChanged);
+      _tryDismiss();
+    }
   }
 
   @override
   void dispose() {
     _autoTimer?.cancel();
+    widget.ready?.removeListener(_onReadyChanged);
     super.dispose();
   }
 
+  void _onReadyChanged() => _tryDismiss();
+
   void _dismiss() {
+    _userSkip = true;
+    _tryDismiss();
+  }
+
+  void _tryDismiss() {
     if (_dismissing || !_layerMounted) return;
+    if (!_isReady) return;
+    if (!_minElapsed && !_userSkip) return;
     _dismissing = true;
     _autoTimer?.cancel();
     setState(() => _opacity = 0);

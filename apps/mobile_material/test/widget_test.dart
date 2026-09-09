@@ -296,6 +296,7 @@ void main() {
     expect(find.text('关于'), findsWidgets);
     expect(find.textContaining('点选切换当前提供商'), findsOneWidget);
     expect(find.text('编辑所选提供商'), findsOneWidget);
+    expect(find.text('删除所选提供商'), findsOneWidget);
     expect(find.text('编辑提供商'), findsNothing);
   });
 
@@ -328,17 +329,82 @@ void main() {
     expect(find.text('暂无提供商'), findsNothing);
     expect(find.text('编辑提供商'), findsNothing);
     expect(find.text('编辑所选提供商'), findsOneWidget);
+    expect(find.text('删除所选提供商'), findsOneWidget);
     expect(find.text('xAI Grok'), findsOneWidget);
     expect(find.byType(ListTile), findsWidgets);
 
     await tester.tap(find.text('xAI Grok'));
     await tester.pumpAndSettle();
     expect(find.text('编辑提供商'), findsNothing);
+    // 内置提供商：删除按钮存在但禁用
+    final deleteBtn = tester.widget<OutlinedButton>(
+      find.widgetWithText(OutlinedButton, '删除所选提供商'),
+    );
+    expect(deleteBtn.onPressed, isNull);
 
     await tester.tap(find.text('编辑所选提供商'));
     await tester.pumpAndSettle();
     expect(find.text('编辑提供商'), findsOneWidget);
     expect(find.text('保存'), findsOneWidget);
+  });
+
+  testWidgets('providers tab can delete custom provider from list',
+      (tester) async {
+    final repo = ProviderRepository(
+      storage: MemoryProviderStorage(
+        ProviderStoreSnapshot(
+          providers: [
+            const ProviderConfig(
+              id: 'custom-1',
+              name: '自定义源',
+              type: ProviderType.openaiCompatible,
+              baseUrl: 'https://example.com/v1',
+              apiKey: 'sk-test',
+              chatModel: 'gpt-test',
+              enabled: true,
+              builtin: false,
+            ),
+            const ProviderConfig(
+              id: 'builtin-1',
+              name: '内置源',
+              type: ProviderType.openaiCompatible,
+              baseUrl: 'https://api.example.com/v1',
+              chatModel: 'gpt-test',
+              enabled: true,
+              builtin: true,
+            ),
+          ],
+          activeProviderId: 'custom-1',
+        ),
+      ),
+      connectionTester: StubProviderConnectionTester(),
+    );
+    await repo.load();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: buildMaterialLightTheme(),
+        home: Scaffold(
+          body: SettingsProvidersTab(repository: repo),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('自定义源'), findsOneWidget);
+    await tester.tap(find.text('自定义源'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('删除所选提供商'));
+    await tester.pumpAndSettle();
+    expect(find.text('删除此提供商？'), findsOneWidget);
+
+    await tester.tap(find.text('删除'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('自定义源'), findsNothing);
+    expect(find.text('内置源'), findsOneWidget);
+    expect(find.text('已删除'), findsOneWidget);
   });
 
   testWidgets('session list items expose semantics labels', (tester) async {
@@ -513,6 +579,34 @@ void main() {
     expect(find.text('shell-ready'), findsOneWidget);
 
     await tester.tap(find.text('AI Studio'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 60));
+
+    expect(find.text('对话 · 生图 · 生视频'), findsNothing);
+    expect(find.text('shell-ready'), findsOneWidget);
+  });
+
+  testWidgets('brand intro waits for ready before dismiss', (tester) async {
+    final ready = ValueNotifier<bool>(false);
+    addTearDown(ready.dispose);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: buildMaterialLightTheme(),
+        home: BrandIntroGate(
+          ready: ready,
+          displayDuration: const Duration(milliseconds: 20),
+          fadeDuration: const Duration(milliseconds: 50),
+          child: const Center(child: Text('shell-ready')),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 40));
+
+    expect(find.text('AI Studio'), findsOneWidget);
+
+    ready.value = true;
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 60));
 

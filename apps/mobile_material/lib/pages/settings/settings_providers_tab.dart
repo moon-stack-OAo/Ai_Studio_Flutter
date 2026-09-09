@@ -80,18 +80,53 @@ class _SettingsProvidersTabState extends State<SettingsProvidersTab> {
     if (mounted) setState(() {});
   }
 
+  ProviderConfig? get _selected {
+    final id = _selectedId;
+    if (id == null) return null;
+    for (final p in _repo.providers) {
+      if (p.id == id) return p;
+    }
+    return null;
+  }
+
+  Future<void> _deleteSelected() async {
+    final current = _selected;
+    if (current == null) return;
+    if (current.builtin) {
+      _snack('内置提供商不可删除');
+      return;
+    }
+    final ok = await showMaterialConfirmDialog(
+      context: context,
+      title: '删除此提供商？',
+      message: '将删除「${current.name}」及其本机密钥，此操作不可撤销。',
+      confirmLabel: '删除',
+      isDestructive: true,
+    );
+    if (!ok) return;
+    final removed = await _repo.removeProvider(current.id);
+    if (!mounted) return;
+    if (!removed) {
+      _snack('无法删除（至少保留一个提供商）');
+      return;
+    }
+    setState(() => _selectedId = _repo.activeProviderId);
+    _snack('已删除');
+  }
+
   @override
   Widget build(BuildContext context) {
     final tokens = materialTokensOf(context);
     final providers = _repo.providers;
-    final canEdit = _selectedId != null &&
-        providers.any((p) => p.id == _selectedId);
+    final selected = _selected;
+    final canEdit = selected != null;
+    final canDelete = selected != null && !selected.builtin;
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
       children: [
         Text(
-          '点选切换当前提供商，再点「编辑」打开抽屉',
+          '点选切换当前提供商；可编辑或删除所选（内置不可删）',
           style: TextStyle(fontSize: 12, color: tokens.inkMuted),
         ),
         const SizedBox(height: 8),
@@ -124,6 +159,19 @@ class _SettingsProvidersTabState extends State<SettingsProvidersTab> {
             label: const Text('编辑所选提供商'),
             style: FilledButton.styleFrom(
               minimumSize: const Size.fromHeight(44),
+            ),
+          ),
+          const SizedBox(height: 8),
+          OutlinedButton.icon(
+            onPressed: canDelete ? _deleteSelected : null,
+            icon: const Icon(Icons.delete_outline),
+            label: const Text('删除所选提供商'),
+            style: OutlinedButton.styleFrom(
+              minimumSize: const Size.fromHeight(44),
+              foregroundColor: canDelete ? tokens.danger : null,
+              side: BorderSide(
+                color: canDelete ? tokens.danger : tokens.border,
+              ),
             ),
           ),
         ],

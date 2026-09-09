@@ -206,7 +206,7 @@ Flutter 落点：`packages/design_fluent` 与 `packages/design_material` 的 `Th
 
 ### 3.1 首次使用
 
-**冷启动视觉序**（与功能引导无关）：原生静图 splash（`flutter_native_splash`，对齐 canvas `#faf9f5` / `#0a0a0a`）→ Flutter 短品牌首屏（`SHELL-BRAND-INTRO`，可跳过，≠ onboarding）→ `AppShell`。每次冷启动都播；与下方「首次配置提供商」划清。
+**冷启动视觉序**（与功能引导无关）：原生纯色启动底（`flutter_native_splash` 仅 canvas `#faf9f5` / `#0a0a0a`，无 logo；Material 端避免与品牌首屏尺寸跳变）→ Flutter 短品牌首屏（`SHELL-BRAND-INTRO`，可跳过，≠ onboarding）→ `AppShell`。Material：仅预加载外观后即播品牌首屏，其余仓库并行后台加载，就绪后再挂壳。每次冷启动都播；与下方「首次配置提供商」划清。
 
 1. 进入默认能力（建议：对话空态）
 2. CTA：**添加提供商 / 填写 API Key**
@@ -333,15 +333,15 @@ Flutter 落点：`packages/design_fluent` 与 `packages/design_material` 的 `Th
 
 ### 5.3 壳层与导航
 
-| 能力 ID         | 职责         | Fluent（F）                                                         | Material（M）                               | 关键状态                            |
-|---------------|------------|-------------------------------------------------------------------|-------------------------------------------|---------------------------------|
-| `NAV-ROOT`    | 四能力入口切换    | `F-NavView`：左侧 NavigationView，**常驻 compact ~56px**（不可展开/折叠）；当前项高亮 | `M-NavBar`：底部 NavigationBar 四项；IME 可见时可隐藏 | 对话 / 生图 / 生视频 / 设置              |
-| `NAV-TITLE`   | 当前区标题与全局动作 | `F-TitleBar` + 可选窗口控点；内容区 `F-CommandBar`                          | `M-TopAppBar`：标题 + 溢出 `More`；可叠搜索         | 普通 / 选择模式（若有）                   |
-| `NAV-BACK`    | 关闭层、返回上一级  | 无系统返回；Esc 关 Dialog/Flyout；窗格关闭按钮                                  | `M-BackHost`：系统返回 / 边缘滑动先 pop 层；根页「再按一次退出」进最近任务（不清数据） | 无层 / 有层栈 / 待确认退出 |
-| `SHELL-SAFE`         | 避让系统 UI    | 窗口边距即可                                                            | `M-SafeArea`：顶底 inset；不遮挡 NavBar/Composer | 竖屏 / 横屏 / 刘海                    |
-| `SHELL-TRAY`         | 托盘与关闭（仅桌面） | `F-TrayMenu` + `F-CloseConfirm`（退出 / 托盘 / 询问）                     | —（不适用）                                    | Ask / Quit / Tray               |
-| `SHELL-THEME`        | 亮暗切换入口     | `F-ThemeToggle`（设置内 + 可选 CommandBar）                              | `M-ThemePref`（设置内）                        | **light / dark only**（无 system） |
-| `SHELL-BRAND-INTRO`  | 冷启动品牌首屏   | `F-BrandIntro`（可跳过短覆层）                                           | `M-BrandIntro`（可跳过短覆层）                  | 原生静图→短品牌→壳                     |
+| 能力 ID               | 职责         | Fluent（F）                                                         | Material（M）                                           | 关键状态                            |
+|---------------------|------------|-------------------------------------------------------------------|-------------------------------------------------------|---------------------------------|
+| `NAV-ROOT`          | 四能力入口切换    | `F-NavView`：左侧 NavigationView，**常驻 compact ~56px**（不可展开/折叠）；当前项高亮 | `M-NavBar`：底部 NavigationBar 四项；IME 可见时可隐藏             | 对话 / 生图 / 生视频 / 设置              |
+| `NAV-TITLE`         | 当前区标题与全局动作 | `F-TitleBar` + 可选窗口控点；内容区 `F-CommandBar`                          | `M-TopAppBar`：标题 + 溢出 `More`；可叠搜索                     | 普通 / 选择模式（若有）                   |
+| `NAV-BACK`          | 关闭层、返回上一级  | 无系统返回；Esc 关 Dialog/Flyout；窗格关闭按钮                                  | `M-BackHost`：系统返回 / 边缘滑动先 pop 层；根页「再按一次退出」进最近任务（不清数据） | 无层 / 有层栈 / 待确认退出                |
+| `SHELL-SAFE`        | 避让系统 UI    | 窗口边距即可                                                            | `M-SafeArea`：顶底 inset；不遮挡 NavBar/Composer             | 竖屏 / 横屏 / 刘海                    |
+| `SHELL-TRAY`        | 托盘与关闭（仅桌面） | `F-TrayMenu` + `F-CloseConfirm`（退出 / 托盘 / 询问）                     | —（不适用）                                                | Ask / Quit / Tray               |
+| `SHELL-THEME`       | 亮暗切换入口     | `F-ThemeToggle`（设置内 + 可选 CommandBar）                              | `M-ThemePref`（设置内）                                    | **light / dark only**（无 system） |
+| `SHELL-BRAND-INTRO` | 冷启动品牌首屏    | `F-BrandIntro`（可跳过短覆层）                                            | `M-BrandIntro`（可跳过短覆层）                                | 原生纯色底→短品牌→壳                     |
 
 ---
 
@@ -380,14 +380,14 @@ Flutter 落点：`packages/design_fluent` 与 `packages/design_material` 的 `Th
 
 ### 5.6 生视频
 
-| 能力 ID            | 职责                   | Fluent（F）                                         | Material（M）                                  | 关键状态                                              |
-|------------------|----------------------|---------------------------------------------------|----------------------------------------------|---------------------------------------------------|
-| `VID-PARAMS`     | 时长、比例等               | `F-VideoParams`：属性窗格                              | `M-VideoParams`：sheet / 折叠                   | 按能力显隐                                             |
-| `VID-PROMPT-REF` | 提示词 + 参考图            | 复用 Prompt/Ref 的 Fluent 变体                         | 复用 Material 变体                               | 同生图                                               |
-| `VID-GENERATE`   | 创建任务 / 取消            | `F-VideoPrimary`                                  | `M-VideoPrimary`                             | 空闲 / 提交中                                          |
+| 能力 ID            | 职责                   | Fluent（F）                                                     | Material（M）                                              | 关键状态                                                                                                                                                |
+|------------------|----------------------|---------------------------------------------------------------|----------------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------|
+| `VID-PARAMS`     | 时长、比例等               | `F-VideoParams`：属性窗格                                          | `M-VideoParams`：sheet / 折叠                               | 按能力显隐                                                                                                                                               |
+| `VID-PROMPT-REF` | 提示词 + 参考图            | 复用 Prompt/Ref 的 Fluent 变体                                     | 复用 Material 变体                                           | 同生图                                                                                                                                                 |
+| `VID-GENERATE`   | 创建任务 / 取消            | `F-VideoPrimary`                                              | `M-VideoPrimary`                                         | 空闲 / 提交中                                                                                                                                            |
 | `VID-QUEUE`      | 任务队列与进度（**按回合时间分隔**） | `F-VideoQueue`：状态筛选 Chip + 每回合提示词 + 任务卡 + ProgressBar + 放弃/重试 | `M-VideoQueue`：状态筛选 Chip + 卡片列表 + LinearProgress + 放弃/重试 | 筛选：全部 / 生成中 / 待恢复 / 已完成 / 失败 / 已放弃；条目态 loading / pending_resume / success / error / abandoned（规格文案 queued·running·succeeded·failed·abandoned 为对外表述） |
-| `VID-PLAYER`     | 播放完成片                | `F-VideoPlayer`：内嵌播放器 + 下载                        | `M-VideoPlayer`：全屏友好播放 + 下载/相册               | 本地 / 远端 URL；缓冲                                    |
-| `VID-RESUME`     | 启动时恢复未完成             | 静默续跑 + InfoBar 提示                                 | 静默续跑 + Snackbar                              | 无可恢复 / 恢复中                                        |
+| `VID-PLAYER`     | 播放完成片                | `F-VideoPlayer`：内嵌播放器 + 下载                                    | `M-VideoPlayer`：全屏友好播放 + 下载/相册                           | 本地 / 远端 URL；缓冲                                                                                                                                      |
+| `VID-RESUME`     | 启动时恢复未完成             | 静默续跑 + InfoBar 提示                                             | 静默续跑 + Snackbar                                          | 无可恢复 / 恢复中                                                                                                                                          |
 
 ---
 
@@ -529,11 +529,11 @@ Flutter 落点：`packages/design_fluent` 与 `packages/design_material` 的 `Th
 
 ### 9.1 实现对照（2026-09-07 核对 §5）
 
-| 范围                              | 结论                                                                      |
-|---------------------------------|-------------------------------------------------------------------------|
+| 范围                              | 结论                                                                        |
+|---------------------------------|---------------------------------------------------------------------------|
 | §5.3–5.7 壳 / 对话 / 生图 / 生视频 / 设置 | 双端 ✅（含 `SHELL-BRAND-INTRO`；Material `NAV-BACK`：`BackHost` / `M-BackHost`） |
-| §5.8 反馈与系统力                     | ✅（含 Material `SYS-SHARE`）；`FB-UPDATE`：冷启动壳层横幅 + 关于页/托盘入口；「稍后」按版本记 prefs |
-| 易漏项                             | 耗时自适应、用户末条撤回、回合时间分隔、IME 藏底栏、关闭嵌关于、三模型可搜索、托盘三态均已落地                       |
+| §5.8 反馈与系统力                     | ✅（含 Material `SYS-SHARE`）；`FB-UPDATE`：冷启动壳层横幅 + 关于页/托盘入口；「稍后」按版本记 prefs   |
+| 易漏项                             | 耗时自适应、用户末条撤回、回合时间分隔、IME 藏底栏、关闭嵌关于、三模型可搜索、托盘三态均已落地                         |
 
 ---
 
@@ -627,5 +627,5 @@ packages/design_material/
 | 2026-09-07 | P3 无障碍全路径自证：双端补语义/触控48/liveRegion/对比度 token；§7.1 自证清单；不宣称第三方认证                                                                         |
 | 2026-09-07 | P3 主题/密度部分落地：`scrim`、InfoBar/Snackbar token、密度作用到会话/Composer/设置；空态 `illustration` 插槽                                                   |
 | 2026-09-07 | P3 空态插画落地：双端 CustomPainter 简易线稿接入 `illustration`；§9 标注                                                                                 |
-| 2026-09-08 | `VID-QUEUE`：双端任务队列增加按状态筛选（全部 / 生成中 / 待恢复 / 已完成 / 失败 / 已放弃）                                                                          |
-| 2026-09-08 | Material 根页返回：`NAV-BACK` 增加「再按一次退出」确认（约 2s），确认后进最近任务、不清数据；键盘可见时优先收 IME                                                      |
+| 2026-09-08 | `VID-QUEUE`：双端任务队列增加按状态筛选（全部 / 生成中 / 待恢复 / 已完成 / 失败 / 已放弃）                                                                             |
+| 2026-09-08 | Material 根页返回：`NAV-BACK` 增加「再按一次退出」确认（约 2s），确认后进最近任务、不清数据；键盘可见时优先收 IME                                                                 |
