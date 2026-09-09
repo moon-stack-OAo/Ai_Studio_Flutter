@@ -35,14 +35,20 @@
 - **下沉判断**：两端都会用的逻辑进 `core`；仅一端的 UI/平台代码留在对应 `apps/*` 或 `design_*`。
 - **风格**：跟随邻近文件既有写法；不擅自引入未在 workspace 使用的依赖；不主动写大段文档（除非用户要求）。
 - **测试**：改 `packages/core` / `design_*` 尽量补/跑 `flutter test`（Flutter 包不能用 `dart test`）；改 UI 行为时在对应 app 跑 `flutter test`（或说明无法跑的原因）。
+- **提交 / 推送前校验**（对齐 `.github/workflows/ci.yml`）：
+  - CI 对改动包跑 `dart analyze`，**warning 也会失败**（exit ≠ 0），不能只看 error。
+  - **改代码后、请求用户 commit / 自行准备 push 前**：至少对**本次改动涉及的包**跑 analyze；有行为变更时再跑相关 `flutter test`。
+  - 范围建议：只动 `core` → `dart analyze packages/core` + 相关 `flutter test`；动某一 app → `dart analyze apps/<app>`（必要时再 test）；跨多包或发版前 → 按 CI 全量 analyze，或至少跑所有改动包。
+  - **可跳过**：纯文档 / `CHANGELOG` / `.editorconfig` / OD HTML 文案，且无 Dart 改动。
+  - 助手若因环境无法跑，须在回复里说明，并提醒用户本地补跑。
 - **安全**：不把密钥写入日志、备份默认或仓库文件；出站 URL 走 `url_safety`；更新验签失败必须阻断（见 `SECURITY.md`）。
 - **文档同步**：用户可见能力或分期状态变化时，按需更新 `CHANGELOG.md` / `DESIGN.md`；`docs/architecture.md` 可能滞后，勿把它当唯一真相。
 
 ## Git / 发版边界
 
 - **禁止**（除非用户明确授权）：`git add` / `commit` / `push` / `reset` / `rebase`、强推、改版本号、打 tag、改 Release Secrets。
-- 应用版本以 `apps/desktop_fluent` 与 `apps/mobile_material` 的 `pubspec.yaml` 为准（当前 `1.0.1+2`）；共享包 `0.0.1` 不单独发版叙事。
-- **build number（`+` 后）**：自下一版起用 **Unix 秒**（如 `1.0.2+1757400000`），须单调递增；已发 `1.0.1+2` 不回溯改写。
+- 应用版本以 `apps/desktop_fluent` 与 `apps/mobile_material` 的 `pubspec.yaml` 为准（当前 `1.0.2+…`）；共享包 `0.0.1` 不单独发版叙事。
+- **build number（`+` 后）**：自 `1.0.2` 起用 **Unix 秒**（如 `1.0.2+1788935264`），须单调递增；已发 `1.0.1+2` 不回溯改写。
 - 本地升版：`node .github/scripts/bump-version.mjs 1.0.2`（可选 `--build <n>` / `--dry-run`）；只改双端 `pubspec`，不自动 commit/tag。
 - 发版入口：推送 `v*` tag → `.github/workflows/release.yml`（draft → 双端产物 + `latest.json` / `android-latest.json`）。
 - Secrets：`TAURI_SIGNING_PRIVATE_KEY`（必填）、`TAURI_SIGNING_PRIVATE_KEY_PASSWORD`；可选 `ANDROID_KEY_*`。助手不创建、不回显、不提交私钥。
@@ -115,6 +121,14 @@ flutter pub get
 cd apps/desktop_fluent && flutter run -d windows
 cd apps/desktop_fluent && flutter run -d macos
 cd apps/mobile_material && flutter run
+
+# 提交 / 推送前（与 CI 一致：warning 即失败）
+dart analyze packages/core
+dart analyze packages/design_fluent
+dart analyze packages/design_material
+dart analyze apps/desktop_fluent
+dart analyze apps/mobile_material
+
 cd packages/core && flutter test
 cd packages/design_fluent && flutter test
 cd packages/design_material && flutter test
