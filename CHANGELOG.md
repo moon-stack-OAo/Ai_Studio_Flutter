@@ -13,6 +13,22 @@
 
 ### Added
 
+（暂无）
+
+### Changed
+
+（暂无）
+
+### Fixed
+
+（暂无）
+
+---
+
+## [1.0.2] — 2026-09-09
+
+### Added
+
 - **检查更新体验完善**：冷启动 / 托盘发现更新弹窗（跳过此版本 / 稍后 / 下载并安装）；设置入口 **NEW** 角标；关于页「启动时自动检查」开关、状态 pill、changelog
 - **`UpdatePrefs`**（core）：持久化 `autoCheckUpdate` / `skippedUpdateVersion` / `availableUpdateVersion`；兼容迁移旧横幅「稍后」键
 - **更新说明 Markdown**：弹窗与关于页用紧凑 `MarkdownHost` 渲染（标题 / 加粗 / 列表）
