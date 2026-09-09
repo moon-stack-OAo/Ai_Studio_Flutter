@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -11,15 +12,19 @@ import 'update_models.dart';
 import 'update_platform.dart';
 import 'version_compare.dart';
 
+/// 下载/安装瞬时网络失败时的最大尝试次数（含首次）。
+const kUpdateInstallMaxAttempts = 3;
+
 /// 拉取 / 解析清单并下载安装包。
 class UpdateClient {
-    UpdateClient({
+  UpdateClient({
     http.Client? client,
     this.manifestUrl = kDesktopUpdateManifestUrl,
-    this.timeout = const Duration(seconds: 30),
+    this.timeout = const Duration(seconds: 45),
     this.downloadDirectory,
     this.minisignPubkey = kDesktopUpdaterMinisignPubkey,
     this.requireSignature = true,
+    this.installMaxAttempts = kUpdateInstallMaxAttempts,
   })  : _ownedClient = client == null,
         _client = client ?? createSafeHttpClient();
 
@@ -33,6 +38,9 @@ class UpdateClient {
 
   /// 桌面安装包是否强制验签；默认 true。Android 侧载走 sha256，可关。
   final bool requireSignature;
+
+  /// 下载瞬时失败时的最大尝试次数（含首次）；签名/格式错误不重试。
+  final int installMaxAttempts;
 
   final http.Client _client;
   final bool _ownedClient;
@@ -72,14 +80,18 @@ class UpdateClient {
         'Accept': 'application/json',
         'User-Agent': 'AiStudio-Flutter-Updater/1.0',
       }).timeout(timeout);
+    } on TimeoutException {
+      throw const UpdateException(
+        '检查更新失败：请求超时，请检查网络后重试。',
+      );
     } on SocketException catch (e) {
-      throw UpdateException('网络不可用：${e.message}');
+      throw UpdateException(friendlyUpdateNetworkError(e));
     } on HttpException catch (e) {
       throw UpdateException('HTTP 错误：${e.message}');
     } on FormatException catch (e) {
       throw UpdateException('请求失败：${e.message}');
     } catch (e) {
-      throw UpdateException(_friendlyNetworkError(e));
+      throw UpdateException(friendlyUpdateNetworkError(e));
     }
 
     if (response.statusCode == 404) {
@@ -89,7 +101,14 @@ class UpdateClient {
       throw UpdateException('拉取清单失败：HTTP ${response.statusCode}');
     }
 
-    final body = response.body.trim();
+    // GitHub release 资产常为 application/octet-stream（无 charset）；
+    // 勿用 response.body（缺 charset 时按 latin1 解，中文会乱码）。
+    late final String body;
+    try {
+      body = utf8.decode(response.bodyBytes).trim();
+    } on FormatException {
+      throw const UpdateException('更新清单不是合法 UTF-8');
+    }
     if (body.isEmpty) {
       throw const UpdateException('更新清单为空');
     }
@@ -167,7 +186,7 @@ class UpdateClient {
     } catch (e) {
       return UpdateCheckResult.failed(
         currentVersion: current,
-        message: _friendlyNetworkError(e),
+        message: friendlyUpdateNetworkError(e),
       );
     }
   }
@@ -187,9 +206,51 @@ class UpdateClient {
   ///
   /// 若 [requireSignature] 为 true，下载后按 [PlatformAsset.signature] 做
   /// minisign / Tauri 验签；失败删除文件并阻断安装。
+  ///
+  /// 瞬时网络失败会自动重试（最多 [installMaxAttempts] 次）；签名/格式类错误不重试。
   Future<File> downloadInstaller(
     PlatformAsset asset, {
     void Function(UpdateDownloadProgress progress)? onProgress,
+    void Function(int attempt, int maxAttempts)? onRetry,
+    bool Function()? shouldCancel,
+    http.Client? client,
+    String? fileNameHint,
+  }) async {
+    final maxAttempts =
+        installMaxAttempts < 1 ? 1 : installMaxAttempts;
+    Object? lastError;
+    for (var attempt = 1; attempt <= maxAttempts; attempt++) {
+      _throwIfDownloadCancelled(shouldCancel);
+      try {
+        return await _downloadInstallerOnce(
+          asset,
+          onProgress: onProgress,
+          shouldCancel: shouldCancel,
+          client: client,
+          fileNameHint: fileNameHint,
+        );
+      } catch (e) {
+        lastError = e;
+        if (isUpdateDownloadCancelled(e)) {
+          if (e is UpdateException) rethrow;
+          throw const UpdateException(kUpdateDownloadCancelledMessage);
+        }
+        final retryable = isRetryableUpdateInstallError(e);
+        if (!retryable || attempt >= maxAttempts) {
+          if (e is UpdateException) rethrow;
+          throw UpdateException(friendlyUpdateInstallError(e));
+        }
+        onRetry?.call(attempt, maxAttempts);
+        await Future<void>.delayed(Duration(milliseconds: 600 * attempt));
+      }
+    }
+    throw UpdateException(friendlyUpdateInstallError(lastError ?? '下载失败'));
+  }
+
+  Future<File> _downloadInstallerOnce(
+    PlatformAsset asset, {
+    void Function(UpdateDownloadProgress progress)? onProgress,
+    bool Function()? shouldCancel,
     http.Client? client,
     String? fileNameHint,
   }) async {
@@ -213,8 +274,12 @@ class UpdateClient {
       final request = http.Request('GET', uri);
       request.headers['User-Agent'] = 'AiStudio-Flutter-Updater/1.0';
       response = await c.send(request).timeout(timeout);
+    } on TimeoutException {
+      throw const UpdateException(
+        '下载更新失败：请求超时，请检查网络后重试。',
+      );
     } catch (e) {
-      throw UpdateException(_friendlyNetworkError(e));
+      throw UpdateException(friendlyUpdateNetworkError(e));
     }
 
     if (response.statusCode == 403) {
@@ -229,6 +294,8 @@ class UpdateClient {
       throw UpdateException('下载更新失败：HTTP ${response.statusCode}');
     }
 
+    _throwIfDownloadCancelled(shouldCancel);
+
     final total = response.contentLength;
     final dir = await _resolveDownloadDir();
     final name = _safeFileName(
@@ -239,6 +306,7 @@ class UpdateClient {
     var received = 0;
     try {
       await for (final chunk in response.stream) {
+        _throwIfDownloadCancelled(shouldCancel);
         sink.add(chunk);
         received += chunk.length;
         onProgress?.call(
@@ -246,12 +314,22 @@ class UpdateClient {
         );
       }
       await sink.flush();
+      _throwIfDownloadCancelled(shouldCancel);
+    } on UpdateException catch (e) {
+      await sink.close();
+      try {
+        if (await file.exists()) await file.delete();
+      } catch (_) {}
+      rethrow;
     } catch (e) {
       await sink.close();
       try {
         if (await file.exists()) await file.delete();
       } catch (_) {}
-      throw UpdateException(_friendlyNetworkError(e));
+      if (isUpdateDownloadCancelled(e)) {
+        throw const UpdateException(kUpdateDownloadCancelledMessage);
+      }
+      throw UpdateException(friendlyUpdateNetworkError(e));
     } finally {
       await sink.close();
     }
@@ -276,7 +354,7 @@ class UpdateClient {
           if (await file.exists()) await file.delete();
         } catch (_) {}
         if (e is UpdateException) rethrow;
-        throw UpdateException('更新包签名校验失败：$e');
+        throw UpdateException(friendlyUpdateInstallError(e));
       }
     }
     return file;
@@ -322,21 +400,142 @@ class UpdateClient {
     return name;
   }
 
-  String _friendlyNetworkError(Object err) {
-    final msg = err.toString();
-    final lower = msg.toLowerCase();
-    if (lower.contains('timeout') || lower.contains('timed out')) {
-      return '下载更新失败：请求超时，请检查网络后重试。';
-    }
-    if (lower.contains('socket') ||
-        lower.contains('connection') ||
-        lower.contains('network') ||
-        lower.contains('failed host lookup') ||
-        lower.contains('dns')) {
-      return '下载更新失败：网络不稳定或无法访问更新源。请检查网络后重试。';
-    }
-    return '更新失败：$msg';
+}
+
+/// 将检查/下载阶段的网络原始错误转成可读中文。
+String friendlyUpdateNetworkError(Object? err) {
+  final msg = _errorText(err);
+  final lower = msg.toLowerCase();
+
+  if (_looksLikeTimeout(msg, lower)) {
+    return '检查更新失败：请求超时，请检查网络后重试。';
   }
+  if (RegExp(
+        r'api\.github\.com/.*/releases/assets/',
+        caseSensitive: false,
+      ).hasMatch(msg) ||
+      RegExp(r'\b403\b').hasMatch(msg) ||
+      lower.contains('forbidden')) {
+    return '下载更新失败：安装包地址可能需要鉴权。请稍后重试，或到 GitHub Releases 手动下载安装。';
+  }
+  if (lower.contains('socket') ||
+      lower.contains('connection') ||
+      lower.contains('network') ||
+      lower.contains('failed host lookup') ||
+      lower.contains('dns') ||
+      lower.contains('failed to fetch') ||
+      msg.contains('网络') ||
+      msg.contains('连接')) {
+    return '检查更新失败：网络不稳定或无法访问更新源。请检查网络后重试。';
+  }
+  if (msg.isEmpty) return '检查更新失败';
+  return '检查更新失败：$msg';
+}
+
+/// 用户主动取消下载时的固定文案。
+const kUpdateDownloadCancelledMessage = '已取消下载';
+
+void _throwIfDownloadCancelled(bool Function()? shouldCancel) {
+  if (shouldCancel?.call() == true) {
+    throw const UpdateException(kUpdateDownloadCancelledMessage);
+  }
+}
+
+/// 是否为用户取消下载。
+bool isUpdateDownloadCancelled(Object? err) {
+  final msg = _errorText(err);
+  return msg.contains(kUpdateDownloadCancelledMessage) || msg.contains('已取消');
+}
+
+/// 将下载/安装错误转成可读中文（对齐旧版 updater 文案）。
+String friendlyUpdateInstallError(Object? err) {
+  final msg = _errorText(err);
+  final lower = msg.toLowerCase();
+
+  if (isUpdateDownloadCancelled(err)) {
+    return kUpdateDownloadCancelledMessage;
+  }
+
+  if (RegExp(
+        r'api\.github\.com/.*/releases/assets/',
+        caseSensitive: false,
+      ).hasMatch(msg) ||
+      RegExp(r'\b403\b').hasMatch(msg) ||
+      lower.contains('forbidden')) {
+    return '下载更新失败：安装包地址可能需要鉴权。请稍后重试，或到 GitHub Releases 手动下载安装。';
+  }
+  if (_looksLikeTimeout(msg, lower) ||
+      lower.contains('connection') ||
+      lower.contains('network') ||
+      lower.contains('dns') ||
+      lower.contains('failed to fetch') ||
+      lower.contains('error sending request') ||
+      msg.contains('网络') ||
+      msg.contains('连接')) {
+    return '下载更新失败：网络不稳定或无法访问更新源。请检查网络后重试。';
+  }
+  if (lower.contains('signature') ||
+      lower.contains('minisign') ||
+      lower.contains('verify') ||
+      msg.contains('签名')) {
+    return '更新包签名校验失败，请稍后重试或手动下载安装。';
+  }
+  if (lower.contains('invalid updater') ||
+      lower.contains('binary not found') ||
+      lower.contains('extract') ||
+      lower.contains('sha256')) {
+    return '更新包格式或完整性校验失败，请稍后重试或手动下载安装。';
+  }
+  return msg.isEmpty ? '安装更新失败' : msg;
+}
+
+/// 瞬时网络类错误可重试；签名/格式/鉴权类不重试。
+bool isRetryableUpdateInstallError(Object? err) {
+  final msg = _errorText(err);
+  final lower = msg.toLowerCase();
+  if (msg.isEmpty) return true;
+  if (isUpdateDownloadCancelled(err)) return false;
+  if (lower.contains('signature') ||
+      lower.contains('minisign') ||
+      lower.contains('verify') ||
+      lower.contains('invalid updater') ||
+      lower.contains('binary not found') ||
+      lower.contains('unsupported') ||
+      lower.contains('sha256') ||
+      msg.contains('签名') ||
+      msg.contains('完整性') ||
+      msg.contains('鉴权') ||
+      RegExp(r'\b403\b').hasMatch(msg) ||
+      RegExp(r'\b404\b').hasMatch(msg)) {
+    return false;
+  }
+  return _looksLikeTimeout(msg, lower) ||
+      lower.contains('connection') ||
+      lower.contains('network') ||
+      lower.contains('dns') ||
+      lower.contains('failed to fetch') ||
+      lower.contains('error sending request') ||
+      RegExp(r'\b502\b|\b503\b|\b504\b|\b429\b').hasMatch(msg) ||
+      msg.contains('网络') ||
+      msg.contains('连接') ||
+      msg.contains('超时');
+}
+
+String _errorText(Object? err) {
+  if (err == null) return '';
+  if (err is UpdateException) return err.message;
+  if (err is TimeoutException) {
+    return err.message?.isNotEmpty == true ? err.message! : 'TimeoutException';
+  }
+  return err.toString();
+}
+
+bool _looksLikeTimeout(String msg, String lower) {
+  return lower.contains('timeout') ||
+      lower.contains('timed out') ||
+      lower.contains('timeoutexception') ||
+      msg.contains('信号灯') ||
+      msg.contains('超时');
 }
 
 /// 更新相关业务异常。

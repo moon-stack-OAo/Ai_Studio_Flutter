@@ -6,12 +6,16 @@ import 'package:desktop_fluent/update/update_controller.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
   group('UpdateController 验签失败阻断', () {
     late Directory dir;
 
     setUp(() async {
+      SharedPreferences.setMockInitialValues({});
       dir = await Directory.systemTemp.createTemp('ai_studio_upd_ctrl_');
     });
 
@@ -74,7 +78,10 @@ void main() {
         expect(ok, isFalse);
         expect(controller.downloadedFile, isNull);
         expect(controller.isDownloading, isFalse);
-        expect(controller.lastError, contains('缺少签名'));
+        expect(
+          controller.lastError,
+          anyOf(contains('签名'), contains('校验')),
+        );
         expect(installer.lastFile, isNull);
         expect(dir.listSync().whereType<File>(), isEmpty);
       } finally {

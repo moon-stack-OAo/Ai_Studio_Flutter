@@ -16,7 +16,7 @@ class AndroidUpdateClient {
   AndroidUpdateClient({
     http.Client? client,
     this.manifestUrl = kAndroidUpdateManifestUrl,
-    this.timeout = const Duration(seconds: 30),
+    this.timeout = const Duration(seconds: 45),
     this.downloadDirectory,
     UpdateClient? updateClient,
   }) : _client = updateClient ??
@@ -82,6 +82,7 @@ class AndroidUpdateClient {
   Future<File> downloadAndVerify(
     PlatformAsset asset, {
     void Function(UpdateDownloadProgress progress)? onProgress,
+    bool Function()? shouldCancel,
     http.Client? client,
     String? fileNameHint,
   }) async {
@@ -89,6 +90,7 @@ class AndroidUpdateClient {
     final file = await _client.downloadInstaller(
       asset,
       onProgress: onProgress,
+      shouldCancel: shouldCancel,
       client: client,
       fileNameHint: fileNameHint ?? _apkNameHint(asset.url),
     );
@@ -105,12 +107,14 @@ class AndroidUpdateClient {
     PlatformAsset asset,
     AndroidApkInstaller installer, {
     void Function(UpdateDownloadProgress progress)? onProgress,
+    bool Function()? shouldCancel,
     http.Client? client,
     String? fileNameHint,
   }) async {
     final file = await downloadAndVerify(
       asset,
       onProgress: onProgress,
+      shouldCancel: shouldCancel,
       client: client,
       fileNameHint: fileNameHint,
     );

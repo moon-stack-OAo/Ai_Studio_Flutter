@@ -50,7 +50,9 @@ Future<void> main() async {
     logs: appLogs,
   );
 
-  final updateController = MobileUpdateController();
+  final updateController = MobileUpdateController(
+    appLogRepository: appLogs,
+  );
 
   runApp(
     AiStudioApp(
@@ -76,6 +78,7 @@ Future<void> main() async {
           videoSessions.load(),
           chatDefaults.load(),
           appLogs.load(),
+          updateController.ensurePrefsLoaded(),
         ]);
         await appLogs.append(
           level: AppLogLevel.info,
@@ -104,6 +107,7 @@ class AiStudioApp extends StatefulWidget {
     this.imageClient,
     this.videoClient,
     this.updateController,
+    this.updatePrefs,
     this.startupUpdateCheckDelay = const Duration(milliseconds: 800),
     this.showBrandIntro = true,
     this.bootstrap,
@@ -123,6 +127,7 @@ class AiStudioApp extends StatefulWidget {
   final OpenAiCompatibleImageClient? imageClient;
   final OpenAiCompatibleVideoClient? videoClient;
   final MobileUpdateController? updateController;
+  final UpdatePrefs? updatePrefs;
   final Duration startupUpdateCheckDelay;
   final bool showBrandIntro;
 
@@ -214,6 +219,7 @@ class _AiStudioAppState extends State<AiStudioApp> {
                       imageClient: widget.imageClient,
                       videoClient: widget.videoClient,
                       updateController: widget.updateController,
+                      updatePrefs: widget.updatePrefs,
                       startupUpdateCheckDelay: widget.startupUpdateCheckDelay,
                     )
                   : const SizedBox.shrink();

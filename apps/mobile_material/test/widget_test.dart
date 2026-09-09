@@ -7,11 +7,11 @@ import 'package:mobile_material/pages/chat/session_list_page.dart';
 import 'package:mobile_material/pages/image/widgets/image_composer.dart';
 import 'package:mobile_material/pages/settings/settings_providers_tab.dart';
 import 'package:mobile_material/shell/brand_intro_gate.dart';
-import 'package:mobile_material/shell/update_banner.dart';
+import 'package:mobile_material/update/mobile_update_controller.dart';
 import 'package:design_material/design_material.dart';
 import 'package:package_info_plus/package_info_plus.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
-void _noop() {}
 Future<void> _pumpApp(
   WidgetTester tester, {
   ProviderRepository? providers,
@@ -510,24 +510,73 @@ void main() {
     expect(find.byTooltip('收起参数'), findsOneWidget);
   });
 
-  testWidgets('update banner is a live region', (tester) async {
+  testWidgets('settings nav icon can show update badge', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    final prefs = UpdatePrefs(prefs: await SharedPreferences.getInstance());
+    await prefs.setAvailableUpdate('9.9.9');
+
+    final providers = ProviderRepository(
+      storage: MemoryProviderStorage(),
+      connectionTester: StubProviderConnectionTester(),
+    );
+    await providers.load();
+    final sessions =
+        ChatSessionRepository(storage: MemoryChatSessionStorage());
+    await sessions.load();
+    final imageSessions =
+        ImageSessionRepository(storage: MemoryImageSessionStorage());
+    await imageSessions.load();
+    final videoSessions =
+        VideoSessionRepository(storage: MemoryVideoSessionStorage());
+    await videoSessions.load();
+    final chatDefaults =
+        ChatDefaultsRepository(storage: MemoryChatDefaultsStorage());
+    await chatDefaults.load();
+    final appearance =
+        AppearanceRepository(storage: MemoryAppearanceStorage());
+    await appearance.load();
+    final appLogs = AppLogRepository(storage: MemoryAppLogStorage());
+    await appLogs.load();
+    final themeController = ThemeController(repository: appearance);
+    themeController.loadFrom(appearance.settings);
+    final dataBackup = DataBackupService(
+      providers: providers,
+      appearance: appearance,
+      chatDefaults: chatDefaults,
+      chatSessions: sessions,
+      imageSessions: imageSessions,
+      videoSessions: videoSessions,
+      logs: appLogs,
+    );
+    final updater = MobileUpdateController(
+      updatePrefs: prefs,
+      forceAndroid: true,
+      currentVersion: '1.0.0',
+    );
+
     await tester.pumpWidget(
-      const MaterialApp(
-        home: Scaffold(
-          body: UpdateBanner(
-            version: '9.9.9',
-            onGoUpdate: _noop,
-            onLater: _noop,
-          ),
-        ),
+      AiStudioApp(
+        themeController: themeController,
+        providerRepository: providers,
+        sessionRepository: sessions,
+        imageSessionRepository: imageSessions,
+        videoSessionRepository: videoSessions,
+        chatDefaultsRepository: chatDefaults,
+        appearanceRepository: appearance,
+        appLogRepository: appLogs,
+        dataBackupService: dataBackup,
+        generation: GenerationRuntime(),
+        updateController: updater,
+        updatePrefs: prefs,
+        startupUpdateCheckDelay: const Duration(days: 1),
+        showBrandIntro: false,
       ),
     );
-    await tester.pump();
+    await tester.pumpAndSettle();
 
-    expect(
-      find.bySemanticsLabel(RegExp(r'发现新版本 9\.9\.9')),
-      findsWidgets,
-    );
+    expect(find.byType(Badge), findsWidgets);
+    expect(find.byType(NavigationBar), findsOneWidget);
+    updater.dispose();
   });
 
   testWidgets('section switch keeps chat state via IndexedStack', (tester) async {

@@ -7,12 +7,12 @@ import 'package:flutter/services.dart';
 
 import '../app/theme_controller.dart';
 import '../pages/chat/chat_page.dart';
+import '../pages/chat/widgets/markdown_host.dart';
 import '../pages/image/image_page.dart';
 import '../pages/settings/settings_page.dart';
 import '../pages/video/video_page.dart';
 import '../update/mobile_update_controller.dart';
 import 'app_section.dart';
-import 'update_banner.dart';
 
 /// Material 壳：Scaffold + 四入口 NavigationBar；IME 升起时随 viewInsets 收起底栏。
 ///
@@ -34,7 +34,7 @@ class AppShell extends StatefulWidget {
     this.imageClient,
     this.videoClient,
     this.updateController,
-    this.updateBannerPrefs,
+    this.updatePrefs,
     this.startupUpdateCheckDelay = const Duration(milliseconds: 800),
     this.exitConfirmWindow = const Duration(seconds: 2),
   });
@@ -53,7 +53,7 @@ class AppShell extends StatefulWidget {
   final OpenAiCompatibleImageClient? imageClient;
   final OpenAiCompatibleVideoClient? videoClient;
   final MobileUpdateController? updateController;
-  final UpdateBannerPrefs? updateBannerPrefs;
+  final UpdatePrefs? updatePrefs;
   final Duration startupUpdateCheckDelay;
   final Duration exitConfirmWindow;
 
@@ -64,12 +64,11 @@ class AppShell extends StatefulWidget {
 class _AppShellState extends State<AppShell> {
   AppSection _section = AppSection.chat;
   int _settingsTabIndex = 0;
-  late final UpdateBannerPrefs _bannerPrefs;
+  late final UpdatePrefs _updatePrefs;
   late final MobileUpdateController _updater;
   late final bool _ownsUpdater;
-  String? _bannerVersion;
-  String? _bannerSubtitle;
   bool _startupCheckStarted = false;
+  bool _promptShowing = false;
   Timer? _startupCheckTimer;
   DateTime? _lastExitPromptAt;
 
@@ -83,9 +82,16 @@ class _AppShellState extends State<AppShell> {
   @override
   void initState() {
     super.initState();
-    _bannerPrefs = widget.updateBannerPrefs ?? UpdateBannerPrefs();
     _ownsUpdater = widget.updateController == null;
-    _updater = widget.updateController ?? MobileUpdateController();
+    _updater = widget.updateController ??
+        MobileUpdateController(
+          appLogRepository: widget.appLogRepository,
+          updatePrefs: widget.updatePrefs,
+        );
+    // 优先复用 controller.prefs，避免壳层与控制器各持一份。
+    _updatePrefs = _updater.prefs;
+    _updater.addListener(_onUpdaterChanged);
+    _updatePrefs.addListener(_onUpdaterChanged);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _scheduleStartupUpdateCheck();
     });
@@ -94,8 +100,14 @@ class _AppShellState extends State<AppShell> {
   @override
   void dispose() {
     _startupCheckTimer?.cancel();
+    _updater.removeListener(_onUpdaterChanged);
+    _updatePrefs.removeListener(_onUpdaterChanged);
     if (_ownsUpdater) _updater.dispose();
     super.dispose();
+  }
+
+  void _onUpdaterChanged() {
+    if (mounted) setState(() {});
   }
 
   void _onRootPopInvoked(bool didPop) {
@@ -126,12 +138,18 @@ class _AppShellState extends State<AppShell> {
   }
 
   Widget _navIcon(AppSection section, {required bool selected}) {
-    return switch (section) {
+    final icon = switch (section) {
       AppSection.chat => NavIcons.chat(selected: selected),
       AppSection.image => NavIcons.image(selected: selected),
       AppSection.video => NavIcons.video(selected: selected),
       AppSection.settings => NavIcons.settings(selected: selected),
     };
+    if (section != AppSection.settings) return icon;
+    return Badge(
+      isLabelVisible: _updater.hasAvailableUpdate,
+      smallSize: 8,
+      child: icon,
+    );
   }
 
   void _openProviders() {
@@ -165,19 +183,17 @@ class _AppShellState extends State<AppShell> {
     if (_updater.isChecking || _updater.isDownloading) return;
 
     try {
-      final result = await _updater.checkForUpdate();
+      await _updater.ensurePrefsLoaded();
+      if (!_updater.autoCheckUpdate) return;
+
+      final result = await _updater.checkForUpdate(silent: true);
       if (!mounted) return;
       if (result.status != UpdateCheckStatus.available) return;
       final version = result.latestVersion;
       if (version == null || version.trim().isEmpty) return;
-      if (!await _bannerPrefs.shouldShowFor(version)) return;
+      if (!await _updatePrefs.shouldPromptFor(version)) return;
       if (!mounted) return;
-      setState(() {
-        _bannerVersion = normalizeVersion(version);
-        _bannerSubtitle = _updater.isIos
-            ? MobileUpdateController.iosNonStoreMessage
-            : null;
-      });
+      await _showUpdatePrompt(result);
     } catch (e) {
       try {
         await widget.appLogRepository.append(
@@ -189,25 +205,93 @@ class _AppShellState extends State<AppShell> {
     }
   }
 
-  Future<void> _dismissBanner() async {
-    final version = _bannerVersion;
-    if (version != null) {
-      await _bannerPrefs.dismissVersion(version);
-    }
-    if (!mounted) return;
-    setState(() {
-      _bannerVersion = null;
-      _bannerSubtitle = null;
-    });
-  }
+  Future<void> _showUpdatePrompt(UpdateCheckResult result) async {
+    if (!mounted || _promptShowing) return;
+    final version = result.latestVersion;
+    if (version == null || version.trim().isEmpty) return;
 
-  void _goUpdateFromBanner() {
-    setState(() {
-      _bannerVersion = null;
-      _bannerSubtitle = null;
-      _section = AppSection.settings;
-      _settingsTabIndex = 4;
-    });
+    _promptShowing = true;
+    final notes = prepareUpdateNotes(result.notes);
+    final isIos = _updater.isIos;
+    final action = await showDialog<_UpdatePromptAction>(
+      context: context,
+      barrierDismissible: true,
+      builder: (dialogCtx) {
+        return AlertDialog(
+          title: Text('发现新版本 ${normalizeVersion(version)}'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  isIos
+                      ? MobileUpdateController.iosNonStoreMessage
+                      : '可下载并安装更新包。请确认已允许「安装未知应用」。',
+                ),
+                if (notes.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  MarkdownHost(data: notes, compact: true),
+                ],
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () =>
+                  Navigator.pop(dialogCtx, _UpdatePromptAction.skip),
+              child: const Text('跳过此版本'),
+            ),
+            TextButton(
+              onPressed: () =>
+                  Navigator.pop(dialogCtx, _UpdatePromptAction.later),
+              child: const Text('稍后'),
+            ),
+            if (isIos)
+              const FilledButton(
+                onPressed: null,
+                child: Text('下载并安装'),
+              )
+            else
+              FilledButton(
+                onPressed: () =>
+                    Navigator.pop(dialogCtx, _UpdatePromptAction.install),
+                child: const Text('下载并安装'),
+              ),
+          ],
+        );
+      },
+    );
+    _promptShowing = false;
+    if (!mounted) return;
+
+    switch (action) {
+      case _UpdatePromptAction.skip:
+        await _updater.skipUpdateVersion(version);
+      case _UpdatePromptAction.later:
+        final messenger = ScaffoldMessenger.of(context);
+        messenger.hideCurrentSnackBar();
+        messenger.showSnackBar(
+          const SnackBar(content: Text('可在 设置 → 关于 中安装')),
+        );
+      case _UpdatePromptAction.install:
+        if (_updater.isIos) return;
+        final ok = await _updater.downloadAndInstall(result: result);
+        if (!mounted) return;
+        final messenger = ScaffoldMessenger.of(context);
+        messenger.hideCurrentSnackBar();
+        if (ok) {
+          messenger.showSnackBar(
+            const SnackBar(content: Text('已调起安装器，请按系统提示完成安装')),
+          );
+        } else {
+          messenger.showSnackBar(
+            SnackBar(content: Text(_updater.lastError ?? '下载或安装失败')),
+          );
+        }
+      case null:
+        break;
+    }
   }
 
   @override
@@ -225,7 +309,6 @@ class _AppShellState extends State<AppShell> {
     final navVisibleFactor =
         (1.0 - (viewInsetsBottom / navSlotHeight).clamp(0.0, 1.0)).toDouble();
     final selectedIndex = AppSection.values.indexOf(_section);
-    final bannerVersion = _bannerVersion;
 
     return PopScope(
       canPop: false,
@@ -236,69 +319,56 @@ class _AppShellState extends State<AppShell> {
         resizeToAvoidBottomInset: false,
         body: SafeArea(
           bottom: false,
-          child: Column(
+          child: IndexedStack(
+            index: selectedIndex,
             children: [
-              if (bannerVersion != null)
-                UpdateBanner(
-                  version: bannerVersion,
-                  subtitle: _bannerSubtitle,
-                  onGoUpdate: _goUpdateFromBanner,
-                  onLater: () => unawaited(_dismissBanner()),
-                ),
-              Expanded(
-                child: IndexedStack(
-                  index: selectedIndex,
-                  children: [
-                    for (final section in AppSection.values)
-                      if (section == AppSection.chat)
-                        ChatPage(
-                          providerRepository: widget.providerRepository,
-                          sessionRepository: widget.sessionRepository,
-                          chatDefaultsRepository: widget.chatDefaultsRepository,
-                          appLogRepository: widget.appLogRepository,
-                          generation: widget.generation,
-                          chatClient: widget.chatClient,
-                          onOpenProviders: _openProviders,
-                        )
-                      else if (section == AppSection.image)
-                        ImagePage(
-                          providerRepository: widget.providerRepository,
-                          sessionRepository: widget.imageSessionRepository,
-                          chatDefaultsRepository: widget.chatDefaultsRepository,
-                          appLogRepository: widget.appLogRepository,
-                          generation: widget.generation,
-                          chatClient: widget.chatClient,
-                          imageClient: widget.imageClient,
-                          onOpenProviders: _openProviders,
-                        )
-                      else if (section == AppSection.video)
-                        VideoPage(
-                          providerRepository: widget.providerRepository,
-                          sessionRepository: widget.videoSessionRepository,
-                          chatDefaultsRepository: widget.chatDefaultsRepository,
-                          appLogRepository: widget.appLogRepository,
-                          generation: widget.generation,
-                          chatClient: widget.chatClient,
-                          videoClient: widget.videoClient,
-                          onOpenProviders: _openProviders,
-                        )
-                      else if (section == AppSection.settings)
-                        SettingsPage(
-                          themeController: widget.themeController,
-                          providerRepository: widget.providerRepository,
-                          chatDefaultsRepository: widget.chatDefaultsRepository,
-                          appearanceRepository: widget.appearanceRepository,
-                          appLogRepository: widget.appLogRepository,
-                          dataBackupService: widget.dataBackupService,
-                          generation: widget.generation,
-                          initialTabIndex: _settingsTabIndex,
-                          updateController: _updater,
-                        )
-                      else
-                        const SizedBox.shrink(),
-                  ],
-                ),
-              ),
+              for (final section in AppSection.values)
+                if (section == AppSection.chat)
+                  ChatPage(
+                    providerRepository: widget.providerRepository,
+                    sessionRepository: widget.sessionRepository,
+                    chatDefaultsRepository: widget.chatDefaultsRepository,
+                    appLogRepository: widget.appLogRepository,
+                    generation: widget.generation,
+                    chatClient: widget.chatClient,
+                    onOpenProviders: _openProviders,
+                  )
+                else if (section == AppSection.image)
+                  ImagePage(
+                    providerRepository: widget.providerRepository,
+                    sessionRepository: widget.imageSessionRepository,
+                    chatDefaultsRepository: widget.chatDefaultsRepository,
+                    appLogRepository: widget.appLogRepository,
+                    generation: widget.generation,
+                    chatClient: widget.chatClient,
+                    imageClient: widget.imageClient,
+                    onOpenProviders: _openProviders,
+                  )
+                else if (section == AppSection.video)
+                  VideoPage(
+                    providerRepository: widget.providerRepository,
+                    sessionRepository: widget.videoSessionRepository,
+                    chatDefaultsRepository: widget.chatDefaultsRepository,
+                    appLogRepository: widget.appLogRepository,
+                    generation: widget.generation,
+                    chatClient: widget.chatClient,
+                    videoClient: widget.videoClient,
+                    onOpenProviders: _openProviders,
+                  )
+                else if (section == AppSection.settings)
+                  SettingsPage(
+                    themeController: widget.themeController,
+                    providerRepository: widget.providerRepository,
+                    chatDefaultsRepository: widget.chatDefaultsRepository,
+                    appearanceRepository: widget.appearanceRepository,
+                    appLogRepository: widget.appLogRepository,
+                    dataBackupService: widget.dataBackupService,
+                    generation: widget.generation,
+                    initialTabIndex: _settingsTabIndex,
+                    updateController: _updater,
+                  )
+                else
+                  const SizedBox.shrink(),
             ],
           ),
         ),
@@ -330,3 +400,5 @@ class _AppShellState extends State<AppShell> {
     );
   }
 }
+
+enum _UpdatePromptAction { skip, later, install }

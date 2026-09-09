@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io' show File, Platform;
 
 import 'package:core/core.dart';
@@ -10,6 +11,7 @@ import 'package:path_provider/path_provider.dart';
 
 import '../../app/theme_controller.dart';
 import '../../update/mobile_update_controller.dart';
+import '../chat/widgets/markdown_host.dart';
 
 class SettingsAboutTab extends StatefulWidget {
   const SettingsAboutTab({
@@ -52,6 +54,7 @@ class _SettingsAboutTabState extends State<SettingsAboutTab> {
     _ownsUpdater = widget.updateController == null;
     _updater = widget.updateController ?? MobileUpdateController();
     _updater.addListener(_onUpdaterChanged);
+    unawaited(_updater.ensurePrefsLoaded());
     _loadPackageInfo();
     _loadUsage();
   }
@@ -140,10 +143,14 @@ class _SettingsAboutTabState extends State<SettingsAboutTab> {
     }
   }
 
+  Future<void> _onToggleAutoCheck(bool value) async {
+    await _updater.setAutoCheckUpdate(value);
+  }
+
   Future<void> _onCheckUpdate() async {
     if (_updater.isChecking || _updater.isDownloading) return;
 
-    final result = await _updater.checkForUpdate();
+    final result = await _updater.checkForUpdate(silent: false);
     if (!mounted) return;
 
     if (_isIos) {
@@ -151,10 +158,7 @@ class _SettingsAboutTabState extends State<SettingsAboutTab> {
         case UpdateCheckStatus.upToDate:
           _snack('已是最新版本（${result.latestVersion ?? result.currentVersion}）');
         case UpdateCheckStatus.available:
-          _snack(
-            '发现新版本 ${result.latestVersion ?? ''}。'
-            '${MobileUpdateController.iosNonStoreMessage}',
-          );
+          await _showUpdatePrompt(result);
         default:
           _snack(
             result.errorMessage ?? MobileUpdateController.iosNonStoreMessage,
@@ -172,7 +176,7 @@ class _SettingsAboutTabState extends State<SettingsAboutTab> {
       case UpdateCheckStatus.upToDate:
         _snack('已是最新版本（${result.latestVersion ?? result.currentVersion}）');
       case UpdateCheckStatus.available:
-        await _confirmDownloadAndInstall(result);
+        await _showUpdatePrompt(result);
       case UpdateCheckStatus.notConfigured:
         _snack('未配置更新源');
       case UpdateCheckStatus.noPlatformAsset:
@@ -182,50 +186,75 @@ class _SettingsAboutTabState extends State<SettingsAboutTab> {
     }
   }
 
-  Future<void> _confirmDownloadAndInstall(UpdateCheckResult check) async {
-    final notes = check.notes.trim();
-    final confirmed = await showDialog<bool>(
+  Future<void> _showUpdatePrompt(UpdateCheckResult check) async {
+    final notes = prepareUpdateNotes(check.notes);
+    final version = check.latestVersion ?? '';
+    final isIos = _updater.isIos || _isIos;
+    final action = await showDialog<_AboutUpdateAction>(
       context: context,
       builder: (dialogCtx) {
         return AlertDialog(
-          title: Text('下载并安装 ${check.latestVersion ?? ''}'),
+          title: Text('发现新版本 ${normalizeVersion(version)}'),
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  '将下载 APK 并校验完整性后调起系统安装器。'
-                  '请确认已允许「安装未知应用」。',
+                Text(
+                  isIos
+                      ? MobileUpdateController.iosNonStoreMessage
+                      : '将下载 APK 并校验完整性后调起系统安装器。'
+                          '请确认已允许「安装未知应用」。',
                 ),
                 if (notes.isNotEmpty) ...[
                   const SizedBox(height: 12),
-                  Text(notes, style: const TextStyle(fontSize: 13)),
+                  MarkdownHost(data: notes, compact: true),
                 ],
               ],
             ),
           ),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(dialogCtx, false),
-              child: const Text('取消'),
+              onPressed: () =>
+                  Navigator.pop(dialogCtx, _AboutUpdateAction.skip),
+              child: const Text('跳过此版本'),
             ),
-            FilledButton(
-              onPressed: () => Navigator.pop(dialogCtx, true),
-              child: const Text('下载并安装'),
+            TextButton(
+              onPressed: () =>
+                  Navigator.pop(dialogCtx, _AboutUpdateAction.later),
+              child: const Text('稍后'),
             ),
+            if (isIos)
+              const FilledButton(
+                onPressed: null,
+                child: Text('下载并安装'),
+              )
+            else
+              FilledButton(
+                onPressed: () =>
+                    Navigator.pop(dialogCtx, _AboutUpdateAction.install),
+                child: const Text('下载并安装'),
+              ),
           ],
         );
       },
     );
-    if (confirmed != true || !mounted) return;
+    if (!mounted || action == null) return;
 
-    final ok = await _updater.downloadAndInstall(result: check);
-    if (!mounted) return;
-    if (ok) {
-      _snack('已调起安装器，请按系统提示完成安装');
-    } else {
-      _snack(_updater.lastError ?? '下载或安装失败');
+    switch (action) {
+      case _AboutUpdateAction.skip:
+        await _updater.skipUpdateVersion(version);
+        _snack('已跳过此版本');
+      case _AboutUpdateAction.later:
+        _snack('可在 设置 → 关于 中安装');
+      case _AboutUpdateAction.install:
+        final ok = await _updater.downloadAndInstall(result: check);
+        if (!mounted) return;
+        if (ok) {
+          _snack('已调起安装器，请按系统提示完成安装');
+        } else {
+          _snack(_updater.lastError ?? '下载或安装失败');
+        }
     }
   }
 
@@ -618,14 +647,49 @@ class _SettingsAboutTabState extends State<SettingsAboutTab> {
         '媒体 ${_formatBytes(u.mediaCacheBytes)}';
   }
 
+  Widget _statusPill(MaterialTokens tokens) {
+    final hasUpdate = _updater.hasAvailableUpdate;
+    final check = _updater.lastCheck;
+    final label = hasUpdate
+        ? '有更新 ${check?.latestVersion ?? _updater.prefs.availableUpdateVersion ?? ''}'
+            .trim()
+        : '已是最新';
+    final bg = hasUpdate
+        ? Color.lerp(tokens.primary, tokens.surface, 0.85)!
+        : tokens.surfaceMuted;
+    final fg = hasUpdate ? tokens.primary : tokens.inkMuted;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(
+          color: hasUpdate
+              ? Color.lerp(tokens.primary, tokens.border, 0.45)!
+              : tokens.border,
+        ),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
+          color: fg,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final tokens = materialTokensOf(context);
     final checking = _updater.isChecking;
     final downloading = _updater.isDownloading;
     final progress = _updater.downloadProgress;
+    final progressLabel = _updater.progressLabel;
     final check = _updater.lastCheck;
     final busy = checking || downloading;
+    final notes = prepareUpdateNotes(check?.notes ?? '');
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
@@ -649,6 +713,8 @@ class _SettingsAboutTabState extends State<SettingsAboutTab> {
                   '版本 $_versionLabel · Android / iOS',
                   style: TextStyle(fontSize: 13, color: tokens.inkSecondary),
                 ),
+                const SizedBox(height: 8),
+                _statusPill(tokens),
                 const SizedBox(height: 6),
                 Text(
                   _isAndroid
@@ -674,6 +740,14 @@ class _SettingsAboutTabState extends State<SettingsAboutTab> {
                   ),
                 ],
                 const SizedBox(height: 14),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('启动时自动检查更新'),
+                  subtitle: const Text('冷启动静默检查；关闭后仅手动检查'),
+                  value: _updater.autoCheckUpdate,
+                  onChanged: busy ? null : _onToggleAutoCheck,
+                ),
+                const SizedBox(height: 8),
                 Wrap(
                   spacing: 8,
                   runSpacing: 8,
@@ -694,37 +768,100 @@ class _SettingsAboutTabState extends State<SettingsAboutTab> {
                     ),
                   ],
                 ),
-                if (downloading) ...[
-                  const SizedBox(height: 12),
-                  LinearProgressIndicator(
-                    value: progress?.fraction,
-                    color: tokens.primary,
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    progress == null
-                        ? '正在下载…'
-                        : progress.total == null
-                            ? '已下载 ${progress.received} 字节'
-                            : '已下载 ${progress.received} / ${progress.total} 字节',
-                    style: TextStyle(fontSize: 12, color: tokens.inkMuted),
-                  ),
-                ],
-                if (_isAndroid &&
-                    check != null &&
-                    check.hasUpdate &&
-                    !downloading &&
-                    !checking) ...[
+                if (check != null && check.hasUpdate) ...[
                   const SizedBox(height: 10),
                   Text(
                     '发现新版本 ${check.latestVersion}',
                     style: TextStyle(fontSize: 13, color: tokens.inkSecondary),
                   ),
+                  if (notes.isNotEmpty) ...[
+                    const SizedBox(height: 6),
+                    MarkdownHost(data: notes, compact: true),
+                  ],
                   const SizedBox(height: 8),
-                  OutlinedButton(
-                    onPressed: () => _confirmDownloadAndInstall(check),
-                    child: const Text('下载并安装'),
-                  ),
+                  if (downloading)
+                    Row(
+                      children: [
+                        Expanded(
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(20),
+                            child: SizedBox(
+                              height: 40,
+                              child: Stack(
+                                fit: StackFit.expand,
+                                children: [
+                                  ColoredBox(color: tokens.surfaceMuted),
+                                  if (progress?.fraction != null)
+                                    FractionallySizedBox(
+                                      widthFactor:
+                                          progress!.fraction!.clamp(0.0, 1.0),
+                                      alignment: Alignment.centerLeft,
+                                      child: ColoredBox(color: tokens.primary),
+                                    )
+                                  else
+                                    const Align(
+                                      child: SizedBox(
+                                        width: 18,
+                                        height: 18,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                        ),
+                                      ),
+                                    ),
+                                  Center(
+                                    child: Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 12,
+                                      ),
+                                      child: Text(
+                                        progressLabel ??
+                                            (progress?.fraction != null
+                                                ? '正在下载… ${(progress!.fraction! * 100).toStringAsFixed(0)}%'
+                                                : '正在下载…'),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w600,
+                                          color: (progress?.fraction ?? 0) > 0.45
+                                              ? tokens.onPrimary
+                                              : tokens.ink,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        OutlinedButton(
+                          onPressed: _updater.cancelDownload,
+                          child: const Text('取消'),
+                        ),
+                      ],
+                    )
+                  else if (!checking)
+                    OutlinedButton(
+                      onPressed: () async {
+                        if (_isIos) {
+                          await _showUpdatePrompt(check);
+                          return;
+                        }
+                        if (_updater.isDownloading) return;
+                        final ok =
+                            await _updater.downloadAndInstall(result: check);
+                        if (!mounted) return;
+                        if (ok) {
+                          _snack('已调起安装器，请按系统提示完成安装');
+                        } else {
+                          final err = _updater.lastError ?? '下载或安装失败';
+                          _snack(err);
+                        }
+                      },
+                      child: Text(_isIos ? '查看更新说明' : '下载并安装'),
+                    ),
                 ],
               ],
             ),
@@ -766,6 +903,8 @@ class _SettingsAboutTabState extends State<SettingsAboutTab> {
     );
   }
 }
+
+enum _AboutUpdateAction { skip, later, install }
 
 enum _ImportExportAction { export, import }
 

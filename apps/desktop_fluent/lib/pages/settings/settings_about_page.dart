@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:core/core.dart';
@@ -8,6 +9,8 @@ import 'package:package_info_plus/package_info_plus.dart';
 
 import '../../app/theme_controller.dart';
 import '../../update/update_controller.dart';
+import '../../update/update_prompt_dialog.dart';
+import '../chat/widgets/markdown_host.dart';
 
 class SettingsAboutPage extends StatefulWidget {
   const SettingsAboutPage({
@@ -150,6 +153,33 @@ class _SettingsAboutPageState extends State<SettingsAboutPage> {
     }
   }
 
+  Future<void> _handleUpdatePrompt(UpdateCheckResult result) async {
+    final updater = _updater;
+    if (updater == null || !mounted) return;
+
+    final action = await showUpdatePromptDialog(
+      context: context,
+      result: result,
+    );
+    if (!mounted) return;
+
+    switch (action ?? UpdatePromptAction.later) {
+      case UpdatePromptAction.skip:
+        await updater.skipUpdateVersion(result.latestVersion);
+      case UpdatePromptAction.later:
+        _showInfoBar('可在 设置 → 关于与更新 中安装', InfoBarSeverity.info);
+      case UpdatePromptAction.install:
+        final ok = await updater.downloadAndInstall(result: result);
+        if (!mounted) return;
+        if (!ok) {
+          _showInfoBar(
+            updater.lastError ?? '下载或安装失败',
+            InfoBarSeverity.error,
+          );
+        }
+    }
+  }
+
   Future<void> _onCheckUpdate() async {
     final updater = _updater;
     if (updater == null) {
@@ -162,7 +192,7 @@ class _SettingsAboutPageState extends State<SettingsAboutPage> {
     }
     if (updater.isChecking || updater.isDownloading) return;
 
-    final result = await updater.checkForUpdate();
+    final result = await updater.checkForUpdate(silent: false);
     if (!mounted) return;
 
     switch (result.status) {
@@ -172,10 +202,7 @@ class _SettingsAboutPageState extends State<SettingsAboutPage> {
           InfoBarSeverity.success,
         );
       case UpdateCheckStatus.available:
-        _showInfoBar(
-          '发现新版本 ${result.latestVersion}',
-          InfoBarSeverity.info,
-        );
+        await _handleUpdatePrompt(result);
       case UpdateCheckStatus.notConfigured:
         _showInfoBar('未配置更新源', InfoBarSeverity.warning);
       case UpdateCheckStatus.noPlatformAsset:
@@ -196,65 +223,27 @@ class _SettingsAboutPageState extends State<SettingsAboutPage> {
     final check = updater?.lastCheck;
     if (updater == null || check == null || !check.hasUpdate) return;
     if (updater.isDownloading) return;
-
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogCtx) {
-        return ContentDialog(
-          title: Text('下载并安装 ${check.latestVersion ?? ''}'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                '将下载 Windows 安装包并校验签名后启动安装器。',
-              ),
-              if (check.notes.trim().isNotEmpty) ...[
-                const SizedBox(height: 12),
-                Text(
-                  check.notes.trim(),
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: FluentTheme.of(dialogCtx)
-                        .resources
-                        .textFillColorSecondary,
-                  ),
-                ),
-              ],
-              const SizedBox(height: 10),
-              Text(
-                '将校验安装包签名；失败则阻断安装。安装器启动后应用将退出。',
-                style: TextStyle(
-                  fontSize: 11,
-                  color: FluentTheme.of(dialogCtx)
-                      .resources
-                      .textFillColorSecondary,
-                ),
-              ),
-            ],
-          ),
-          actions: [
-            Button(
-              onPressed: () => Navigator.pop(dialogCtx, false),
-              child: const Text('取消'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(dialogCtx, true),
-              child: const Text('下载并安装'),
-            ),
-          ],
-        );
-      },
-    );
-    if (confirmed != true || !mounted) return;
-
+    // 关于页卡片已展示版本与说明，直接安装，不再二次弹窗。
     final ok = await updater.downloadAndInstall(result: check);
     if (!mounted) return;
     if (!ok) {
+      final err = updater.lastError ?? '下载或安装失败';
+      final cancelled = isUpdateDownloadCancelled(err);
       _showInfoBar(
-        updater.lastError ?? '下载或安装失败',
-        InfoBarSeverity.error,
+        err,
+        cancelled ? InfoBarSeverity.info : InfoBarSeverity.error,
       );
+    }
+  }
+
+  Future<void> _onToggleAutoCheck(bool value) async {
+    final updater = _updater;
+    if (updater == null) return;
+    try {
+      await updater.setAutoCheckUpdate(value);
+    } catch (e) {
+      if (!mounted) return;
+      _showInfoBar('保存失败：$e', InfoBarSeverity.error);
     }
   }
 
@@ -595,6 +584,35 @@ class _SettingsAboutPageState extends State<SettingsAboutPage> {
         '提供商 ${u.providerCount}';
   }
 
+  Widget? _updateStatusPill(FluentTokens tokens, UpdateController? updater) {
+    final check = updater?.lastCheck;
+    if (check == null && !(updater?.hasAvailableUpdate ?? false)) {
+      return null;
+    }
+    final hasUpdate =
+        (check?.hasUpdate ?? false) || (updater?.hasAvailableUpdate ?? false);
+    final bg = hasUpdate
+        ? Color.lerp(tokens.primary, tokens.surface, 0.82)!
+        : Color.lerp(const Color(0xFF107C10), tokens.surface, 0.85)!;
+    final fg = hasUpdate ? tokens.primaryPressed : const Color(0xFF0B6A0B);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        hasUpdate ? '有更新' : '最新',
+        style: TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
+          color: fg,
+          fontFamily: tokens.fontFamily,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final tokens = fluentTokensOf(context);
@@ -604,6 +622,10 @@ class _SettingsAboutPageState extends State<SettingsAboutPage> {
     final checking = updater?.isChecking ?? false;
     final downloading = updater?.isDownloading ?? false;
     final progress = updater?.downloadProgress;
+    final progressLabel = updater?.progressLabel;
+    final autoCheck = updater?.autoCheckUpdate ?? true;
+    final configured = updater != null && updater.isConfigured;
+    final statusPill = _updateStatusPill(tokens, updater);
 
     return ColoredBox(
       color: tokens.canvas,
@@ -630,12 +652,13 @@ class _SettingsAboutPageState extends State<SettingsAboutPage> {
           ),
           const SizedBox(height: 12),
           _SectionCard(
-            title: 'AI Studio',
+            title: '更新',
+            trailing: statusPill,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  '版本 $_versionLabel · Windows / macOS',
+                  '版本 $_versionLabel · ${updateInstallPlatformLabel()}',
                   style: TextStyle(
                     fontSize: 13,
                     color: tokens.inkSecondary,
@@ -644,7 +667,7 @@ class _SettingsAboutPageState extends State<SettingsAboutPage> {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  updater == null || !updater.isConfigured
+                  !configured
                       ? '更新通道：未配置更新源 · 不上架'
                       : '更新通道：GitHub Releases（签名校验）· 不上架',
                   style: TextStyle(
@@ -654,14 +677,27 @@ class _SettingsAboutPageState extends State<SettingsAboutPage> {
                   ),
                 ),
                 const SizedBox(height: 12),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  crossAxisAlignment: WrapCrossAlignment.center,
+                Row(
                   children: [
+                    ToggleSwitch(
+                      checked: autoCheck,
+                      onChanged: !configured
+                          ? null
+                          : (v) => unawaited(_onToggleAutoCheck(v)),
+                      content: Text(
+                        '启动时自动检查更新',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: tokens.ink,
+                          fontFamily: tokens.fontFamily,
+                        ),
+                      ),
+                    ),
+                    const Spacer(),
                     FilledButton(
-                      onPressed:
-                          (checking || downloading) ? null : _onCheckUpdate,
+                      onPressed: (!configured || checking || downloading)
+                          ? null
+                          : _onCheckUpdate,
                       child: checking
                           ? const Row(
                               mainAxisSize: MainAxisSize.min,
@@ -677,13 +713,6 @@ class _SettingsAboutPageState extends State<SettingsAboutPage> {
                             )
                           : const Text('检查更新'),
                     ),
-                    const Tooltip(
-                      message: '开源许可暂未开放',
-                      child: Button(
-                        onPressed: null,
-                        child: Text('开源许可'),
-                      ),
-                    ),
                   ],
                 ),
                 if (check != null && check.hasUpdate) ...[
@@ -692,12 +721,11 @@ class _SettingsAboutPageState extends State<SettingsAboutPage> {
                     result: check,
                     downloading: downloading,
                     progress: progress,
+                    progressLabel: progressLabel,
                     onInstall: _onDownloadAndInstall,
+                    onCancel:
+                        downloading ? () => updater?.cancelDownload() : null,
                   ),
-                ],
-                if (downloading && progress != null) ...[
-                  const SizedBox(height: 10),
-                  _DownloadProgressBar(progress: progress),
                 ],
               ],
             ),
@@ -822,17 +850,22 @@ class _UpdateAvailableCard extends StatelessWidget {
     required this.result,
     required this.downloading,
     required this.onInstall,
+    this.onCancel,
     this.progress,
+    this.progressLabel,
   });
 
   final UpdateCheckResult result;
   final bool downloading;
   final UpdateDownloadProgress? progress;
+  final String? progressLabel;
   final VoidCallback onInstall;
+  final VoidCallback? onCancel;
 
   @override
   Widget build(BuildContext context) {
     final tokens = fluentTokensOf(context);
+    final label = progressLabel;
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(12),
@@ -847,7 +880,7 @@ class _UpdateAvailableCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            '发现新版本 ${result.latestVersion}',
+            '发现新版本 v${result.latestVersion}',
             style: TextStyle(
               fontSize: 13,
               fontWeight: FontWeight.w600,
@@ -857,7 +890,7 @@ class _UpdateAvailableCard extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           Text(
-            '当前 ${result.currentVersion}'
+            '当前 v${result.currentVersion}'
             '${result.matchedPlatformKey != null ? ' · ${result.matchedPlatformKey}' : ''}',
             style: TextStyle(
               fontSize: 12,
@@ -865,58 +898,127 @@ class _UpdateAvailableCard extends StatelessWidget {
               fontFamily: tokens.fontFamily,
             ),
           ),
-          if (result.notes.trim().isNotEmpty) ...[
-            const SizedBox(height: 8),
-            Text(
-              result.notes.trim(),
-              style: TextStyle(
-                fontSize: 12,
-                color: tokens.inkSecondary,
-                fontFamily: tokens.fontFamily,
-              ),
-            ),
-          ],
-          const SizedBox(height: 10),
-          FilledButton(
-            onPressed: downloading ? null : onInstall,
-            child: downloading
-                ? Text(
-                    progress?.fraction != null
-                        ? '下载中… ${(progress!.fraction! * 100).toStringAsFixed(0)}%'
-                        : '下载中…',
-                  )
-                : const Text('下载并安装'),
+          Builder(
+            builder: (context) {
+              final notes = prepareUpdateNotes(result.notes);
+              if (notes.isEmpty) return const SizedBox.shrink();
+              return Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: MarkdownHost(data: notes, compact: true),
+              );
+            },
           ),
+          const SizedBox(height: 10),
+          if (downloading)
+            _DownloadActionProgress(
+              progress: progress,
+              progressLabel: label,
+              onCancel: onCancel,
+            )
+          else
+            FilledButton(
+              onPressed: onInstall,
+              child: const Text('下载并安装'),
+            ),
         ],
       ),
     );
   }
 }
 
-class _DownloadProgressBar extends StatelessWidget {
-  const _DownloadProgressBar({required this.progress});
+/// 下载中：按钮位替换为进度条 + 取消（不再拉长禁用按钮）。
+class _DownloadActionProgress extends StatelessWidget {
+  const _DownloadActionProgress({
+    required this.progress,
+    required this.progressLabel,
+    this.onCancel,
+  });
 
-  final UpdateDownloadProgress progress;
+  final UpdateDownloadProgress? progress;
+  final String? progressLabel;
+  final VoidCallback? onCancel;
 
   @override
   Widget build(BuildContext context) {
     final tokens = fluentTokensOf(context);
-    final fraction = progress.fraction;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    final fraction = progress?.fraction;
+    final pct = fraction == null ? null : (fraction * 100).clamp(0, 100);
+    final status = (progressLabel != null && progressLabel!.isNotEmpty)
+        ? progressLabel!
+        : (pct != null
+            ? '正在下载… ${pct.toStringAsFixed(0)}%'
+            : '正在下载…');
+    final detail = progress == null
+        ? null
+        : (progress!.total == null
+            ? _formatBytes(progress!.received)
+            : '${_formatBytes(progress!.received)} / ${_formatBytes(progress!.total!)}');
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        ProgressBar(value: fraction == null ? null : fraction * 100),
-        const SizedBox(height: 4),
-        Text(
-          fraction == null
-              ? '已下载 ${_formatBytes(progress.received)}'
-              : '已下载 ${_formatBytes(progress.received)} / ${_formatBytes(progress.total!)}',
-          style: TextStyle(
-            fontSize: 11,
-            color: tokens.inkMuted,
-            fontFamily: tokens.fontFamily,
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(4),
+                child: SizedBox(
+                  height: 28,
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      ColoredBox(color: tokens.surfaceMuted),
+                      if (pct != null)
+                        FractionallySizedBox(
+                          widthFactor: (pct / 100).clamp(0.0, 1.0),
+                          alignment: Alignment.centerLeft,
+                          child: ColoredBox(
+                            color: Color.lerp(
+                              tokens.primary,
+                              tokens.primaryPressed,
+                              0.15,
+                            )!,
+                          ),
+                        )
+                      else
+                        const Align(
+                          alignment: Alignment.center,
+                          child: SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: ProgressRing(strokeWidth: 2),
+                          ),
+                        ),
+                      Center(
+                        child: Text(
+                          detail == null ? status : '$status · $detail',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: pct != null && pct > 45
+                                ? tokens.onPrimary
+                                : tokens.ink,
+                            fontFamily: tokens.fontFamily,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
+        if (onCancel != null) ...[
+          const SizedBox(width: 8),
+          Button(
+            onPressed: onCancel,
+            child: const Text('取消'),
+          ),
+        ],
       ],
     );
   }
@@ -947,10 +1049,15 @@ const _closeOptions = <({String wire, String label, String subtitle})>[
 ];
 
 class _SectionCard extends StatelessWidget {
-  const _SectionCard({required this.title, required this.child});
+  const _SectionCard({
+    required this.title,
+    required this.child,
+    this.trailing,
+  });
 
   final String title;
   final Widget child;
+  final Widget? trailing;
 
   @override
   Widget build(BuildContext context) {
@@ -965,14 +1072,21 @@ class _SectionCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            title,
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-              color: tokens.inkSecondary,
-              fontFamily: tokens.fontFamily,
-            ),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: tokens.inkSecondary,
+                    fontFamily: tokens.fontFamily,
+                  ),
+                ),
+              ),
+              ?trailing,
+            ],
           ),
           const SizedBox(height: 10),
           child,

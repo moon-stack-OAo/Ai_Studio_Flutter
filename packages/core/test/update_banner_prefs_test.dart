@@ -5,14 +5,16 @@ import 'package:shared_preferences/shared_preferences.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  group('UpdateBannerPrefs', () {
+  group('UpdateBannerPrefs (compat)', () {
     late SharedPreferences prefs;
+    late UpdatePrefs updatePrefs;
     late UpdateBannerPrefs bannerPrefs;
 
     setUp(() async {
       SharedPreferences.setMockInitialValues({});
       prefs = await SharedPreferences.getInstance();
-      bannerPrefs = UpdateBannerPrefs(prefs: prefs);
+      updatePrefs = UpdatePrefs(prefs: prefs);
+      bannerPrefs = UpdateBannerPrefs(prefs: updatePrefs);
     });
 
     test('shouldShowFor true when never dismissed', () async {
@@ -24,6 +26,7 @@ void main() {
       expect(await bannerPrefs.loadDismissedVersion(), '1.2.0');
       expect(await bannerPrefs.shouldShowFor('1.2.0'), isFalse);
       expect(await bannerPrefs.shouldShowFor('v1.2.0+3'), isFalse);
+      // 跳过语义为精确版本匹配（对齐旧版），更高版本仍提示。
       expect(await bannerPrefs.shouldShowFor('1.2.1'), isTrue);
       expect(await bannerPrefs.shouldShowFor('1.3.0'), isTrue);
     });

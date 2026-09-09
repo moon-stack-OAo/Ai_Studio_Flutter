@@ -401,7 +401,7 @@ Flutter 落点：`packages/design_fluent` 与 `packages/design_material` 的 `Th
 | `SET-CHAT-DEFAULTS`  | 温度、系统提示、Max Tokens、超时、上下文裁剪        | `F-ChatDefaults`                                                                             | `M-ChatDefaults`                                | 校验错误                                    |
 | `SET-APPEARANCE`     | 主题、字号、密度                           | `F-Appearance`：主题仅浅/深并联动对侧稿；字号五档；密度=Fluent 疏密                                                | `M-Appearance`：同上；密度=触控疏密                       | **light / dark**（无跟随系统）                 |
 | `SET-LOGS`           | **运行日志**（必有）                       | `F-Logs`：筛选级别/来源、搜索、复制可见、清空；控制台列表最新在上                                                        | `M-Logs`：同能力，触控工具栏更紧凑                           | 空 / 有数据 / 过滤后空；时间 `YYYY-MM-DD HH:mm:ss` |
-| `SET-ABOUT`          | 版本、检查更新、开源说明、数据清理                  | `F-About` + 更新按钮；**内嵌关闭行为**                                                                  | `M-About` + 更新（无关闭行为）                           | 检查中 / 有更新 / 已最新 / 失败                    |
+| `SET-ABOUT`          | 版本、检查更新、开源说明、数据清理                  | `F-About`：自动检查开关、状态 pill、changelog、更新按钮；**内嵌关闭行为**                                           | `M-About`：同上（无关闭行为）                             | 检查中 / 有更新 / 已最新 / 失败；可跳过版本              |
 | `SET-DATA`           | 导入导出、清数据                           | Dialog 确认                                                                                    | Dialog / 确认 sheet                               | 危险操作二次确认                                |
 | `SET-CLOSE-BEHAVIOR` | 关闭行为                               | **仅 Fluent** `F-CloseBehavior`，**嵌在关于页**（非独立分类）                                              | —                                               | Ask / Quit / Tray                       |
 
@@ -411,15 +411,15 @@ Flutter 落点：`packages/design_fluent` 与 `packages/design_material` 的 `Th
 
 ### 5.8 反馈、覆层与系统力
 
-| 能力 ID           | 职责       | Fluent（F）                  | Material（M）                         | 关键状态          |
-|-----------------|----------|----------------------------|-------------------------------------|---------------|
-| `FB-CONFIRM`    | 破坏性确认    | `F-ContentDialog`          | `M-ConfirmDialog` / 确认 sheet        | 开 / 关         |
-| `FB-TOAST`      | 短反馈      | InfoBar / TeachingTip      | Snackbar                            | 成功 / 失败       |
-| `FB-PROGRESS`   | 不确定或确定进度 | ProgressRing / ProgressBar | Circular / LinearProgress           | —             |
-| `FB-UPDATE`     | 更新提示     | `F-UpdateBanner` 或关于页内联    | `M-UpdateBanner` / 关于页；结果用 Snackbar | 见 `SET-ABOUT` |
-| `SYS-SAVE-FILE` | 另存为（桌面）  | 系统保存对话框                    | —                                   | 取消 / 成功       |
-| `SYS-GALLERY`   | 存相册（移动）  | —                          | 系统相册写入；权限说明                         | 已授权 / 拒绝      |
-| `SYS-SHARE`     | 系统分享（移动） | —                          | Share sheet（`share_plus`）；图/视频本地文件  | 取消 / 成功 / 失败  |
+| 能力 ID           | 职责       | Fluent（F）                                                       | Material（M）                                           | 关键状态                                            |
+|-----------------|----------|-----------------------------------------------------------------|-------------------------------------------------------|-------------------------------------------------|
+| `FB-CONFIRM`    | 破坏性确认    | `F-ContentDialog`                                               | `M-ConfirmDialog` / 确认 sheet                          | 开 / 关                                           |
+| `FB-TOAST`      | 短反馈      | InfoBar / TeachingTip                                           | Snackbar                                              | 成功 / 失败                                         |
+| `FB-PROGRESS`   | 不确定或确定进度 | ProgressRing / ProgressBar                                      | Circular / LinearProgress                             | —                                               |
+| `FB-UPDATE`     | 更新提示     | 冷启动/托盘 **ContentDialog**（跳过 / 稍后 / 下载并安装）；设置侧栏 **NEW** 角标；关于页内联 | 冷启动 **AlertDialog**（同上）；底栏设置 **Badge**；关于页 / Snackbar | 见 `SET-ABOUT`；`UpdatePrefs`（自动检查 / 跳过版本 / 可用版本） |
+| `SYS-SAVE-FILE` | 另存为（桌面）  | 系统保存对话框                                                         | —                                                     | 取消 / 成功                                         |
+| `SYS-GALLERY`   | 存相册（移动）  | —                                                               | 系统相册写入；权限说明                                           | 已授权 / 拒绝                                        |
+| `SYS-SHARE`     | 系统分享（移动） | —                                                               | Share sheet（`share_plus`）；图/视频本地文件                    | 取消 / 成功 / 失败                                    |
 
 ---
 
@@ -524,16 +524,16 @@ Flutter 落点：`packages/design_fluent` 与 `packages/design_material` 的 `Th
 - ~~无障碍与键盘可达~~（已落地：双端全路径 Semantics/tooltip/触控≥48/liveRegion/焦点；Windows debug 可关语义树；**WCAG 2.2 AA 自证，非第三方认证**）
 - ~~**`SYS-SHARE`**：Material 图/视频系统分享入口（`share_plus`）~~（已落地）
 - ~~**`NAV-BACK`**：Material `M-BackHost` 统一托管全屏层返回~~（已落地）
-- ~~**`FB-UPDATE`**：双端壳层启动更新横幅（`F-UpdateBanner` / `M-UpdateBanner`；关于页入口保留）~~（已落地）
+- ~~**`FB-UPDATE`**：对齐现网检查更新 UX——冷启动/托盘弹窗（跳过 / 稍后 / 下载并安装）、设置入口 NEW 角标、关于页自动检查开关与 changelog；`UpdatePrefs` 持久化~~（已落地；横幅组件保留可复用，启动路径改为弹窗）
 - （可选）评估是否另开 Cupertino——默认不做
 
-### 9.1 实现对照（2026-09-07 核对 §5）
+### 9.1 实现对照（2026-09-07 核对 §5；更新 UX 2026-09-09 再对齐）
 
-| 范围                              | 结论                                                                        |
-|---------------------------------|---------------------------------------------------------------------------|
-| §5.3–5.7 壳 / 对话 / 生图 / 生视频 / 设置 | 双端 ✅（含 `SHELL-BRAND-INTRO`；Material `NAV-BACK`：`BackHost` / `M-BackHost`） |
-| §5.8 反馈与系统力                     | ✅（含 Material `SYS-SHARE`）；`FB-UPDATE`：冷启动壳层横幅 + 关于页/托盘入口；「稍后」按版本记 prefs   |
-| 易漏项                             | 耗时自适应、用户末条撤回、回合时间分隔、IME 藏底栏、关闭嵌关于、三模型可搜索、托盘三态均已落地                         |
+| 范围                              | 结论                                                                                  |
+|---------------------------------|-------------------------------------------------------------------------------------|
+| §5.3–5.7 壳 / 对话 / 生图 / 生视频 / 设置 | 双端 ✅（含 `SHELL-BRAND-INTRO`；Material `NAV-BACK`：`BackHost` / `M-BackHost`）           |
+| §5.8 反馈与系统力                     | ✅（含 Material `SYS-SHARE`）；`FB-UPDATE`：冷启动/托盘弹窗 + 设置 NEW 角标 + 关于页/自动检查开关；跳过版本与静默失败降噪 |
+| 易漏项                             | 耗时自适应、用户末条撤回、回合时间分隔、IME 藏底栏、关闭嵌关于、三模型可搜索、托盘三态均已落地                                   |
 
 ---
 

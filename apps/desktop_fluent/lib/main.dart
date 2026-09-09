@@ -128,7 +128,7 @@ class AiStudioApp extends StatelessWidget {
     this.updateController,
     this.navigatorKey,
     this.closeCoordinator,
-    this.startupUpdateCheckDelay = const Duration(milliseconds: 800),
+    this.startupUpdateCheckDelay = const Duration(milliseconds: 1800),
     this.showBrandIntro = true,
   });
 

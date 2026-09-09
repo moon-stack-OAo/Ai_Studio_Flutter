@@ -10,20 +10,25 @@ class MarkdownHost extends StatelessWidget {
     super.key,
     required this.data,
     this.error = false,
+    this.compact = false,
   });
 
   final String data;
   final bool error;
+
+  /// 更新说明等次要区域：更小字号与间距。
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
     final tokens = fluentTokensOf(context);
     final ink = error ? tokens.danger : tokens.ink;
     final base = TextStyle(
-      fontSize: 14,
-      height: 1.65,
-      color: ink,
+      fontSize: compact ? 12.5 : 14,
+      height: compact ? 1.45 : 1.65,
+      color: compact ? tokens.inkSecondary : ink,
       fontFamily: tokens.fontFamily,
+      fontFamilyFallback: kFluentFontFamilyFallback,
     );
 
     if (data.isEmpty) {
@@ -36,12 +41,27 @@ class MarkdownHost extends StatelessWidget {
         color: tokens.primary,
         decoration: TextDecoration.underline,
       ),
-      h1: base.copyWith(fontSize: 22, fontWeight: FontWeight.w700, height: 1.3),
-      h2: base.copyWith(fontSize: 18, fontWeight: FontWeight.w700, height: 1.35),
-      h3: base.copyWith(fontSize: 16, fontWeight: FontWeight.w600, height: 1.4),
-      h4: base.copyWith(fontSize: 15, fontWeight: FontWeight.w600),
-      h5: base.copyWith(fontSize: 14, fontWeight: FontWeight.w600),
-      h6: base.copyWith(fontSize: 13, fontWeight: FontWeight.w600),
+      h1: base.copyWith(
+        fontSize: compact ? 16 : 22,
+        fontWeight: FontWeight.w700,
+        height: 1.3,
+        color: ink,
+      ),
+      h2: base.copyWith(
+        fontSize: compact ? 14.5 : 18,
+        fontWeight: FontWeight.w700,
+        height: 1.35,
+        color: ink,
+      ),
+      h3: base.copyWith(
+        fontSize: compact ? 13.5 : 16,
+        fontWeight: FontWeight.w600,
+        height: 1.4,
+        color: ink,
+      ),
+      h4: base.copyWith(fontSize: compact ? 13 : 15, fontWeight: FontWeight.w600, color: ink),
+      h5: base.copyWith(fontSize: compact ? 12.5 : 14, fontWeight: FontWeight.w600, color: ink),
+      h6: base.copyWith(fontSize: compact ? 12 : 13, fontWeight: FontWeight.w600, color: ink),
       em: base.copyWith(fontStyle: FontStyle.italic),
       strong: base.copyWith(fontWeight: FontWeight.w700),
       del: base.copyWith(decoration: TextDecoration.lineThrough),
@@ -69,8 +89,8 @@ class MarkdownHost extends StatelessWidget {
           top: BorderSide(color: tokens.border, width: 1),
         ),
       ),
-      blockSpacing: 10,
-      listIndent: 24,
+      blockSpacing: compact ? 6 : 10,
+      listIndent: compact ? 18 : 24,
     );
 
     return MarkdownBody(

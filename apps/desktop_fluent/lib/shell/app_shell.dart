@@ -10,10 +10,10 @@ import '../pages/image/image_page.dart';
 import '../pages/settings/settings_shell.dart';
 import '../pages/video/video_page.dart';
 import '../update/update_controller.dart';
+import '../update/update_prompt_dialog.dart';
 import 'app_section.dart';
 import 'fluent_app_title_bar.dart';
 import 'title_bar_theme_button.dart';
-import 'update_banner.dart';
 import 'window_bootstrap.dart';
 import 'window_close_coordinator.dart';
 
@@ -34,8 +34,9 @@ class AppShell extends StatefulWidget {
     this.videoClient,
     this.updateController,
     this.closeCoordinator,
-    this.updateBannerPrefs,
-    this.startupUpdateCheckDelay = const Duration(milliseconds: 800),
+    this.updatePrefs,
+    @Deprecated('Use updatePrefs') this.updateBannerPrefs,
+    this.startupUpdateCheckDelay = const Duration(milliseconds: 1800),
   });
 
   final ThemeController themeController;
@@ -52,7 +53,11 @@ class AppShell extends StatefulWidget {
   final OpenAiCompatibleVideoClient? videoClient;
   final UpdateController? updateController;
   final WindowCloseCoordinator? closeCoordinator;
-  final UpdateBannerPrefs? updateBannerPrefs;
+  final UpdatePrefs? updatePrefs;
+
+  /// 兼容旧测试参数名；优先 [updatePrefs]。
+  @Deprecated('Use updatePrefs')
+  final UpdatePrefs? updateBannerPrefs;
   final Duration startupUpdateCheckDelay;
 
   @override
@@ -65,9 +70,9 @@ class _AppShellState extends State<AppShell> {
   late final AppearanceRepository _fallbackAppearance =
       AppearanceRepository(storage: MemoryAppearanceStorage());
   late final List<Widget> _sectionPages;
-  late final UpdateBannerPrefs _bannerPrefs;
-  String? _bannerVersion;
+  late final UpdatePrefs _updatePrefs;
   bool _startupCheckStarted = false;
+  bool _updateDialogVisible = false;
   Timer? _startupCheckTimer;
 
   AppearanceRepository get _appearanceRepository =>
@@ -76,7 +81,17 @@ class _AppShellState extends State<AppShell> {
   @override
   void initState() {
     super.initState();
-    _bannerPrefs = widget.updateBannerPrefs ?? UpdateBannerPrefs();
+    final injected = widget.updatePrefs ?? widget.updateBannerPrefs;
+    final controllerPrefs = widget.updateController?.prefs;
+    if (injected != null) {
+      _updatePrefs = injected;
+    } else if (controllerPrefs != null) {
+      _updatePrefs = controllerPrefs;
+    } else {
+      _updatePrefs = UpdatePrefs();
+    }
+    widget.updateController?.addListener(_onUpdaterChanged);
+    _updatePrefs.addListener(_onUpdaterChanged);
     _sectionPages = [
       ChatPage(
         providerRepository: widget.providerRepository,
@@ -125,11 +140,17 @@ class _AppShellState extends State<AppShell> {
   @override
   void dispose() {
     _startupCheckTimer?.cancel();
+    widget.updateController?.removeListener(_onUpdaterChanged);
+    _updatePrefs.removeListener(_onUpdaterChanged);
     final coordinator = widget.closeCoordinator;
     if (coordinator != null && supportsCustomTitleBar) {
       unawaited(coordinator.detach());
     }
     super.dispose();
+  }
+
+  void _onUpdaterChanged() {
+    if (mounted) setState(() {});
   }
 
   void _scheduleStartupUpdateCheck() {
@@ -153,14 +174,17 @@ class _AppShellState extends State<AppShell> {
     if (updater.isChecking || updater.isDownloading) return;
 
     try {
-      final result = await updater.checkForUpdate();
+      await _updatePrefs.ensureLoaded();
+      if (!_updatePrefs.autoCheckUpdate) return;
+
+      final result = await updater.checkForUpdate(silent: true);
       if (!mounted) return;
       if (result.status != UpdateCheckStatus.available) return;
       final version = result.latestVersion;
       if (version == null || version.trim().isEmpty) return;
-      if (!await _bannerPrefs.shouldShowFor(version)) return;
+      if (!await _updatePrefs.shouldPromptFor(version)) return;
       if (!mounted) return;
-      setState(() => _bannerVersion = normalizeVersion(version));
+      await _presentUpdatePrompt(result);
     } catch (e) {
       try {
         await widget.appLogRepository.append(
@@ -170,23 +194,6 @@ class _AppShellState extends State<AppShell> {
         );
       } catch (_) {}
     }
-  }
-
-  Future<void> _dismissBanner() async {
-    final version = _bannerVersion;
-    if (version != null) {
-      await _bannerPrefs.dismissVersion(version);
-    }
-    if (!mounted) return;
-    setState(() => _bannerVersion = null);
-  }
-
-  void _goUpdateFromBanner() {
-    setState(() {
-      _bannerVersion = null;
-      _section = AppSection.settings;
-      _settingsCategory = SettingsCategory.about;
-    });
   }
 
   void _openSettingsFromTray() {
@@ -199,10 +206,6 @@ class _AppShellState extends State<AppShell> {
 
   void _checkUpdateFromTray() {
     if (!mounted) return;
-    setState(() {
-      _section = AppSection.settings;
-      _settingsCategory = SettingsCategory.about;
-    });
     unawaited(_runCheckUpdateFromTray());
   }
 
@@ -210,36 +213,23 @@ class _AppShellState extends State<AppShell> {
     final updater = widget.updateController;
     if (updater == null) {
       if (!mounted) return;
-      displayInfoBar(
-        context,
-        builder: (context, close) {
-          return InfoBar(
-            title: const Text('更新服务未初始化'),
-            severity: InfoBarSeverity.warning,
-            onClose: close,
-          );
-        },
-      );
+      _showInfoBar('更新服务未初始化', InfoBarSeverity.warning);
       return;
     }
     if (!updater.isConfigured) {
       if (!mounted) return;
-      displayInfoBar(
-        context,
-        builder: (context, close) {
-          return InfoBar(
-            title: const Text('未配置更新源'),
-            severity: InfoBarSeverity.warning,
-            onClose: close,
-          );
-        },
-      );
+      _showInfoBar('未配置更新源', InfoBarSeverity.warning);
       return;
     }
     if (updater.isChecking || updater.isDownloading) return;
 
-    final result = await updater.checkForUpdate();
+    final result = await updater.checkForUpdate(silent: false);
     if (!mounted) return;
+
+    if (result.status == UpdateCheckStatus.available) {
+      await _presentUpdatePrompt(result);
+      return;
+    }
 
     final (String title, InfoBarSeverity severity) = switch (result.status) {
       UpdateCheckStatus.upToDate => (
@@ -247,7 +237,7 @@ class _AppShellState extends State<AppShell> {
           InfoBarSeverity.success,
         ),
       UpdateCheckStatus.available => (
-          '发现新版本 ${result.latestVersion}，请在关于页下载安装',
+          '发现新版本 ${result.latestVersion}',
           InfoBarSeverity.info,
         ),
       UpdateCheckStatus.notConfigured => (
@@ -264,21 +254,51 @@ class _AppShellState extends State<AppShell> {
         ),
     };
 
-    if (result.status == UpdateCheckStatus.available) {
-      final version = result.latestVersion;
-      if (version != null &&
-          version.trim().isNotEmpty &&
-          await _bannerPrefs.shouldShowFor(version) &&
-          mounted) {
-        setState(() => _bannerVersion = normalizeVersion(version));
-      }
-    }
+    _showInfoBar(title, severity);
+  }
 
+  Future<void> _presentUpdatePrompt(UpdateCheckResult result) async {
+    if (!mounted || _updateDialogVisible) return;
+    final updater = widget.updateController;
+    if (updater == null) return;
+
+    _updateDialogVisible = true;
+    try {
+      final action = await showUpdatePromptDialog(
+        context: context,
+        result: result,
+      );
+      if (!mounted) return;
+
+      switch (action ?? UpdatePromptAction.later) {
+        case UpdatePromptAction.skip:
+          await updater.skipUpdateVersion(result.latestVersion);
+        case UpdatePromptAction.later:
+          _showInfoBar(
+            '可在 设置 → 关于与更新 中安装',
+            InfoBarSeverity.info,
+          );
+        case UpdatePromptAction.install:
+          final ok = await updater.downloadAndInstall(result: result);
+          if (!mounted) return;
+          if (!ok) {
+            _showInfoBar(
+              updater.lastError ?? '下载或安装失败',
+              InfoBarSeverity.error,
+            );
+          }
+      }
+    } finally {
+      _updateDialogVisible = false;
+    }
+  }
+
+  void _showInfoBar(String message, InfoBarSeverity severity) {
     displayInfoBar(
       context,
       builder: (context, close) {
         return InfoBar(
-          title: Text(title),
+          title: Text(message),
           severity: severity,
           onClose: close,
         );
@@ -311,11 +331,17 @@ class _AppShellState extends State<AppShell> {
     setState(() => _section = next);
   }
 
+  bool get _showUpdateBadge {
+    final updater = widget.updateController;
+    if (updater != null) return updater.hasAvailableUpdate;
+    return _updatePrefs.hasAvailableUpdate;
+  }
+
   @override
   Widget build(BuildContext context) {
     final tokens = fluentTokensOf(context);
     final coordinator = widget.closeCoordinator;
-    final bannerVersion = _bannerVersion;
+    final showBadge = _showUpdateBadge;
 
     return Column(
       children: [
@@ -331,12 +357,6 @@ class _AppShellState extends State<AppShell> {
             ),
           ],
         ),
-        if (bannerVersion != null)
-          UpdateBanner(
-            version: bannerVersion,
-            onGoUpdate: _goUpdateFromBanner,
-            onLater: () => unawaited(_dismissBanner()),
-          ),
         Expanded(
           child: FluentTheme(
             // 侧栏同级切换：短淡入，避免 Entrance 位移「飘」感。
@@ -404,6 +424,9 @@ class _AppShellState extends State<AppShell> {
                       selected: _section == AppSection.settings,
                     ),
                     title: const Text('设置'),
+                    infoBadge: showBadge
+                        ? const InfoBadge(source: Text('NEW'))
+                        : null,
                     body: const SizedBox.shrink(),
                   ),
                 ],

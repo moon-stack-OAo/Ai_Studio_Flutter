@@ -195,5 +195,43 @@ void main() {
       await dir.delete(recursive: true);
       client.close();
     });
+
+    test('downloadInstaller cancels when shouldCancel becomes true', () async {
+      final bytes = List<int>.generate(256, (i) => i);
+      final mock = MockClient((request) async {
+        return http.Response.bytes(bytes, 200, headers: {
+          'content-length': '${bytes.length}',
+        });
+      });
+      final dir = await Directory.systemTemp.createTemp('ai_studio_upd_cancel_');
+      final client = UpdateClient(
+        client: mock,
+        manifestUrl: 'https://example.com/latest.json',
+        downloadDirectory: dir,
+        requireSignature: false,
+        installMaxAttempts: 3,
+      );
+      var cancel = false;
+      await expectLater(
+        () => client.downloadInstaller(
+          const PlatformAsset(
+            url: 'https://example.com/AI.Studio_1.0.7_x64-setup.exe',
+          ),
+          onProgress: (_) => cancel = true,
+          shouldCancel: () => cancel,
+        ),
+        throwsA(
+          isA<UpdateException>().having(
+            (e) => e.message,
+            'message',
+            contains('已取消'),
+          ),
+        ),
+      );
+      // 取消后临时文件应已清理
+      expect(dir.listSync(), isEmpty);
+      await dir.delete(recursive: true);
+      client.close();
+    });
   });
 }

@@ -1,5 +1,7 @@
 import 'package:http/http.dart' as http;
+import 'package:http/io_client.dart';
 
+import 'system_proxy.dart';
 import 'url_safety.dart';
 
 /// 默认最大重定向次数（与 `package:http` BaseRequest 默认一致）。
@@ -9,10 +11,13 @@ const int kDefaultMaxRedirects = 5;
 const Set<int> kRedirectStatusCodes = {301, 302, 303, 307, 308};
 
 /// 创建默认出站 Client：对初始 URL 与每一次 redirect 目标做 [assertSafeHttpUrl]。
+///
+/// 未注入 [inner] 时，底层使用 [createProxyAwareHttpClient]：
+/// 优先环境变量代理，其次 Windows 系统代理，否则直连。
 http.Client createSafeHttpClient({http.Client? inner}) {
   final owned = inner == null;
   return SafeRedirectHttpClient(
-    inner ?? http.Client(),
+    inner ?? IOClient(createProxyAwareHttpClient()),
     closeInner: owned,
   );
 }

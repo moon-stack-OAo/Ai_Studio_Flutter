@@ -13,15 +13,22 @@
 
 ### Added
 
-（暂无）
+- **检查更新**：冷启动/托盘发现更新直接弹窗（跳过此版本 / 稍后 / 下载并安装）；设置侧栏/底栏 **NEW** 角标；关于页「启动时自动检查」开关与状态 pill / changelog
+- **`UpdatePrefs`**（core）：`autoCheckUpdate` / `skippedUpdateVersion` / `availableUpdateVersion`；兼容迁移旧横幅「稍后」键
 
 ### Changed
 
-（暂无）
+- 更新检查默认超时 45s；下载瞬时失败最多重试 3 次；错误文案中文化（含「信号灯超时」等映射）
+- 静默检查失败降为 warn、不刷 ERROR；手动检查仍完整反馈
+- 安装前重新拉取清单，避免长时间持有过期结果
 
 ### Fixed
 
-（暂无）
+- 检查更新失败时原始 Socket/Timeout 文案（如「信号灯超时时间已到」）改为可读中文提示
+- **出站 HTTP 跟随系统代理**：无 `HTTP(S)_PROXY` 环境变量时，Windows 读取 Internet 设置（如 Clash `127.0.0.1:7897`），避免浏览器能开 GitHub、应用直连超时
+- **更新说明中文乱码**：GitHub 清单为 `application/octet-stream` 时强制按 UTF-8 解码（不再走 `response.body` 的 latin1）
+- **更新说明 Markdown**：弹窗 / 关于页用紧凑 `MarkdownHost` 渲染 changelog（标题、加粗、列表）
+- **更新下载可取消**：关于页下载中显示「取消」；中断后清理临时文件且不自动重试
 
 ---
 

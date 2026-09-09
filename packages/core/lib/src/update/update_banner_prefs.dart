@@ -1,49 +1,30 @@
-import 'package:shared_preferences/shared_preferences.dart';
+import 'update_prefs.dart';
 
-import 'version_compare.dart';
-
-/// 启动更新横幅「稍后」偏好：记住已忽略的远端版本。
+/// 兼容旧 API：横幅「稍后」曾写入 dismissed version。
 ///
-/// SharedPreferences：`core.update_banner.dismissed_version.v1` → 规范化版本字符串。
-/// 同版本不再提示；更高版本再次提示。
+/// 现已并入 [UpdatePrefs] 的「跳过此版本」语义。新代码请直接使用 [UpdatePrefs]。
 class UpdateBannerPrefs {
-  UpdateBannerPrefs({SharedPreferences? prefs}) : _prefsOverride = prefs;
+  UpdateBannerPrefs({UpdatePrefs? prefs})
+      : _prefs = prefs ?? UpdatePrefs();
 
-  static const prefsKey = 'core.update_banner.dismissed_version.v1';
+  static const prefsKey = UpdatePrefs.legacyDismissedVersionKey;
 
-  final SharedPreferences? _prefsOverride;
-  SharedPreferences? _prefs;
+  final UpdatePrefs _prefs;
 
-  Future<SharedPreferences> _ensurePrefs() async {
-    return _prefs ??= _prefsOverride ?? await SharedPreferences.getInstance();
-  }
+  UpdatePrefs get updatePrefs => _prefs;
 
   Future<String?> loadDismissedVersion() async {
-    final prefs = await _ensurePrefs();
-    final raw = prefs.getString(prefsKey);
-    if (raw == null || raw.trim().isEmpty) return null;
-    final normalized = normalizeVersion(raw);
-    return normalized.isEmpty ? null : normalized;
+    await _prefs.ensureLoaded();
+    return _prefs.skippedUpdateVersion;
   }
 
-  /// 是否应对 [availableVersion] 显示横幅（相对已忽略版本更高，或从未忽略）。
-  Future<bool> shouldShowFor(String? availableVersion) async {
-    final available = normalizeVersion(availableVersion);
-    if (available.isEmpty) return false;
-    final dismissed = await loadDismissedVersion();
-    if (dismissed == null || dismissed.isEmpty) return true;
-    return isRemoteNewer(available, dismissed);
+  Future<bool> shouldShowFor(String? availableVersion) {
+    return _prefs.shouldPromptFor(availableVersion);
   }
 
-  Future<void> dismissVersion(String? version) async {
-    final normalized = normalizeVersion(version);
-    if (normalized.isEmpty) return;
-    final prefs = await _ensurePrefs();
-    await prefs.setString(prefsKey, normalized);
+  Future<void> dismissVersion(String? version) {
+    return _prefs.skipUpdateVersion(version);
   }
 
-  Future<void> clear() async {
-    final prefs = await _ensurePrefs();
-    await prefs.remove(prefsKey);
-  }
+  Future<void> clear() => _prefs.clearSkippedUpdateVersion();
 }
