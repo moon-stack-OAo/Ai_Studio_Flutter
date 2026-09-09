@@ -87,56 +87,61 @@ class _BrandIntroGateState extends State<BrandIntroGate> {
               onEnd: _onFadeEnd,
               child: ColoredBox(
                 color: tokens.canvas,
-                child: Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Container(
-                        width: 96,
-                        height: 96,
-                        padding: const EdgeInsets.all(14),
-                        decoration: BoxDecoration(
-                          color: tokens.surface,
-                          borderRadius: BorderRadius.circular(22),
-                          border: Border.all(color: tokens.border),
-                          boxShadow: [
-                            BoxShadow(
-                              color: tokens.ink.withValues(alpha: 0.10),
-                              blurRadius: 32,
-                              offset: const Offset(0, 12),
-                            ),
-                          ],
+                child: DefaultTextStyle.merge(
+                  style: const TextStyle(decoration: TextDecoration.none),
+                  child: Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          width: 96,
+                          height: 96,
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            color: tokens.surface,
+                            borderRadius: BorderRadius.circular(22),
+                            border: Border.all(color: tokens.border),
+                            boxShadow: [
+                              BoxShadow(
+                                color: tokens.ink.withValues(alpha: 0.10),
+                                blurRadius: 32,
+                                offset: const Offset(0, 12),
+                              ),
+                            ],
+                          ),
+                          child: Image.asset(
+                            'assets/logo.png',
+                            fit: BoxFit.contain,
+                            filterQuality: FilterQuality.medium,
+                          ),
                         ),
-                        child: Image.asset(
-                          'assets/logo.png',
-                          fit: BoxFit.contain,
-                          filterQuality: FilterQuality.medium,
+                        const SizedBox(height: 18),
+                        Text(
+                          'AI Studio',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 22,
+                            fontWeight: FontWeight.w600,
+                            letterSpacing: -0.02,
+                            color: tokens.ink,
+                            fontFamily: tokens.fontFamily,
+                            decoration: TextDecoration.none,
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 18),
-                      Text(
-                        'AI Studio',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontSize: 22,
-                          fontWeight: FontWeight.w600,
-                          letterSpacing: -0.02,
-                          color: tokens.ink,
-                          fontFamily: tokens.fontFamily,
+                        const SizedBox(height: 8),
+                        Text(
+                          '对话 · 生图 · 生视频',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 13,
+                            letterSpacing: 0.02,
+                            color: tokens.inkMuted,
+                            fontFamily: tokens.fontFamily,
+                            decoration: TextDecoration.none,
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        '对话 · 生图 · 生视频',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontSize: 13,
-                          letterSpacing: 0.02,
-                          color: tokens.inkMuted,
-                          fontFamily: tokens.fontFamily,
-                        ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               ),

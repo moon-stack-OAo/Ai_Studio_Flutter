@@ -124,7 +124,7 @@ class _BrandIntroGateState extends State<BrandIntroGate> {
               duration: widget.fadeDuration,
               curve: Curves.easeOut,
               onEnd: _onFadeEnd,
-              child: ColoredBox(
+              child: Material(
                 color: tokens.canvas,
                 child: SafeArea(
                   child: Center(
@@ -163,6 +163,7 @@ class _BrandIntroGateState extends State<BrandIntroGate> {
                             letterSpacing: -0.01,
                             color: tokens.ink,
                             fontFamily: tokens.fontFamily,
+                            decoration: TextDecoration.none,
                           ),
                         ),
                         const SizedBox(height: 8),
@@ -173,6 +174,7 @@ class _BrandIntroGateState extends State<BrandIntroGate> {
                             fontSize: 13,
                             color: tokens.inkMuted,
                             fontFamily: tokens.fontFamily,
+                            decoration: TextDecoration.none,
                           ),
                         ),
                       ],
