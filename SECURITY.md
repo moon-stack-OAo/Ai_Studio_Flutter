@@ -32,10 +32,10 @@
 
 ## 密钥存储
 
-| 键 | 介质 | 内容 |
-|----|------|------|
-| `core.providers.v1` | `shared_preferences` | 提供商元数据 JSON（**不含** apiKey） |
-| `core.provider.keys.v1` | `flutter_secure_storage` | `id → apiKey` JSON 映射 |
+| 键                       | 介质                       | 内容                         |
+|-------------------------|--------------------------|----------------------------|
+| `core.providers.v1`     | `shared_preferences`     | 提供商元数据 JSON（**不含** apiKey） |
+| `core.provider.keys.v1` | `flutter_secure_storage` | `id → apiKey` JSON 映射      |
 
 实现：`SecureProviderStorage` + `SecretStore`（`packages/core`）。
 
@@ -62,9 +62,9 @@
 
 - 默认 `includeSecrets: false`，备份仅含提供商元数据（id / name / baseUrl / models 等）。
 - 若用户显式选择导出密钥（`includeSecrets: true`）：
-  - 备份文件等同于**明文密钥副本**；落盘、分享、云同步、截图均可能导致泄露。
-  - UI 必须明确警示，并建议加密存储或用完即删。
-  - 日志与 Toast **不得**回显 Key 或整份含密钥 JSON。
+    - 备份文件等同于**明文密钥副本**；落盘、分享、云同步、截图均可能导致泄露。
+    - UI 必须明确警示，并建议加密存储或用完即删。
+    - 日志与 Toast **不得**回显 Key 或整份含密钥 JSON。
 
 ### 导入恶意 / 过大 JSON
 
