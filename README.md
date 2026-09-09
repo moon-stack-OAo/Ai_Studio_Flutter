@@ -107,6 +107,13 @@ Windows 使用 `flutter_secure_storage` 时需 VS Build Tools 的 **C++ ATL**（
 
 发版前配置 Secrets：`TAURI_SIGNING_PRIVATE_KEY`（必填）、`TAURI_SIGNING_PRIVATE_KEY_PASSWORD`；可选 `ANDROID_KEY_*`。清单与签名脚本在 `.github/scripts/`。
 
+本地升版（双端 `pubspec` → `x.y.z+Unix秒`，不自动 commit）：
+
+```bash
+node .github/scripts/bump-version.mjs 1.0.2
+# node .github/scripts/bump-version.mjs 1.0.2 --dry-run
+```
+
 ## 文档索引
 
 | 文档                                               | 说明                               |
