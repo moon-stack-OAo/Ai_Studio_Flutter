@@ -1,5 +1,5 @@
-# 手动预览构建：Windows 安装包 + macOS zip（按芯片）+ Android APK（上传 artifact，不发 Release）
-# 正式分发走 release.yml（推送 v* tag）；日常校验走 ci.yml。
+# 手动预览构建：Windows 安装包 + macOS zip（按芯片）+ Android APK + iOS 未签名 IPA（上传 artifact，不发 Release）
+# iOS 产物需本机用 Sideloadly 等工具以 Apple ID 重签后才能装真机；正式分发走 release.yml（推送 v* tag）；日常校验走 ci.yml。
 name: build
 
 on:
@@ -189,4 +189,57 @@ jobs:
         with:
           name: android-apk
           path: dist/*.apk
+          if-no-files-found: error
+
+  # 未签名 IPA：供 Sideloadly / AltStore 等以免费或付费 Apple ID 重签安装；不进 Release。
+  ios:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Pub get
+        run: flutter pub get
+
+      - name: Build iOS release (no codesign)
+        working-directory: apps/mobile_material
+        run: flutter build ios --release --no-codesign
+
+      - name: Package unsigned IPA
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="$(grep -E '^version:' apps/mobile_material/pubspec.yaml | head -1 | sed -E 's/^version:[[:space:]]*//; s/\+.*//')"
+          APP_DIR="apps/mobile_material/build/ios/iphoneos"
+          APP_PATH="$(find "$APP_DIR" -maxdepth 1 -name '*.app' -print | head -n 1)"
+          test -n "$APP_PATH"
+          test -d "$APP_PATH"
+          # 侧载工具对未签名 framework 更友好：adhoc 身份轻量签一层元数据
+          if [ -d "$APP_PATH/Frameworks" ]; then
+            find "$APP_PATH/Frameworks" -type d -name '*.framework' \
+              -exec codesign --force --sign - --preserve-metadata=identifier,entitlements {} \;
+          fi
+          mkdir -p dist/Payload
+          cp -R "$APP_PATH" dist/Payload/
+          OUT="dist/AI.Studio_${VERSION}_ios.ipa"
+          (
+            cd dist
+            zip -r9 -q "AI.Studio_${VERSION}_ios.ipa" Payload
+            rm -rf Payload
+          )
+          test -f "$OUT"
+          ls -lh "$OUT"
+          unzip -l "$OUT" | head -n 20
+
+      - name: Upload iOS artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-ipa
+          path: dist/*.ipa
           if-no-files-found: error
