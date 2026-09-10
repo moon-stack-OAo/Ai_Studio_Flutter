@@ -1,6 +1,7 @@
 import 'package:core/core.dart';
 import 'package:design_material/design_material.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../../widgets/collapsible_prompt.dart';
 import '../../../widgets/empty_illustrations.dart';
@@ -263,39 +264,12 @@ class _TurnCard extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Container(
-          padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
-          decoration: BoxDecoration(
-            color: tokens.surfaceMuted,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: tokens.border),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                '你 · 回合 $turnIndex · ${_timeLabel(item.createdAt)}'
-                '${item.mode == VideoGenMode.image ? ' · 图生视频' : ' · 文生视频'}'
-                '${item.duration != null ? ' · ${item.duration}s' : ''}',
-                style: TextStyle(
-                  fontSize: 11,
-                  color: tokens.inkMuted,
-                  fontFamily: tokens.fontFamily,
-                ),
-              ),
-              const SizedBox(height: 6),
-              CollapsiblePrompt(
-                text: item.prompt,
-                style: TextStyle(
-                  fontSize: 13,
-                  height: 1.45,
-                  color: tokens.ink,
-                  fontFamily: tokens.fontFamily,
-                ),
-                linkColor: tokens.primary,
-              ),
-            ],
-          ),
+        _UserPromptBubble(
+          prompt: item.prompt,
+          header:
+              '你 · 回合 $turnIndex · ${_timeLabel(item.createdAt)}'
+              '${item.mode == VideoGenMode.image ? ' · 图生视频' : ' · 文生视频'}'
+              '${item.duration != null ? ' · ${item.duration}s' : ''}',
         ),
         const SizedBox(height: 8),
         Container(
@@ -468,5 +442,89 @@ class _TurnCard extends StatelessWidget {
       case VideoItemStatus.abandoned:
         return const [];
     }
+  }
+}
+
+class _UserPromptBubble extends StatelessWidget {
+  const _UserPromptBubble({
+    required this.prompt,
+    required this.header,
+  });
+
+  final String prompt;
+  final String header;
+
+  Future<void> _copy(BuildContext context) async {
+    if (prompt.isEmpty) return;
+    await Clipboard.setData(ClipboardData(text: prompt));
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('已复制')),
+    );
+  }
+
+  Future<void> _showActions(BuildContext context) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.copy_outlined),
+                title: const Text('复制'),
+                onTap: () {
+                  Navigator.of(ctx).pop();
+                  _copy(context);
+                },
+              ),
+              const SizedBox(height: 8),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = materialTokensOf(context);
+    return GestureDetector(
+      onLongPress: () => _showActions(context),
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+        decoration: BoxDecoration(
+          color: tokens.surfaceMuted,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: tokens.border),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              header,
+              style: TextStyle(
+                fontSize: 11,
+                color: tokens.inkMuted,
+                fontFamily: tokens.fontFamily,
+              ),
+            ),
+            const SizedBox(height: 6),
+            CollapsiblePrompt(
+              text: prompt,
+              style: TextStyle(
+                fontSize: 13,
+                height: 1.45,
+                color: tokens.ink,
+                fontFamily: tokens.fontFamily,
+              ),
+              linkColor: tokens.primary,
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }

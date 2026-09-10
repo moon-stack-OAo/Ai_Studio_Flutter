@@ -1,6 +1,7 @@
 import 'package:core/core.dart';
 import 'package:design_fluent/design_fluent.dart';
 import 'package:fluent_ui/fluent_ui.dart';
+import 'package:flutter/services.dart';
 
 import '../../../widgets/collapsible_prompt.dart';
 import '../../../widgets/empty_illustrations.dart';
@@ -402,40 +403,13 @@ class _TurnBlock extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Container(
-            padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
-            decoration: BoxDecoration(
-              color: tokens.canvas,
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: tokens.border),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '你 · 回合 $turnIndex'
-                  '${item.mode == VideoGenMode.image ? ' · 图生视频' : ''}'
-                  '${item.duration != null ? ' · ${item.duration}s' : ''}',
-                  style: TextStyle(
-                    fontSize: 10,
-                    color: tokens.inkMuted,
-                    fontFamily: tokens.fontFamily,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                CollapsiblePrompt(
-                  text: item.prompt,
-                  maxLines: 3,
-                  style: TextStyle(
-                    fontSize: 12,
-                    height: 1.45,
-                    color: tokens.inkSecondary,
-                    fontFamily: tokens.fontFamily,
-                  ),
-                  linkColor: tokens.primary,
-                ),
-              ],
-            ),
+          _UserPromptBubble(
+            prompt: item.prompt,
+            tokens: tokens,
+            header:
+                '你 · 回合 $turnIndex'
+                '${item.mode == VideoGenMode.image ? ' · 图生视频' : ''}'
+                '${item.duration != null ? ' · ${item.duration}s' : ''}',
           ),
           const SizedBox(height: 8),
           Semantics(
@@ -660,5 +634,181 @@ class _TurnBlock extends StatelessWidget {
       case VideoItemStatus.abandoned:
         return const [];
     }
+  }
+}
+
+class _UserPromptBubble extends StatefulWidget {
+  const _UserPromptBubble({
+    required this.prompt,
+    required this.tokens,
+    required this.header,
+  });
+
+  final String prompt;
+  final FluentTokens tokens;
+  final String header;
+
+  @override
+  State<_UserPromptBubble> createState() => _UserPromptBubbleState();
+}
+
+class _UserPromptBubbleState extends State<_UserPromptBubble> {
+  final FlyoutController _flyout = FlyoutController();
+  bool _hovered = false;
+
+  @override
+  void dispose() {
+    _flyout.dispose();
+    super.dispose();
+  }
+
+  Future<void> _copy() async {
+    final text = widget.prompt;
+    if (text.isEmpty) return;
+    await Clipboard.setData(ClipboardData(text: text));
+    if (!mounted) return;
+    displayInfoBar(
+      context,
+      builder: (context, close) {
+        return InfoBar(
+          title: const Text('已复制'),
+          severity: InfoBarSeverity.success,
+          onClose: close,
+        );
+      },
+    );
+  }
+
+  Future<void> _showContextMenu(Offset globalPosition) async {
+    final navBox =
+        Navigator.of(context).context.findRenderObject() as RenderBox?;
+    if (navBox == null) return;
+    final position = navBox.globalToLocal(globalPosition);
+    await _flyout.showFlyout<void>(
+      position: position,
+      barrierDismissible: true,
+      dismissWithEsc: true,
+      builder: (ctx) {
+        return MenuFlyout(
+          items: [
+            MenuFlyoutItem(
+              leading: const Icon(FluentIcons.copy, size: 14),
+              text: const Text('复制'),
+              onPressed: () {
+                Navigator.of(ctx).pop();
+                _copy();
+              },
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = widget.tokens;
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: FlyoutTarget(
+        controller: _flyout,
+        child: GestureDetector(
+          onSecondaryTapUp: (details) =>
+              _showContextMenu(details.globalPosition),
+          child: Container(
+            padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
+            decoration: BoxDecoration(
+              color: tokens.canvas,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: tokens.border),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  widget.header,
+                  style: TextStyle(
+                    fontSize: 10,
+                    color: tokens.inkMuted,
+                    fontFamily: tokens.fontFamily,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                CollapsiblePrompt(
+                  text: widget.prompt,
+                  maxLines: 3,
+                  style: TextStyle(
+                    fontSize: 12,
+                    height: 1.45,
+                    color: tokens.inkSecondary,
+                    fontFamily: tokens.fontFamily,
+                  ),
+                  linkColor: tokens.primary,
+                ),
+                AnimatedOpacity(
+                  opacity: _hovered ? 1 : 0,
+                  duration: const Duration(milliseconds: 120),
+                  child: IgnorePointer(
+                    ignoring: !_hovered,
+                    child: Padding(
+                      padding: const EdgeInsets.only(top: 6),
+                      child: _PromptCopyChip(
+                        onPressed: _copy,
+                        tokens: tokens,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PromptCopyChip extends StatelessWidget {
+  const _PromptCopyChip({
+    required this.onPressed,
+    required this.tokens,
+  });
+
+  final VoidCallback onPressed;
+  final FluentTokens tokens;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      label: '复制',
+      excludeSemantics: true,
+      child: HoverButton(
+        onPressed: onPressed,
+        cursor: SystemMouseCursors.click,
+        builder: (context, states) {
+          final hovered = states.isHovered || states.isPressed;
+          return Container(
+            height: 26,
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            decoration: BoxDecoration(
+              color: hovered ? tokens.surfaceMuted : tokens.surface,
+              borderRadius: BorderRadius.circular(5),
+              border: Border.all(color: tokens.border),
+            ),
+            alignment: Alignment.center,
+            child: Text(
+              '复制',
+              style: TextStyle(
+                fontSize: 11,
+                color: hovered ? tokens.ink : tokens.inkSecondary,
+                fontFamily: tokens.fontFamily,
+              ),
+            ),
+          );
+        },
+      ),
+    );
   }
 }

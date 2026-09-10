@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
 
 import '../../../shell/back_host.dart';
+import 'video_playback_guard.dart';
 
 /// M-VideoPlayer：全屏播放页，pop 即 dispose。
 class VideoPlayerPage extends StatefulWidget {
@@ -28,6 +29,7 @@ class VideoPlayerPage extends StatefulWidget {
 
 class _VideoPlayerPageState extends State<VideoPlayerPage> {
   VideoPlayerController? _controller;
+  VideoPlaybackGuard? _guard;
   String? _error;
   bool _ready = false;
 
@@ -49,6 +51,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
     }
     try {
       final VideoPlayerController ctrl;
+      final VideoPlaybackGuard guard;
       if (RegExp(r'^https?://', caseSensitive: false).hasMatch(path)) {
         ctrl = VideoPlayerController.networkUrl(Uri.parse(path));
       } else {
@@ -68,7 +71,16 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
         await ctrl.dispose();
         return;
       }
+      await ctrl.setLooping(false);
+      if (!mounted) {
+        await ctrl.dispose();
+        return;
+      }
+      guard = VideoPlaybackGuard(ctrl);
+      _guard = guard;
       setState(() => _ready = true);
+      // 先起墙钟再 await play，避免开头长时间停在 0。
+      guard.notePlayStarted();
       await ctrl.play();
     } catch (e) {
       if (!mounted) return;
@@ -88,8 +100,11 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
 
   @override
   void dispose() {
+    final g = _guard;
     final c = _controller;
+    _guard = null;
     _controller = null;
+    g?.dispose();
     c?.dispose();
     super.dispose();
   }
@@ -139,10 +154,11 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
                     ),
                   ),
                 )
-              : !_ready || _controller == null
+              : !_ready || _controller == null || _guard == null
                   ? const CircularProgressIndicator(color: Colors.white)
                   : _PlayerStage(
                       controller: _controller!,
+                      guard: _guard!,
                       fallbackAspectRatio:
                           _parseAspect(widget.item.aspectRatio),
                     ),
@@ -166,10 +182,12 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
 class _PlayerStage extends StatelessWidget {
   const _PlayerStage({
     required this.controller,
+    required this.guard,
     this.fallbackAspectRatio,
   });
 
   final VideoPlayerController controller;
+  final VideoPlaybackGuard guard;
   final double? fallbackAspectRatio;
 
   @override
@@ -193,38 +211,28 @@ class _PlayerStage extends StatelessWidget {
         const SizedBox(height: 12),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: ValueListenableBuilder<VideoPlayerValue>(
-            valueListenable: controller,
-            builder: (context, value, _) {
+          child: AnimatedBuilder(
+            animation: Listenable.merge([controller, guard]),
+            builder: (context, _) {
+              final playing = guard.uiPlaying;
               return Row(
                 children: [
                   IconButton(
                     color: Colors.white,
-                    tooltip: value.isPlaying ? '暂停' : '播放',
+                    tooltip: playing ? '暂停' : '播放',
                     icon: Icon(
-                      value.isPlaying ? Icons.pause : Icons.play_arrow,
+                      playing ? Icons.pause : Icons.play_arrow,
                     ),
                     style: IconButton.styleFrom(
                       minimumSize: const Size(48, 48),
                       tapTargetSize: MaterialTapTargetSize.padded,
                     ),
-                    onPressed: () {
-                      if (value.isPlaying) {
-                        controller.pause();
-                      } else {
-                        controller.play();
-                      }
-                    },
+                    onPressed: () => guard.togglePlayPause(),
                   ),
                   Expanded(
-                    child: VideoProgressIndicator(
-                      controller,
-                      allowScrubbing: true,
-                      colors: const VideoProgressColors(
-                        playedColor: Colors.white,
-                        bufferedColor: Colors.white38,
-                        backgroundColor: Colors.white24,
-                      ),
+                    child: _MobileScrubber(
+                      controller: controller,
+                      guard: guard,
                     ),
                   ),
                 ],
@@ -233,6 +241,97 @@ class _PlayerStage extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _MobileScrubber extends StatefulWidget {
+  const _MobileScrubber({
+    required this.controller,
+    required this.guard,
+  });
+
+  final VideoPlayerController controller;
+  final VideoPlaybackGuard guard;
+
+  @override
+  State<_MobileScrubber> createState() => _MobileScrubberState();
+}
+
+class _MobileScrubberState extends State<_MobileScrubber> {
+  double? _dragFraction;
+  bool _wasPlaying = false;
+
+  double _fractionOf(Offset globalPosition) {
+    final box = context.findRenderObject()! as RenderBox;
+    final local = box.globalToLocal(globalPosition);
+    if (box.size.width <= 0) return 0;
+    return (local.dx / box.size.width).clamp(0.0, 1.0);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: Listenable.merge([widget.controller, widget.guard]),
+      builder: (context, _) {
+        final value = widget.controller.value;
+        final fraction =
+            _dragFraction ?? widget.guard.progressFraction(value);
+        final durationMs = value.duration.inMilliseconds;
+        final buffered = durationMs <= 0
+            ? 0.0
+            : value.buffered
+                    .map((r) => r.end.inMilliseconds)
+                    .fold<int>(0, (a, b) => a > b ? a : b) /
+                durationMs;
+        return GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onHorizontalDragStart: (_) {
+            _wasPlaying = widget.guard.uiPlaying;
+            setState(() => _dragFraction = fraction);
+          },
+          onHorizontalDragUpdate: (details) {
+            setState(() => _dragFraction = _fractionOf(details.globalPosition));
+          },
+          onHorizontalDragEnd: (_) async {
+            final f = _dragFraction ?? fraction;
+            setState(() => _dragFraction = null);
+            await widget.guard.seekFraction(f, resume: _wasPlaying);
+          },
+          onTapDown: (details) async {
+            final f = _fractionOf(details.globalPosition);
+            await widget.guard.seekFraction(
+              f,
+              resume: widget.guard.uiPlaying,
+            );
+          },
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            child: SizedBox(
+              height: 4,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(2),
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    const ColoredBox(color: Colors.white24),
+                    FractionallySizedBox(
+                      widthFactor: buffered.clamp(0.0, 1.0),
+                      alignment: Alignment.centerLeft,
+                      child: const ColoredBox(color: Colors.white38),
+                    ),
+                    FractionallySizedBox(
+                      widthFactor: fraction.clamp(0.0, 1.0),
+                      alignment: Alignment.centerLeft,
+                      child: const ColoredBox(color: Colors.white),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 }

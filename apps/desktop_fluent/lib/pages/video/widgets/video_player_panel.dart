@@ -5,6 +5,7 @@ import 'package:design_fluent/design_fluent.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:video_player/video_player.dart';
 
+import 'video_playback_guard.dart';
 import 'video_player_dialog.dart' show resolveVideoItemPlayablePath;
 
 /// F-VideoPlayer · VID-PLAYER：主区内嵌播放面板。
@@ -178,6 +179,7 @@ class _InlinePlayer extends StatefulWidget {
 
 class _InlinePlayerState extends State<_InlinePlayer> {
   VideoPlayerController? _controller;
+  VideoPlaybackGuard? _guard;
   String? _error;
   bool _ready = false;
   String? _boundItemId;
@@ -221,7 +223,9 @@ class _InlinePlayerState extends State<_InlinePlayer> {
     final path = resolveVideoItemPlayablePath(item);
     final token = ++_bindToken;
     final old = _controller;
+    final oldGuard = _guard;
     _controller = null;
+    _guard = null;
     _boundItemId = item.id;
     _boundPath = path;
     if (mounted) {
@@ -230,6 +234,7 @@ class _InlinePlayerState extends State<_InlinePlayer> {
         _error = null;
       });
     }
+    oldGuard?.dispose();
     await old?.dispose();
     if (!mounted || token != _bindToken) return;
 
@@ -271,7 +276,16 @@ class _InlinePlayerState extends State<_InlinePlayer> {
         await ctrl.dispose();
         return;
       }
+      await ctrl.setLooping(false);
+      if (!mounted || token != _bindToken) {
+        await ctrl.dispose();
+        return;
+      }
+      final guard = VideoPlaybackGuard(ctrl);
+      _guard = guard;
       setState(() => _ready = true);
+      // 先起墙钟再 await play，避免开头长时间停在 0。
+      guard.notePlayStarted();
       await ctrl.play();
     } catch (e) {
       if (!mounted || token != _bindToken) return;
@@ -282,8 +296,11 @@ class _InlinePlayerState extends State<_InlinePlayer> {
   @override
   void dispose() {
     _bindToken++;
+    final g = _guard;
     final c = _controller;
+    _guard = null;
     _controller = null;
+    g?.dispose();
     c?.dispose();
     super.dispose();
   }
@@ -321,9 +338,14 @@ class _InlinePlayerState extends State<_InlinePlayer> {
               ),
             ),
           ),
-          if (_ready && _controller != null) ...[
+          if (_ready && _controller != null && _guard != null) ...[
             const SizedBox(height: 10),
-            _Transport(controller: _controller!, tokens: tokens, fmt: _fmt),
+            _Transport(
+              controller: _controller!,
+              guard: _guard!,
+              tokens: tokens,
+              fmt: _fmt,
+            ),
           ],
           const SizedBox(height: 10),
           Wrap(
@@ -385,57 +407,53 @@ class _InlinePlayerState extends State<_InlinePlayer> {
 class _Transport extends StatelessWidget {
   const _Transport({
     required this.controller,
+    required this.guard,
     required this.tokens,
     required this.fmt,
   });
 
   final VideoPlayerController controller;
+  final VideoPlaybackGuard guard;
   final FluentTokens tokens;
   final String Function(Duration) fmt;
 
   @override
   Widget build(BuildContext context) {
-    return ValueListenableBuilder<VideoPlayerValue>(
-      valueListenable: controller,
-      builder: (context, value, _) {
+    return AnimatedBuilder(
+      animation: Listenable.merge([controller, guard]),
+      builder: (context, _) {
+        final value = controller.value;
+        final playing = guard.uiPlaying;
+        final position = guard.displayPosition(value);
         return Row(
           children: [
             Tooltip(
-              message: value.isPlaying ? '暂停' : '播放',
+              message: playing ? '暂停' : '播放',
               child: Semantics(
                 button: true,
-                label: value.isPlaying ? '暂停' : '播放',
+                label: playing ? '暂停' : '播放',
                 excludeSemantics: true,
                 child: IconButton(
                   icon: Icon(
-                    value.isPlaying ? FluentIcons.pause : FluentIcons.play,
+                    playing ? FluentIcons.pause : FluentIcons.play,
                     size: 14,
                   ),
-                  onPressed: () {
-                    if (value.isPlaying) {
-                      controller.pause();
-                    } else {
-                      controller.play();
-                    }
-                  },
+                  onPressed: () => guard.togglePlayPause(),
                 ),
               ),
             ),
             Expanded(
-              child: VideoProgressIndicator(
-                controller,
-                allowScrubbing: true,
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                colors: VideoProgressColors(
-                  playedColor: tokens.primary,
-                  bufferedColor: tokens.primary.withValues(alpha: 0.25),
-                  backgroundColor: tokens.surfaceMuted,
-                ),
+              child: _GuardedScrubber(
+                controller: controller,
+                guard: guard,
+                playedColor: tokens.primary,
+                bufferedColor: tokens.primary.withValues(alpha: 0.25),
+                backgroundColor: tokens.surfaceMuted,
               ),
             ),
             const SizedBox(width: 8),
             Text(
-              '${fmt(value.position)} / ${fmt(value.duration)}',
+              '${fmt(position)} / ${fmt(value.duration)}',
               style: TextStyle(
                 fontSize: 11,
                 color: tokens.inkMuted,
@@ -444,6 +462,103 @@ class _Transport extends StatelessWidget {
               ),
             ),
           ],
+        );
+      },
+    );
+  }
+}
+
+class _GuardedScrubber extends StatefulWidget {
+  const _GuardedScrubber({
+    required this.controller,
+    required this.guard,
+    required this.playedColor,
+    required this.bufferedColor,
+    required this.backgroundColor,
+  });
+
+  final VideoPlayerController controller;
+  final VideoPlaybackGuard guard;
+  final Color playedColor;
+  final Color bufferedColor;
+  final Color backgroundColor;
+
+  @override
+  State<_GuardedScrubber> createState() => _GuardedScrubberState();
+}
+
+class _GuardedScrubberState extends State<_GuardedScrubber> {
+  double? _dragFraction;
+  bool _wasPlaying = false;
+
+  double _fractionOf(Offset globalPosition) {
+    final box = context.findRenderObject()! as RenderBox;
+    final local = box.globalToLocal(globalPosition);
+    if (box.size.width <= 0) return 0;
+    return (local.dx / box.size.width).clamp(0.0, 1.0);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: Listenable.merge([widget.controller, widget.guard]),
+      builder: (context, _) {
+        final value = widget.controller.value;
+        final fraction =
+            _dragFraction ?? widget.guard.progressFraction(value);
+        final durationMs = value.duration.inMilliseconds;
+        final buffered = durationMs <= 0
+            ? 0.0
+            : value.buffered
+                    .map((r) => r.end.inMilliseconds)
+                    .fold<int>(0, (a, b) => a > b ? a : b) /
+                durationMs;
+        return GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onHorizontalDragStart: (_) {
+            _wasPlaying = widget.guard.uiPlaying;
+            setState(() => _dragFraction = fraction);
+          },
+          onHorizontalDragUpdate: (details) {
+            setState(() => _dragFraction = _fractionOf(details.globalPosition));
+          },
+          onHorizontalDragEnd: (_) async {
+            final f = _dragFraction ?? fraction;
+            setState(() => _dragFraction = null);
+            await widget.guard.seekFraction(f, resume: _wasPlaying);
+          },
+          onTapDown: (details) async {
+            final f = _fractionOf(details.globalPosition);
+            await widget.guard.seekFraction(
+              f,
+              resume: widget.guard.uiPlaying,
+            );
+          },
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: SizedBox(
+              height: 4,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(2),
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    ColoredBox(color: widget.backgroundColor),
+                    FractionallySizedBox(
+                      widthFactor: buffered.clamp(0.0, 1.0),
+                      alignment: Alignment.centerLeft,
+                      child: ColoredBox(color: widget.bufferedColor),
+                    ),
+                    FractionallySizedBox(
+                      widthFactor: fraction.clamp(0.0, 1.0),
+                      alignment: Alignment.centerLeft,
+                      child: ColoredBox(color: widget.playedColor),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
         );
       },
     );

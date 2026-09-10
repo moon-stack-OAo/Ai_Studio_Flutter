@@ -21,7 +21,7 @@
 
 ### Fixed
 
-（暂无）
+- **视频预览播完首尾帧来回跳**：Windows `video_player_win` 在 `completed` 后再 `seekTo(duration)` 会强制续播；双端播放器加守卫，接近片尾主动暂停并钉住末态；进度条用墙钟插值对齐画面，钉住时强制满格
 
 ---
 
