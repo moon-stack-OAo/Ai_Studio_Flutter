@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 
 import '../chat/chat_errors.dart';
 import '../openai/openai_urls.dart';
+import '../provider/agnes_profile.dart';
 import '../provider/provider_repository.dart';
 import '../provider/provider_type.dart';
 import '../security/safe_http_client.dart';
@@ -65,7 +66,9 @@ class OpenAiCompatibleImageClient {
 
   /// 文生图：POST `{base}/images/generations`。
   ///
-  /// OpenAI 系写 [size]；xAI 或显式传入 [aspectRatio] 时写 `aspect_ratio`。
+  /// - OpenAI 系写 [size]
+  /// - xAI 写 `aspect_ratio`
+  /// - Agnes：`size` 档位 + `ratio`；`response_format` 放 `extra_body`
   Future<List<ImageRef>> generateTextToImage({
     required String baseUrl,
     required String apiKey,
@@ -97,6 +100,28 @@ class OpenAiCompatibleImageClient {
       throw const ChatApiException('请输入提示词');
     }
 
+    final agnes = isAgnesImageProvider(baseUrl: baseUrl, imageModel: modelId);
+    if (agnes) {
+      final body = <String, dynamic>{
+        'model': modelId,
+        'prompt': text,
+        'n': n.clamp(1, 10),
+        'size': normalizeAgnesImageSize(size),
+        'ratio': normalizeAgnesImageRatio(aspectRatio),
+        'extra_body': {'response_format': responseFormat},
+      };
+      if (responseFormat == 'b64_json') {
+        body['return_base64'] = true;
+      }
+      return _postJson(
+        uri: imageGenerationsUri(baseUrl),
+        apiKey: apiKey,
+        body: body,
+        timeout: timeout,
+        client: client,
+      );
+    }
+
     final useAspect = providerType == ProviderType.xai ||
         (aspectRatio != null && aspectRatio.trim().isNotEmpty);
 
@@ -125,7 +150,10 @@ class OpenAiCompatibleImageClient {
     );
   }
 
-  /// 图生图：OpenAI multipart `/images/edits`；xAI JSON + `image.url` dataUrl。
+  /// 图生图：
+  /// - OpenAI multipart `/images/edits`
+  /// - xAI JSON + `image.url` dataUrl
+  /// - Agnes：仍走 `/images/generations`，参考图进 `extra_body.image`
   Future<List<ImageRef>> editImage({
     required String baseUrl,
     required String apiKey,
@@ -164,6 +192,30 @@ class OpenAiCompatibleImageClient {
 
     final effectiveClient = client ?? _client;
     final reqTimeout = timeout ?? this.timeout;
+
+    final agnes = isAgnesImageProvider(baseUrl: baseUrl, imageModel: modelId);
+    if (agnes) {
+      final dataUrl = 'data:image/png;base64,${base64Encode(imageBytes)}';
+      final body = <String, dynamic>{
+        'model': modelId,
+        'prompt': text,
+        'n': n.clamp(1, 10),
+        'size': normalizeAgnesImageSize(size),
+        'ratio': normalizeAgnesImageRatio(aspectRatio),
+        'extra_body': {
+          'image': [dataUrl],
+          'response_format': responseFormat,
+        },
+      };
+      return _postJson(
+        uri: imageGenerationsUri(baseUrl),
+        apiKey: apiKey,
+        body: body,
+        timeout: timeout,
+        client: client,
+      );
+    }
+
     final uri = imageEditsUri(baseUrl);
 
     if (providerType == ProviderType.xai) {

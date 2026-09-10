@@ -10,6 +10,7 @@ import '../chat/generation_runtime.dart';
 import '../logging/app_log_entry.dart';
 import '../logging/app_log_level.dart';
 import '../logging/app_log_repository.dart';
+import '../provider/agnes_profile.dart';
 import '../provider/provider_connection.dart';
 import '../provider/provider_models_cache.dart';
 import '../provider/provider_repository.dart';
@@ -98,13 +99,55 @@ class ImageSessionFacade {
         promptDraft: _promptDraft,
       );
 
-  bool get useAspectRatio {
-    final creds = _providers.activeImageCredentials;
-    return creds?.type == ProviderType.xai;
+  ActiveImageCredentials? get _imageCreds => _providers.activeImageCredentials;
+
+  bool get isAgnesImageActive {
+    final c = _imageCreds;
+    if (c == null) return false;
+    return isAgnesImageProvider(baseUrl: c.baseUrl, imageModel: c.imageModel);
   }
+
+  /// Agnes：同时展示 size 档位与 ratio；xAI：仅比例；其余：仅像素 size。
+  bool get useAspectRatio {
+    if (isAgnesImageActive) return true;
+    return _imageCreds?.type == ProviderType.xai;
+  }
+
+  bool get showSize {
+    if (isAgnesImageActive) return true;
+    return !useAspectRatio;
+  }
+
+  List<String> get activeSizeOptions =>
+      isAgnesImageActive ? List<String>.from(agnesImageSizes) : sizeOptions;
+
+  List<String> get activeAspectOptions =>
+      isAgnesImageActive ? List<String>.from(agnesImageRatios) : aspectOptions;
 
   bool get supportsQuality =>
       supportsImageQualityForProvider(_providers.activeProvider);
+
+  /// 切换提供商后校正 size / ratio 落在可选范围内。
+  void syncParamsToActiveProvider({VoidCallback? onNotify}) {
+    var changed = false;
+    final sizes = activeSizeOptions;
+    if (sizes.isNotEmpty && !sizes.contains(_size)) {
+      _size = isAgnesImageActive
+          ? normalizeAgnesImageSize(_size)
+          : sizes.first;
+      if (!sizes.contains(_size)) _size = sizes.first;
+      changed = true;
+    }
+    final aspects = activeAspectOptions;
+    if (aspects.isNotEmpty && !aspects.contains(_aspectRatio)) {
+      _aspectRatio = isAgnesImageActive
+          ? normalizeAgnesImageRatio(_aspectRatio)
+          : aspects.first;
+      if (!aspects.contains(_aspectRatio)) _aspectRatio = aspects.first;
+      changed = true;
+    }
+    if (changed) onNotify?.call();
+  }
 
   void setPromptDraft(String value, {VoidCallback? onNotify}) {
     if (value == _promptDraft) return;
@@ -240,7 +283,15 @@ class ImageSessionFacade {
     onNotify();
 
     final qualityParam = supportsQuality ? useQuality : null;
+    final agnes = isAgnesImageProvider(
+      baseUrl: creds.baseUrl,
+      imageModel: creds.imageModel,
+    );
     final passAspect = useAspectRatio;
+    final passSize = showSize;
+    final effectiveSize = agnes ? normalizeAgnesImageSize(useSize) : useSize;
+    final effectiveAspect =
+        agnes ? normalizeAgnesImageRatio(useAspect) : useAspect;
     final pending = await _sessions.appendLoadingItem(
       sessionId,
       mode: isEdit ? ImageGenMode.edit : ImageGenMode.text,
@@ -248,8 +299,8 @@ class ImageSessionFacade {
       model: creds.imageModel,
       providerName: creds.providerName,
       n: useN,
-      size: passAspect ? null : useSize,
-      aspectRatio: passAspect ? useAspect : null,
+      size: passSize ? effectiveSize : null,
+      aspectRatio: passAspect ? effectiveAspect : null,
       quality: qualityParam,
       refPreview: refPreview,
     );
@@ -271,8 +322,8 @@ class ImageSessionFacade {
           imageBytes: refBytes,
           imageFileName: effectiveRefName,
           n: useN,
-          size: passAspect ? null : useSize,
-          aspectRatio: passAspect ? useAspect : null,
+          size: passSize ? effectiveSize : null,
+          aspectRatio: passAspect ? effectiveAspect : null,
           quality: qualityParam,
           client: httpClient,
         );
@@ -281,8 +332,8 @@ class ImageSessionFacade {
           creds,
           prompt: text,
           n: useN,
-          size: passAspect ? null : useSize,
-          aspectRatio: passAspect ? useAspect : null,
+          size: passSize ? effectiveSize : null,
+          aspectRatio: passAspect ? effectiveAspect : null,
           quality: qualityParam,
           client: httpClient,
         );

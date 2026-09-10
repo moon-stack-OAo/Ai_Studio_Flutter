@@ -184,6 +184,7 @@ class _ImagePageState extends State<ImagePage> {
       providers: widget.providerRepository,
       modelsCache: _controller.modelsCache,
       kind: ModelKind.image,
+      onProviderSwitched: _controller.syncParamsToActiveProvider,
     );
   }
 
@@ -412,8 +413,9 @@ class _ImagePageState extends State<ImagePage> {
                           aspectRatio: _controller.aspectRatio,
                           onAspectRatioChanged: _controller.setAspectRatio,
                           useAspectRatio: _controller.useAspectRatio,
-                          sizeOptions: ImageController.sizeOptions,
-                          aspectOptions: ImageController.aspectOptions,
+                          showSize: _controller.showSize,
+                          sizeOptions: _controller.activeSizeOptions,
+                          aspectOptions: _controller.activeAspectOptions,
                           quality: _controller.quality,
                           onQualityChanged: _controller.setQuality,
                           supportsQuality: _controller.supportsQuality,

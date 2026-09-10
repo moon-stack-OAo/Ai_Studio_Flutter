@@ -3,6 +3,13 @@ import 'package:design_material/design_material.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
+/// 工具行按钮统一高度（与 FilledButton.tonal「AI 润色」默认 40 对齐）。
+const ButtonStyle kPromptToolRowBtnStyle = ButtonStyle(
+  minimumSize: WidgetStatePropertyAll(Size(0, 40)),
+  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+  visualDensity: VisualDensity.standard,
+);
+
 /// M-PromptBuilder：结构化提示拼装面板（Chip + 预览 + 填入/清空/AI 润色）。
 ///
 /// 由「提示词辅助」Sheet 的「结构化」分段嵌入复用。
@@ -36,6 +43,8 @@ class _PromptBuilderPanelState extends State<PromptBuilderPanel> {
   String? _enhanceError;
   String? _enhancedPreview;
   http.Client? _enhanceHttp;
+  /// 上区预览局部切换：0=草稿，1=润色。
+  int _previewTab = 0;
 
   @override
   void initState() {
@@ -50,6 +59,7 @@ class _PromptBuilderPanelState extends State<PromptBuilderPanel> {
       _state = PromptBuilderState(widget.domain);
       _enhanceError = null;
       _enhancedPreview = null;
+      _previewTab = 0;
     }
   }
 
@@ -63,6 +73,14 @@ class _PromptBuilderPanelState extends State<PromptBuilderPanel> {
 
   bool get _canEnhance => widget.providerRepository != null;
 
+  bool get _showingPolish => _previewTab == 1;
+
+  void _clearEnhanceAndShowDraft() {
+    _enhanceError = null;
+    _enhancedPreview = null;
+    _previewTab = 0;
+  }
+
   bool _isSelected(String groupId, String optionId) {
     final val = _state.selection[groupId];
     if (val is List) return val.map((e) => e.toString()).contains(optionId);
@@ -73,22 +91,26 @@ class _PromptBuilderPanelState extends State<PromptBuilderPanel> {
     if (widget.disabled || _enhancing) return;
     setState(() {
       _state.toggleOption(groupId, optionId);
-      _enhanceError = null;
-      _enhancedPreview = null;
+      _clearEnhanceAndShowDraft();
     });
   }
 
-  void _onApply() {
+  void _onApplyDraft() {
     if (widget.disabled || !_hasPreview || _enhancing) return;
     widget.onApply(_state.preview);
+  }
+
+  void _onApplyEnhanced() {
+    final text = _enhancedPreview;
+    if (widget.disabled || text == null || text.trim().isEmpty) return;
+    widget.onApply(text);
   }
 
   void _onClear() {
     if (widget.disabled || _enhancing) return;
     setState(() {
       _state.clear();
-      _enhanceError = null;
-      _enhancedPreview = null;
+      _clearEnhanceAndShowDraft();
     });
   }
 
@@ -108,6 +130,7 @@ class _PromptBuilderPanelState extends State<PromptBuilderPanel> {
       setState(() {
         _enhanceError = '请先选择标签生成草稿';
         _enhancedPreview = null;
+        _previewTab = 0;
       });
       return;
     }
@@ -118,6 +141,7 @@ class _PromptBuilderPanelState extends State<PromptBuilderPanel> {
       setState(() {
         _enhanceError = '请先在设置中配置对话模型与 API Key';
         _enhancedPreview = null;
+        _previewTab = 0;
       });
       return;
     }
@@ -150,6 +174,7 @@ class _PromptBuilderPanelState extends State<PromptBuilderPanel> {
         _enhancedPreview = result;
         _enhancing = false;
         _enhanceError = null;
+        _previewTab = 1;
       });
     } on ChatAbortException {
       if (!mounted) return;
@@ -181,11 +206,10 @@ class _PromptBuilderPanelState extends State<PromptBuilderPanel> {
     }
   }
 
-  Widget _infoCard({
+  Widget _previewCard({
     required MaterialTokens tokens,
-    required String title,
-    required Widget child,
-    Widget? trailing,
+    required String body,
+    required bool empty,
   }) {
     return Material(
       color: tokens.surfaceMuted,
@@ -195,85 +219,106 @@ class _PromptBuilderPanelState extends State<PromptBuilderPanel> {
       ),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    title,
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                      color: tokens.inkMuted,
-                      fontFamily: tokens.fontFamily,
-                    ),
-                  ),
-                ),
-                ?trailing,
-              ],
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 56, maxHeight: 120),
+          child: SingleChildScrollView(
+            child: Text(
+              body,
+              style: TextStyle(
+                fontSize: 12,
+                height: 1.45,
+                color: empty ? tokens.inkMuted : tokens.inkSecondary,
+                fontFamily: tokens.fontFamily,
+              ),
             ),
-            const SizedBox(height: 6),
-            child,
-          ],
+          ),
         ),
       ),
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final tokens = materialTokensOf(context);
+  Widget _buildTopSection(MaterialTokens tokens) {
     const gap = 12.0;
+    final polishEmpty = _enhancedPreview == null;
+    final previewBody = _showingPolish
+        ? (polishEmpty
+            ? (_enhancing ? '正在润色…' : '暂无润色结果，可先在「草稿」点 AI 润色')
+            : _enhancedPreview!)
+        : (_hasPreview ? _state.preview : '选择下方标签生成草稿');
+    final previewEmpty = _showingPolish
+        ? polishEmpty
+        : !_hasPreview;
 
     return Column(
+      mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _infoCard(
-          tokens: tokens,
-          title: '当前草稿',
-          child: Text(
-            _hasPreview ? _state.preview : '选择下方标签生成草稿',
-            maxLines: 3,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              fontSize: 12,
-              height: 1.45,
-              color: _hasPreview ? tokens.inkSecondary : tokens.inkMuted,
-              fontFamily: tokens.fontFamily,
-            ),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: DraftPolishUnderlineToggle(
+            tokens: tokens,
+            selected: _previewTab,
+            onChanged: (v) => setState(() => _previewTab = v),
           ),
         ),
-        const SizedBox(height: gap),
-        Row(
-          children: [
-            OutlinedButton(
-              onPressed: widget.disabled || _enhancing ? null : _onClear,
-              child: const Text('清空'),
-            ),
-            const SizedBox(width: 8),
-            if (_canEnhance)
-              Builder(
-                builder: (context) {
-                  final btn = FilledButton.tonal(
-                    onPressed: widget.disabled ||
-                            (!_hasPreview && !_enhancing)
-                        ? null
-                        : _runEnhance,
-                    child: Text(_enhancing ? '取消' : 'AI 润色'),
-                  );
-                  if (!_hasPreview && !_enhancing) {
-                    return Tooltip(
-                      message: '请先选择标签生成草稿',
-                      child: btn,
-                    );
-                  }
-                  return btn;
-                },
-              ),
-          ],
+        const SizedBox(height: 8),
+        _previewCard(
+          tokens: tokens,
+          body: previewBody,
+          empty: previewEmpty && !_enhancing,
         ),
+        const SizedBox(height: gap),
+        if (!_showingPolish)
+          Row(
+            children: [
+              OutlinedButton(
+                onPressed: widget.disabled || _enhancing ? null : _onClear,
+                style: kPromptToolRowBtnStyle,
+                child: const Text('清空'),
+              ),
+              const SizedBox(width: 8),
+              if (_canEnhance)
+                Builder(
+                  builder: (context) {
+                    final btn = FilledButton.tonal(
+                      onPressed: widget.disabled ||
+                              (!_hasPreview && !_enhancing)
+                          ? null
+                          : _runEnhance,
+                      style: kPromptToolRowBtnStyle,
+                      child: Text(_enhancing ? '取消' : 'AI 润色'),
+                    );
+                    if (!_hasPreview && !_enhancing) {
+                      return Tooltip(
+                        message: '请先选择标签生成草稿',
+                        child: btn,
+                      );
+                    }
+                    return btn;
+                  },
+                ),
+            ],
+          )
+        else
+          Row(
+            children: [
+              if (_enhancing)
+                FilledButton.tonal(
+                  onPressed: widget.disabled ? null : _runEnhance,
+                  style: kPromptToolRowBtnStyle,
+                  child: const Text('取消'),
+                ),
+              const Spacer(),
+              if (!_enhancing)
+                FilledButton(
+                  onPressed: widget.disabled || polishEmpty
+                      ? null
+                      : _onApplyEnhanced,
+                  style: kPromptToolRowBtnStyle,
+                  child: const Text('应用润色结果'),
+                ),
+            ],
+          ),
         if (_enhancing) ...[
           const SizedBox(height: 10),
           const LinearProgressIndicator(),
@@ -309,33 +354,31 @@ class _PromptBuilderPanelState extends State<PromptBuilderPanel> {
             ),
           ),
         ],
-        if (_enhancedPreview != null) ...[
-          const SizedBox(height: 10),
-          _infoCard(
-            tokens: tokens,
-            title: '润色预览',
-            trailing: FilledButton(
-              onPressed: widget.disabled
-                  ? null
-                  : () => widget.onApply(_enhancedPreview!),
-              child: const Text('用润色结果'),
-            ),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxHeight: 110),
-              child: SingleChildScrollView(
-                child: Text(
-                  _enhancedPreview!,
-                  style: TextStyle(
-                    fontSize: 12,
-                    height: 1.45,
-                    color: tokens.inkSecondary,
-                    fontFamily: tokens.fontFamily,
-                  ),
-                ),
-              ),
-            ),
+      ],
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = materialTokensOf(context);
+    const gap = 12.0;
+    // Sheet 有限高度：限制上区，保证下方 chip 与「填入」按钮仍有视口。
+    const topMaxH = 220.0;
+
+    // 上区非 flex + ListView.shrinkWrap：高度跟内容走并封顶；勿用 Flexible，
+    // 否则与 Expanded(chip) 均分后未用完的配额会变成 Column 底部留白。
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        ConstrainedBox(
+          constraints: const BoxConstraints(maxHeight: topMaxH),
+          child: ListView(
+            shrinkWrap: true,
+            primary: false,
+            padding: EdgeInsets.zero,
+            children: [_buildTopSection(tokens)],
           ),
-        ],
+        ),
         const SizedBox(height: gap),
         Expanded(
           child: SingleChildScrollView(
@@ -353,7 +396,7 @@ class _PromptBuilderPanelState extends State<PromptBuilderPanel> {
         const SizedBox(height: gap),
         FilledButton(
           onPressed:
-              widget.disabled || !_hasPreview || _enhancing ? null : _onApply,
+              widget.disabled || !_hasPreview || _enhancing ? null : _onApplyDraft,
           child: const Text('填入提示词'),
         ),
       ],
@@ -414,6 +457,84 @@ class _PromptBuilderPanelState extends State<PromptBuilderPanel> {
               ],
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// 上区内「草稿 | 润色」下划线 Tab，比外层「模板|结构化」更轻。
+class DraftPolishUnderlineToggle extends StatelessWidget {
+  const DraftPolishUnderlineToggle({
+    super.key,
+    required this.tokens,
+    required this.selected,
+    required this.onChanged,
+  });
+
+  final MaterialTokens tokens;
+  final int selected;
+  final ValueChanged<int> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _DraftPolishUnderlineItem(
+          label: '草稿',
+          selected: selected == 0,
+          tokens: tokens,
+          onTap: () => onChanged(0),
+        ),
+        _DraftPolishUnderlineItem(
+          label: '润色',
+          selected: selected == 1,
+          tokens: tokens,
+          onTap: () => onChanged(1),
+        ),
+      ],
+    );
+  }
+}
+
+class _DraftPolishUnderlineItem extends StatelessWidget {
+  const _DraftPolishUnderlineItem({
+    required this.label,
+    required this.selected,
+    required this.tokens,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final MaterialTokens tokens;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(4),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 100),
+        padding: const EdgeInsets.fromLTRB(10, 6, 10, 8),
+        decoration: BoxDecoration(
+          border: Border(
+            bottom: BorderSide(
+              color: selected ? tokens.primary : const Color(0x00000000),
+              width: 2,
+            ),
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+            color: selected ? tokens.primary : tokens.inkSecondary,
+            fontFamily: tokens.fontFamily,
+          ),
         ),
       ),
     );

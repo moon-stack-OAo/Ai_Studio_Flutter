@@ -17,6 +17,7 @@ class ImageComposer extends StatefulWidget {
     required this.aspectRatio,
     required this.onAspectRatioChanged,
     required this.useAspectRatio,
+    this.showSize = true,
     required this.sizeOptions,
     required this.aspectOptions,
     required this.modelLabel,
@@ -45,6 +46,7 @@ class ImageComposer extends StatefulWidget {
   final String aspectRatio;
   final ValueChanged<String> onAspectRatioChanged;
   final bool useAspectRatio;
+  final bool showSize;
   final List<String> sizeOptions;
   final List<String> aspectOptions;
   final String modelLabel;
@@ -210,31 +212,37 @@ class _ImageComposerState extends State<ImageComposer> {
                 children: [
                   Row(
                     children: [
-                      Expanded(
-                        child: widget.useAspectRatio
-                            ? _dropdown(
-                                tokens: tokens,
-                                label: '比例',
-                                value: widget.aspectOptions
-                                        .contains(widget.aspectRatio)
-                                    ? widget.aspectRatio
-                                    : widget.aspectOptions.first,
-                                items: widget.aspectOptions,
-                                enabled: !widget.generating,
-                                onChanged: widget.onAspectRatioChanged,
-                              )
-                            : _dropdown(
-                                tokens: tokens,
-                                label: '尺寸',
-                                value: widget.sizeOptions.contains(widget.size)
-                                    ? widget.size
-                                    : widget.sizeOptions.first,
-                                items: widget.sizeOptions,
-                                labelOf: (e) => e.replaceAll('x', '×'),
-                                enabled: !widget.generating,
-                                onChanged: widget.onSizeChanged,
-                              ),
-                      ),
+                      if (widget.useAspectRatio)
+                        Expanded(
+                          child: _dropdown(
+                            tokens: tokens,
+                            label: '比例',
+                            value: widget.aspectOptions
+                                    .contains(widget.aspectRatio)
+                                ? widget.aspectRatio
+                                : widget.aspectOptions.first,
+                            items: widget.aspectOptions,
+                            enabled: !widget.generating,
+                            onChanged: widget.onAspectRatioChanged,
+                          ),
+                        ),
+                      if (widget.showSize && widget.sizeOptions.isNotEmpty) ...[
+                        if (widget.useAspectRatio) const SizedBox(width: 8),
+                        Expanded(
+                          child: _dropdown(
+                            tokens: tokens,
+                            label: '尺寸',
+                            value: widget.sizeOptions.contains(widget.size)
+                                ? widget.size
+                                : widget.sizeOptions.first,
+                            items: widget.sizeOptions,
+                            labelOf: (e) =>
+                                e.contains('x') ? e.replaceAll('x', '×') : e,
+                            enabled: !widget.generating,
+                            onChanged: widget.onSizeChanged,
+                          ),
+                        ),
+                      ],
                       const SizedBox(width: 8),
                       Expanded(
                         child: _dropdown<int>(

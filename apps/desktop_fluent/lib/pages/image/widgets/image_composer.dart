@@ -21,6 +21,7 @@ class ImageComposer extends StatefulWidget {
     required this.aspectRatio,
     required this.onAspectRatioChanged,
     required this.useAspectRatio,
+    this.showSize = true,
     required this.sizeOptions,
     required this.aspectOptions,
     required this.modelLabel,
@@ -52,6 +53,7 @@ class ImageComposer extends StatefulWidget {
   final String aspectRatio;
   final ValueChanged<String> onAspectRatioChanged;
   final bool useAspectRatio;
+  final bool showSize;
   final List<String> sizeOptions;
   final List<String> aspectOptions;
   final String modelLabel;
@@ -167,7 +169,9 @@ class _ImageComposerState extends State<ImageComposer> {
                     enabled: !widget.generating,
                     onChanged: widget.onAspectRatioChanged,
                   ),
-                ] else ...[
+                ],
+                if (widget.showSize && widget.sizeOptions.isNotEmpty) ...[
+                  if (widget.useAspectRatio) const SizedBox(height: 12),
                   _label(tokens, '尺寸'),
                   const SizedBox(height: 6),
                   _ChipWrap(
@@ -175,7 +179,7 @@ class _ImageComposerState extends State<ImageComposer> {
                     options: widget.sizeOptions,
                     value: widget.size,
                     enabled: !widget.generating,
-                    labelOf: (e) => e.replaceAll('x', '×'),
+                    labelOf: (e) => e.contains('x') ? e.replaceAll('x', '×') : e,
                     onChanged: widget.onSizeChanged,
                   ),
                 ],

@@ -57,7 +57,17 @@ class ImageController extends ChangeNotifier {
 
   bool get useAspectRatio => _facade.useAspectRatio;
 
+  bool get showSize => _facade.showSize;
+
+  List<String> get activeSizeOptions => _facade.activeSizeOptions;
+
+  List<String> get activeAspectOptions => _facade.activeAspectOptions;
+
   bool get supportsQuality => _facade.supportsQuality;
+
+  void syncParamsToActiveProvider() {
+    _facade.syncParamsToActiveProvider(onNotify: notifyListeners);
+  }
 
   String get promptAssistMode => hasRefImage ? 'img2img' : 'txt2img';
 

@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:core/core.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -72,6 +73,79 @@ void main() {
     );
     expect(captured!['aspect_ratio'], '16:9');
     expect(captured!.containsKey('size'), isFalse);
+  });
+
+  test('文生图 Agnes 写 size 档位 + ratio + extra_body', () async {
+    Map? captured;
+    Uri? uri;
+    final client = MockClient((request) async {
+      uri = request.url;
+      captured = jsonDecode(request.body) as Map;
+      return http.Response(
+        jsonEncode({
+          'data': [
+            {'b64_json': 'YQ=='},
+          ],
+        }),
+        200,
+      );
+    });
+    final api = OpenAiCompatibleImageClient(client: client);
+    await api.generateTextToImage(
+      baseUrl: 'https://apihub.agnes-ai.com/v1',
+      apiKey: 'ag-k',
+      model: 'agnes-image-2.5-flash',
+      prompt: 'city',
+      size: '2K',
+      aspectRatio: '16:9',
+      providerType: ProviderType.openaiCompatible,
+    );
+    expect(uri!.path, endsWith('/images/generations'));
+    expect(captured!['size'], '2K');
+    expect(captured!['ratio'], '16:9');
+    expect(captured!['return_base64'], isTrue);
+    expect(
+      (captured!['extra_body'] as Map)['response_format'],
+      'b64_json',
+    );
+    expect(captured!.containsKey('response_format'), isFalse);
+    expect(captured!.containsKey('aspect_ratio'), isFalse);
+  });
+
+  test('图生图 Agnes 走 generations + extra_body.image', () async {
+    Map? captured;
+    Uri? uri;
+    final client = MockClient((request) async {
+      uri = request.url;
+      captured = jsonDecode(request.body) as Map;
+      return http.Response(
+        jsonEncode({
+          'data': [
+            {'url': 'https://cdn.example/out.png'},
+          ],
+        }),
+        200,
+      );
+    });
+    final api = OpenAiCompatibleImageClient(client: client);
+    final refs = await api.editImage(
+      baseUrl: 'https://apihub.agnes-ai.com/v1',
+      apiKey: 'ag-k',
+      model: 'agnes-image-2.1-flash',
+      prompt: 'make blue',
+      imageBytes: Uint8List.fromList([1, 2, 3, 4]),
+      size: '1K',
+      aspectRatio: '1:1',
+      responseFormat: 'url',
+      providerType: ProviderType.openaiCompatible,
+    );
+    expect(uri!.path, endsWith('/images/generations'));
+    expect(captured!['size'], '1K');
+    expect(captured!['ratio'], '1:1');
+    final extra = captured!['extra_body'] as Map;
+    expect(extra['response_format'], 'url');
+    expect((extra['image'] as List).single, startsWith('data:image/png;base64,'));
+    expect(refs.single.type, ImageRefType.url);
   });
 
   test('401 鉴权文案', () async {

@@ -123,7 +123,13 @@ class VideoJobFacade {
   bool get isAgnesActive {
     final c = _videoCreds;
     if (c == null) return false;
-    return isAgnesProvider(baseUrl: c.baseUrl, videoModel: c.videoModel);
+    return isAgnesVideoProvider(baseUrl: c.baseUrl, videoModel: c.videoModel);
+  }
+
+  bool get isAgnesV20Active {
+    final c = _videoCreds;
+    if (c == null) return false;
+    return isAgnesVideoV20(c.videoModel);
   }
 
   bool get supportsReferenceImage => true;
@@ -147,12 +153,14 @@ class VideoJobFacade {
   bool get useResolution => isXaiVideoActive;
 
   bool get showSize {
+    if (isAgnesV20Active) return false;
     if (isAgnesActive) return true;
     return !useAspectRatio;
   }
 
-  List<int> get activeDurationOptions =>
-      isAgnesActive ? agnesVideoDurationOptions : defaultDurationOptions;
+  List<int> get activeDurationOptions => isAgnesActive
+      ? agnesVideoDurationOptionsFor(_videoCreds?.videoModel)
+      : defaultDurationOptions;
 
   List<String> get activeSizeOptions {
     if (isAgnesActive) {
@@ -217,7 +225,7 @@ class VideoJobFacade {
     final durations = activeDurationOptions;
     if (!durations.contains(_duration)) {
       _duration = isAgnesActive
-          ? agnesVideoDurationDefault
+          ? agnesVideoDurationDefaultFor(_videoCreds?.videoModel)
           : durations.contains(10)
               ? 10
               : durations.first;
@@ -581,23 +589,25 @@ class VideoJobFacade {
     onInfo?.call(null);
     onNotify();
 
-    final agnes = isAgnesProvider(
+    final agnes = isAgnesVideoProvider(
       baseUrl: creds.baseUrl,
       videoModel: creds.videoModel,
     );
+    final agnesV20 = isAgnesVideoV20(creds.videoModel);
     final xai = isXaiVideoProvider(
       providerType: creds.type,
       baseUrl: creds.baseUrl,
       videoModel: creds.videoModel,
     );
     final passAspect = agnes || xai;
-    final passSize = agnes || !passAspect;
+    final passSize = (agnes && !agnesV20) || (!agnes && !passAspect);
     final passResolution = xai ? useRes : null;
-    final effectiveSize = agnes
+    final effectiveSize = agnes && !agnesV20
         ? normalizeAgnesVideoSize(useSize, videoModel: creds.videoModel)
         : useSize;
-    final effectiveDuration =
-        agnes ? clampAgnesVideoSeconds(useDuration) : useDuration;
+    final effectiveDuration = agnes && !agnesV20
+        ? clampAgnesVideoSeconds(useDuration)
+        : useDuration;
 
     final pending = await _sessions.appendLoadingItem(
       sessionId,

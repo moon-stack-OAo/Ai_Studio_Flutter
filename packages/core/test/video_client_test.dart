@@ -116,7 +116,7 @@ void main() {
     });
     final api = OpenAiCompatibleVideoClient(client: client);
     final job = await api.createJob(
-      baseUrl: 'https://api.agnes-ai.com/v1',
+      baseUrl: 'https://apihub.agnes-ai.com/v1',
       apiKey: 'ag-k',
       model: 'agnes-video-2.5',
       prompt: 'cat runs',
@@ -149,7 +149,7 @@ void main() {
     });
     final api = OpenAiCompatibleVideoClient(client: client);
     final job = await api.createJob(
-      baseUrl: 'https://api.agnes-ai.com/v1',
+      baseUrl: 'https://apihub.agnes-ai.com/v1',
       apiKey: 'ag-k',
       model: 'agnes-video-2.5',
       prompt: '   ',
@@ -157,7 +157,7 @@ void main() {
       imageBytes: _testPng(w: 800, h: 600),
       imageFileName: 'ref.png',
       duration: 8,
-      size: '960P',
+      size: '1080P',
       aspectRatio: '16:9',
       providerType: ProviderType.openaiCompatible,
     );
@@ -165,7 +165,7 @@ void main() {
     expect(captured!['mode'], 'keyframe');
     expect(captured!['prompt'], '');
     expect(captured!['seconds'], '8');
-    expect(captured!['size'], '960P');
+    expect(captured!['size'], '1080P');
     expect(captured!['n'], 1);
     expect(captured!['aspect_ratio'], '16:9');
     expect(captured!['first_frame'], startsWith('data:image/jpeg;base64,'));
@@ -192,7 +192,7 @@ void main() {
     });
     final api = OpenAiCompatibleVideoClient(client: client);
     final job = await api.createJob(
-      baseUrl: 'https://api.agnes-ai.com/v1',
+      baseUrl: 'https://apihub.agnes-ai.com/v1',
       apiKey: 'ag-k',
       model: 'agnes-video-2.5',
       prompt: 'walk',
@@ -219,13 +219,42 @@ void main() {
     await api.createJob(
       baseUrl: 'https://hub.example.com/v1',
       apiKey: 'k',
-      model: 'agnes-video-flash',
+      model: 'agnes-video-2.5-flash',
       prompt: 'x',
       duration: 8,
       size: '2K',
       providerType: ProviderType.openaiCompatible,
     );
     expect(captured!['size'], '720P');
+    expect(captured!['mode'], 'text');
+  });
+
+  test('Agnes Video v2.0 走 width/height/num_frames', () async {
+    Map? captured;
+    final client = MockClient((request) async {
+      captured = jsonDecode(request.body) as Map;
+      return http.Response(
+        jsonEncode({'video_id': 'v20', 'status': 'queued'}),
+        200,
+      );
+    });
+    final api = OpenAiCompatibleVideoClient(client: client);
+    await api.createJob(
+      baseUrl: 'https://apihub.agnes-ai.com/v1',
+      apiKey: 'k',
+      model: 'agnes-video-v2.0',
+      prompt: 'cat',
+      duration: 5,
+      aspectRatio: '16:9',
+      providerType: ProviderType.openaiCompatible,
+    );
+    expect(captured!['width'], 1152);
+    expect(captured!['height'], 768);
+    expect(captured!['num_frames'], 121);
+    expect(captured!['frame_rate'], 24);
+    expect(captured!.containsKey('seconds'), isFalse);
+    expect(captured!.containsKey('size'), isFalse);
+    expect(captured!.containsKey('mode'), isFalse);
   });
 
   test('Agnes getJob 走 agnesapi 且不拉 content', () async {
@@ -244,7 +273,7 @@ void main() {
     });
     final api = OpenAiCompatibleVideoClient(client: client);
     final job = await api.getJob(
-      baseUrl: 'https://api.agnes-ai.com/v1',
+      baseUrl: 'https://apihub.agnes-ai.com/v1',
       apiKey: 'k',
       jobId: 'vid1',
       videoModel: 'agnes-video-2.5',
@@ -260,23 +289,30 @@ void main() {
     expect(agnesVideoRatios, contains('21:9'));
     expect(agnesVideoRatios, contains('9:16'));
     expect(
-      isAgnesProvider(baseUrl: 'https://api.agnes-ai.com/v1'),
+      isAgnesProvider(baseUrl: 'https://apihub.agnes-ai.com/v1'),
       isTrue,
     );
     expect(isAgnesProvider(videoModel: 'agnes-video-2.5'), isTrue);
     expect(isAgnesProvider(baseUrl: 'https://api.openai.com'), isFalse);
-    expect(isAgnesVideoFlash('agnes-video-flash'), isTrue);
-    expect(normalizeAgnesVideoSize('960P'), '960P');
+    // 对话模型 agnes-2.5-flash 不得误判为视频协议
+    expect(isAgnesVideoProvider(videoModel: 'agnes-2.5-flash'), isFalse);
+    expect(isAgnesProvider(videoModel: 'agnes-2.5-flash'), isFalse);
+    expect(isAgnesVideoFlash('agnes-video-2.5-flash'), isTrue);
+    expect(isAgnesVideoFlash('agnes-2.5-flash'), isFalse);
+    expect(isAgnesVideoV20('agnes-video-v2.0'), isTrue);
+    expect(normalizeAgnesVideoSize('960P'), '1080P');
     expect(normalizeAgnesVideoSize('1920x1080'), '2K');
     expect(
-      normalizeAgnesVideoSize('2K', videoModel: 'agnes-video-flash'),
+      normalizeAgnesVideoSize('2K', videoModel: 'agnes-video-2.5-flash'),
       '720P',
     );
     expect(clampAgnesVideoSeconds(20), 12);
     expect(clampAgnesVideoSeconds(2), 4);
     expect(clampAgnesVideoSeconds(null), 5);
+    expect(normalizeAgnesImageSize('1024x768'), '1K');
+    expect(normalizeAgnesImageRatio('16:9'), '16:9');
     final poll = buildAgnesPollUrl(
-      baseUrl: 'https://api.agnes-ai.com/v1/',
+      baseUrl: 'https://apihub.agnes-ai.com/v1/',
       jobId: 'abc',
       videoModel: 'agnes-video-2.5',
     );
@@ -285,7 +321,7 @@ void main() {
     expect(
       shouldFetchVideoContent(
         isXai: false,
-        baseUrl: 'https://api.agnes-ai.com/v1',
+        baseUrl: 'https://apihub.agnes-ai.com/v1',
         videoModel: 'agnes-video-2.5',
       ),
       isFalse,

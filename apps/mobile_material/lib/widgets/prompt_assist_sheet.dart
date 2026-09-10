@@ -69,6 +69,8 @@ class _PromptAssistSheetState extends State<PromptAssistSheet> {
   http.Client? _enhanceHttp;
   late String _workingPrompt;
   String? _selectedPresetId;
+  /// 模板上区预览局部切换：0=草稿，1=润色。
+  int _previewTab = 0;
 
   @override
   void initState() {
@@ -82,13 +84,18 @@ class _PromptAssistSheetState extends State<PromptAssistSheet> {
     super.dispose();
   }
 
+  void _clearEnhanceAndShowDraft() {
+    _enhanceError = null;
+    _enhancedPreview = null;
+    _previewTab = 0;
+  }
+
   void _selectPrompt(String text, {String? presetId}) {
     if (_enhancing) return;
     setState(() {
       _workingPrompt = text;
       _selectedPresetId = presetId;
-      _enhanceError = null;
-      _enhancedPreview = null;
+      _clearEnhanceAndShowDraft();
     });
   }
 
@@ -108,6 +115,7 @@ class _PromptAssistSheetState extends State<PromptAssistSheet> {
       setState(() {
         _enhanceError = '请先选中模板或输入提示词再优化';
         _enhancedPreview = null;
+        _previewTab = 0;
       });
       return;
     }
@@ -118,6 +126,7 @@ class _PromptAssistSheetState extends State<PromptAssistSheet> {
       setState(() {
         _enhanceError = '请先在设置中配置对话模型与 API Key';
         _enhancedPreview = null;
+        _previewTab = 0;
       });
       return;
     }
@@ -150,6 +159,7 @@ class _PromptAssistSheetState extends State<PromptAssistSheet> {
         _enhancedPreview = result;
         _enhancing = false;
         _enhanceError = null;
+        _previewTab = 1;
       });
     } on ChatAbortException {
       if (!mounted) return;
@@ -181,11 +191,10 @@ class _PromptAssistSheetState extends State<PromptAssistSheet> {
     }
   }
 
-  Widget _infoCard({
+  Widget _previewCard({
     required MaterialTokens tokens,
-    required String title,
-    required Widget child,
-    Widget? trailing,
+    required String body,
+    required bool empty,
   }) {
     return Material(
       color: tokens.surfaceMuted,
@@ -195,28 +204,19 @@ class _PromptAssistSheetState extends State<PromptAssistSheet> {
       ),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    title,
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                      color: tokens.inkMuted,
-                      fontFamily: tokens.fontFamily,
-                    ),
-                  ),
-                ),
-                ?trailing,
-              ],
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 56, maxHeight: 120),
+          child: SingleChildScrollView(
+            child: Text(
+              body,
+              style: TextStyle(
+                fontSize: 12,
+                height: 1.45,
+                color: empty ? tokens.inkMuted : tokens.inkSecondary,
+                fontFamily: tokens.fontFamily,
+              ),
             ),
-            const SizedBox(height: 6),
-            child,
-          ],
+          ),
         ),
       ),
     );
@@ -226,52 +226,80 @@ class _PromptAssistSheetState extends State<PromptAssistSheet> {
     final presets = getPromptPresets(widget.domain, mode: widget.mode);
     final canEnhance = widget.providerRepository != null;
     final hasWorking = _workingPrompt.trim().isNotEmpty;
+    final showingPolish = _previewTab == 1;
+    final polishEmpty = _enhancedPreview == null;
+    final previewBody = showingPolish
+        ? (polishEmpty
+            ? (_enhancing ? '正在润色…' : '暂无润色结果，可先在「草稿」点 AI 润色')
+            : _enhancedPreview!)
+        : (hasWorking ? _workingPrompt : '从下方选模板，或点「随机一条」');
+    final previewEmpty = showingPolish ? polishEmpty : !hasWorking;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        if (hasWorking) ...[
-          _infoCard(
+        Align(
+          alignment: Alignment.centerLeft,
+          child: DraftPolishUnderlineToggle(
             tokens: tokens,
-            title: '当前选中',
-            child: Text(
-              _workingPrompt,
-              maxLines: 3,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontSize: 12,
-                height: 1.45,
-                color: tokens.inkSecondary,
-                fontFamily: tokens.fontFamily,
-              ),
-            ),
+            selected: _previewTab,
+            onChanged: (v) => setState(() => _previewTab = v),
           ),
-          const SizedBox(height: 12),
-        ],
-        Row(
-          children: [
-            OutlinedButton(
-              onPressed: presets.isEmpty || _enhancing
-                  ? null
-                  : () {
-                      final p = pickRandomPromptPreset(
-                        widget.domain,
-                        mode: widget.mode,
-                      );
-                      if (p != null) {
-                        _selectPrompt(p.prompt, presetId: p.id);
-                      }
-                    },
-              child: const Text('随机一条'),
-            ),
-            const SizedBox(width: 8),
-            if (canEnhance)
-              FilledButton.tonal(
-                onPressed: (!hasWorking && !_enhancing) ? null : _runEnhance,
-                child: Text(_enhancing ? '取消' : 'AI 润色'),
-              ),
-          ],
         ),
+        const SizedBox(height: 8),
+        _previewCard(
+          tokens: tokens,
+          body: previewBody,
+          empty: previewEmpty && !_enhancing,
+        ),
+        const SizedBox(height: 12),
+        if (!showingPolish)
+          Row(
+            children: [
+              OutlinedButton(
+                onPressed: presets.isEmpty || _enhancing
+                    ? null
+                    : () {
+                        final p = pickRandomPromptPreset(
+                          widget.domain,
+                          mode: widget.mode,
+                        );
+                        if (p != null) {
+                          _selectPrompt(p.prompt, presetId: p.id);
+                        }
+                      },
+                style: kPromptToolRowBtnStyle,
+                child: const Text('随机一条'),
+              ),
+              const SizedBox(width: 8),
+              if (canEnhance)
+                FilledButton.tonal(
+                  onPressed: (!hasWorking && !_enhancing) ? null : _runEnhance,
+                  style: kPromptToolRowBtnStyle,
+                  child: Text(_enhancing ? '取消' : 'AI 润色'),
+                ),
+            ],
+          )
+        else
+          Row(
+            children: [
+              if (_enhancing)
+                FilledButton.tonal(
+                  onPressed: _runEnhance,
+                  style: kPromptToolRowBtnStyle,
+                  child: const Text('取消'),
+                ),
+              const Spacer(),
+              if (!_enhancing)
+                FilledButton(
+                  onPressed: polishEmpty
+                      ? null
+                      : () => widget.onApply(_enhancedPreview!),
+                  style: kPromptToolRowBtnStyle,
+                  child: const Text('应用润色结果'),
+                ),
+            ],
+          ),
         if (_enhancing) ...[
           const SizedBox(height: 10),
           const LinearProgressIndicator(),
@@ -302,31 +330,6 @@ class _PromptAssistSheetState extends State<PromptAssistSheet> {
                       ? tokens.inkMuted
                       : tokens.danger,
                   fontFamily: tokens.fontFamily,
-                ),
-              ),
-            ),
-          ),
-        ],
-        if (_enhancedPreview != null) ...[
-          const SizedBox(height: 10),
-          _infoCard(
-            tokens: tokens,
-            title: '润色预览',
-            trailing: FilledButton(
-              onPressed: () => widget.onApply(_enhancedPreview!),
-              child: const Text('用润色结果'),
-            ),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxHeight: 110),
-              child: SingleChildScrollView(
-                child: Text(
-                  _enhancedPreview!,
-                  style: TextStyle(
-                    fontSize: 12,
-                    height: 1.45,
-                    color: tokens.inkSecondary,
-                    fontFamily: tokens.fontFamily,
-                  ),
                 ),
               ),
             ),
@@ -415,17 +418,20 @@ class _PromptAssistSheetState extends State<PromptAssistSheet> {
   Widget build(BuildContext context) {
     final tokens = materialTokensOf(context);
     final media = MediaQuery.of(context);
-    final bottom = media.viewPadding.bottom;
     final keyboard = media.viewInsets.bottom;
-    final maxH = media.size.height * 0.88;
+    // 默认贴底固定约 88% 屏高；键盘弹出时缩短，避免顶出屏幕。
+    final targetH = media.size.height * 0.88;
+    final sheetH = keyboard > 0
+        ? (media.size.height - keyboard).clamp(0.0, targetH)
+        : targetH;
 
     return Padding(
       padding: EdgeInsets.only(bottom: keyboard),
-      child: SafeArea(
-        child: Padding(
-          padding: EdgeInsets.fromLTRB(16, 0, 16, 12 + bottom),
-          child: ConstrainedBox(
-            constraints: BoxConstraints(maxHeight: maxH),
+      child: SizedBox(
+        height: sheetH,
+        child: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [

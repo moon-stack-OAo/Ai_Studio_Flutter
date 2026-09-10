@@ -6,10 +6,14 @@ void main() {
     test('classifies video / image / chat / other', () {
       expect(classifyModelId('sora-2'), ModelKind.video);
       expect(classifyModelId('grok-imagine-video'), ModelKind.video);
+      expect(classifyModelId('agnes-video-2.5'), ModelKind.video);
+      expect(classifyModelId('agnes-video-v2.0'), ModelKind.video);
       expect(classifyModelId('gpt-image-1'), ModelKind.image);
       expect(classifyModelId('dall-e-3'), ModelKind.image);
+      expect(classifyModelId('agnes-image-2.5-flash'), ModelKind.image);
       expect(classifyModelId('gpt-4o'), ModelKind.chat);
       expect(classifyModelId('grok-4.5'), ModelKind.chat);
+      expect(classifyModelId('agnes-2.5-flash'), ModelKind.chat);
       expect(classifyModelId('text-embedding-3'), ModelKind.other);
       expect(classifyModelId('whisper-1'), ModelKind.other);
     });

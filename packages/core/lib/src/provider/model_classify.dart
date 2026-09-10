@@ -19,6 +19,7 @@ const _videoHints = <String>[
   'luma',
   'hailuo',
   'minimax-video',
+  'agnes-video',
 ];
 
 const _imageHints = <String>[
@@ -32,6 +33,7 @@ const _imageHints = <String>[
   'sdxl',
   'grok-imagine',
   'banana',
+  'agnes-image',
 ];
 
 const _chatExclude = <String>[

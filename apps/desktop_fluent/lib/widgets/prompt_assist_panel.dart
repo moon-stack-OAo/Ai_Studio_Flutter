@@ -87,6 +87,8 @@ class _PromptAssistPanelState extends State<PromptAssistPanel> {
   http.Client? _enhanceHttp;
   late String _workingPrompt;
   String? _selectedPresetId;
+  /// 模板上区预览局部切换：0=草稿，1=润色。
+  int _previewTab = 0;
 
   @override
   void initState() {
@@ -100,13 +102,18 @@ class _PromptAssistPanelState extends State<PromptAssistPanel> {
     super.dispose();
   }
 
+  void _clearEnhanceAndShowDraft() {
+    _enhanceError = null;
+    _enhancedPreview = null;
+    _previewTab = 0;
+  }
+
   void _selectPrompt(String text, {String? presetId}) {
     if (_enhancing) return;
     setState(() {
       _workingPrompt = text;
       _selectedPresetId = presetId;
-      _enhanceError = null;
-      _enhancedPreview = null;
+      _clearEnhanceAndShowDraft();
     });
   }
 
@@ -126,6 +133,7 @@ class _PromptAssistPanelState extends State<PromptAssistPanel> {
       setState(() {
         _enhanceError = '请先选中模板或输入提示词再优化';
         _enhancedPreview = null;
+        _previewTab = 0;
       });
       return;
     }
@@ -136,6 +144,7 @@ class _PromptAssistPanelState extends State<PromptAssistPanel> {
       setState(() {
         _enhanceError = '请先在设置中配置对话模型与 API Key';
         _enhancedPreview = null;
+        _previewTab = 0;
       });
       return;
     }
@@ -168,6 +177,7 @@ class _PromptAssistPanelState extends State<PromptAssistPanel> {
         _enhancedPreview = result;
         _enhancing = false;
         _enhanceError = null;
+        _previewTab = 1;
       });
     } on ChatAbortException {
       if (!mounted) return;
@@ -230,91 +240,219 @@ class _PromptAssistPanelState extends State<PromptAssistPanel> {
     );
   }
 
+  Widget _previewCard({
+    required FluentTokens tokens,
+    required String body,
+    required bool empty,
+  }) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+      decoration: BoxDecoration(
+        color: tokens.surfaceMuted,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: tokens.border),
+      ),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: 56, maxHeight: 120),
+        child: SingleChildScrollView(
+          child: Text(
+            body,
+            style: TextStyle(
+              fontSize: 12,
+              height: 1.45,
+              color: empty ? tokens.inkMuted : tokens.inkSecondary,
+              fontFamily: tokens.fontFamily,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildTemplateTab(FluentTokens tokens) {
     final presets = getPromptPresets(widget.domain, mode: widget.mode);
     final canEnhance = widget.providerRepository != null;
     final hasWorking = _workingPrompt.trim().isNotEmpty;
+    final showingPolish = _previewTab == 1;
+    final polishEmpty = _enhancedPreview == null;
+    final previewBody = showingPolish
+        ? (polishEmpty
+            ? (_enhancing ? '正在润色…' : '暂无润色结果，可先在「草稿」点 AI 润色')
+            : _enhancedPreview!)
+        : (hasWorking ? _workingPrompt : '从下方选模板，或点「随机一条」');
+    final previewEmpty = showingPolish ? polishEmpty : !hasWorking;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        if (hasWorking) ...[
-          _InfoCard(
+        Align(
+          alignment: Alignment.centerLeft,
+          child: _DraftPolishToggle(
             tokens: tokens,
-            title: '当前选中',
-            child: Text(
-              _workingPrompt,
-              maxLines: 3,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontSize: 12,
-                height: 1.45,
-                color: tokens.inkSecondary,
-                fontFamily: tokens.fontFamily,
-              ),
-            ),
+            selected: _previewTab,
+            onChanged: (v) => setState(() => _previewTab = v),
           ),
-          const SizedBox(height: 12),
-        ],
-        Row(
-          children: [
-            Button(
-              onPressed: presets.isEmpty || _enhancing
-                  ? null
-                  : () {
-                      final p = pickRandomPromptPreset(
-                        widget.domain,
-                        mode: widget.mode,
-                      );
-                      if (p != null) {
-                        _selectPrompt(p.prompt, presetId: p.id);
-                      }
-                    },
-              child: const Text('随机一条'),
-            ),
-            const SizedBox(width: 8),
-            if (canEnhance)
-              Button(
-                onPressed: (!hasWorking && !_enhancing) ? null : _runEnhance,
-                style: ButtonStyle(
-                  backgroundColor: WidgetStateProperty.resolveWith((states) {
-                    if (states.isDisabled) {
-                      return tokens.surfaceMuted;
-                    }
-                    if (states.isPressed) {
-                      return tokens.primary.withValues(alpha: 0.22);
-                    }
-                    if (states.isHovered) {
-                      return tokens.primary.withValues(alpha: 0.16);
-                    }
-                    return tokens.primary.withValues(alpha: 0.12);
-                  }),
-                  foregroundColor: WidgetStateProperty.resolveWith((states) {
-                    if (states.isDisabled) return tokens.inkMuted;
-                    return tokens.primaryPressed;
-                  }),
-                  shape: WidgetStateProperty.resolveWith((states) {
-                    final side = BorderSide(
-                      color: states.isDisabled
-                          ? tokens.border
-                          : tokens.primary.withValues(alpha: 0.35),
-                    );
-                    return RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(4),
-                      side: side,
-                    );
-                  }),
-                ),
-                child: Text(_enhancing ? '取消润色' : '✨ AI 润色'),
-              ),
-            const Spacer(),
-            FilledButton(
-              onPressed: !hasWorking || _enhancing
-                  ? null
-                  : () => widget.onApply(_workingPrompt),
-              child: const Text('填入'),
-            ),
-          ],
         ),
+        const SizedBox(height: 8),
+        _previewCard(
+          tokens: tokens,
+          body: previewBody,
+          empty: previewEmpty && !_enhancing,
+        ),
+        const SizedBox(height: 12),
+        if (!showingPolish)
+          Row(
+            children: [
+              promptToolRowHeight(
+                Button(
+                  onPressed: presets.isEmpty || _enhancing
+                      ? null
+                      : () {
+                          final p = pickRandomPromptPreset(
+                            widget.domain,
+                            mode: widget.mode,
+                          );
+                          if (p != null) {
+                            _selectPrompt(p.prompt, presetId: p.id);
+                          }
+                        },
+                  child: Text(
+                    '随机一条',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontFamily: tokens.fontFamily,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              if (canEnhance)
+                promptToolRowHeight(
+                  Button(
+                    onPressed:
+                        (!hasWorking && !_enhancing) ? null : _runEnhance,
+                    style: ButtonStyle(
+                      backgroundColor:
+                          WidgetStateProperty.resolveWith((states) {
+                        if (states.isDisabled) {
+                          return tokens.surfaceMuted;
+                        }
+                        if (states.isPressed) {
+                          return tokens.primary.withValues(alpha: 0.22);
+                        }
+                        if (states.isHovered) {
+                          return tokens.primary.withValues(alpha: 0.16);
+                        }
+                        return tokens.primary.withValues(alpha: 0.12);
+                      }),
+                      foregroundColor:
+                          WidgetStateProperty.resolveWith((states) {
+                        if (states.isDisabled) return tokens.inkMuted;
+                        return tokens.primaryPressed;
+                      }),
+                      shape: WidgetStateProperty.resolveWith((states) {
+                        final side = BorderSide(
+                          color: states.isDisabled
+                              ? tokens.border
+                              : tokens.primary.withValues(alpha: 0.35),
+                        );
+                        return RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(4),
+                          side: side,
+                        );
+                      }),
+                    ),
+                    child: Text(
+                      _enhancing ? '取消' : '✨ AI 润色',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontFamily: tokens.fontFamily,
+                      ),
+                    ),
+                  ),
+                ),
+              const Spacer(),
+              promptToolRowHeight(
+                FilledButton(
+                  onPressed: !hasWorking || _enhancing
+                      ? null
+                      : () => widget.onApply(_workingPrompt),
+                  child: Text(
+                    '填入',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontFamily: tokens.fontFamily,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          )
+        else
+          Row(
+            children: [
+              if (_enhancing)
+                promptToolRowHeight(
+                  Button(
+                    onPressed: _runEnhance,
+                    style: ButtonStyle(
+                      backgroundColor:
+                          WidgetStateProperty.resolveWith((states) {
+                        if (states.isDisabled) {
+                          return tokens.surfaceMuted;
+                        }
+                        if (states.isPressed) {
+                          return tokens.primary.withValues(alpha: 0.22);
+                        }
+                        if (states.isHovered) {
+                          return tokens.primary.withValues(alpha: 0.16);
+                        }
+                        return tokens.primary.withValues(alpha: 0.12);
+                      }),
+                      foregroundColor:
+                          WidgetStateProperty.resolveWith((states) {
+                        if (states.isDisabled) return tokens.inkMuted;
+                        return tokens.primaryPressed;
+                      }),
+                      shape: WidgetStateProperty.resolveWith((states) {
+                        final side = BorderSide(
+                          color: states.isDisabled
+                              ? tokens.border
+                              : tokens.primary.withValues(alpha: 0.35),
+                        );
+                        return RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(4),
+                          side: side,
+                        );
+                      }),
+                    ),
+                    child: Text(
+                      '取消',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontFamily: tokens.fontFamily,
+                      ),
+                    ),
+                  ),
+                ),
+              const Spacer(),
+              if (!_enhancing)
+                promptToolRowHeight(
+                  FilledButton(
+                    onPressed: polishEmpty
+                        ? null
+                        : () => widget.onApply(_enhancedPreview!),
+                    child: Text(
+                      '应用润色结果',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontFamily: tokens.fontFamily,
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
         if (_enhancing) ...[
           const SizedBox(height: 10),
           const ProgressBar(),
@@ -335,31 +473,6 @@ class _PromptAssistPanelState extends State<PromptAssistPanel> {
             severity: _enhanceError == '已取消'
                 ? InfoBarSeverity.info
                 : InfoBarSeverity.error,
-          ),
-        ],
-        if (_enhancedPreview != null) ...[
-          const SizedBox(height: 10),
-          _InfoCard(
-            tokens: tokens,
-            title: '润色预览',
-            trailing: FilledButton(
-              onPressed: () => widget.onApply(_enhancedPreview!),
-              child: const Text('应用润色结果'),
-            ),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxHeight: 110),
-              child: SingleChildScrollView(
-                child: Text(
-                  _enhancedPreview!,
-                  style: TextStyle(
-                    fontSize: 12,
-                    height: 1.45,
-                    color: tokens.inkSecondary,
-                    fontFamily: tokens.fontFamily,
-                  ),
-                ),
-              ),
-            ),
           ),
         ],
         const SizedBox(height: 12),
@@ -514,7 +627,9 @@ class _SegmentTab extends StatelessWidget {
             color: selected ? tokens.surface : const Color(0x00000000),
             borderRadius: BorderRadius.circular(6),
             border: Border.all(
-              color: selected ? tokens.primary.withValues(alpha: 0.45) : tokens.border.withValues(alpha: 0),
+              color: selected
+                  ? tokens.primary.withValues(alpha: 0.45)
+                  : tokens.border.withValues(alpha: 0),
             ),
             boxShadow: selected
                 ? [
@@ -541,51 +656,80 @@ class _SegmentTab extends StatelessWidget {
   }
 }
 
-class _InfoCard extends StatelessWidget {
-  const _InfoCard({
+/// 上区内「草稿 | 润色」下划线 Tab，不与外层「模板|结构化」同级抢视觉。
+class _DraftPolishToggle extends StatelessWidget {
+  const _DraftPolishToggle({
     required this.tokens,
-    required this.title,
-    required this.child,
-    this.trailing,
+    required this.selected,
+    required this.onChanged,
   });
 
   final FluentTokens tokens;
-  final String title;
-  final Widget child;
-  final Widget? trailing;
+  final int selected;
+  final ValueChanged<int> onChanged;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
-      decoration: BoxDecoration(
-        color: tokens.surfaceMuted,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: tokens.border),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  title,
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                    color: tokens.inkMuted,
-                    fontFamily: tokens.fontFamily,
-                  ),
-                ),
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _DraftPolishToggleItem(
+          label: '草稿',
+          selected: selected == 0,
+          tokens: tokens,
+          onPressed: () => onChanged(0),
+        ),
+        _DraftPolishToggleItem(
+          label: '润色',
+          selected: selected == 1,
+          tokens: tokens,
+          onPressed: () => onChanged(1),
+        ),
+      ],
+    );
+  }
+}
+
+class _DraftPolishToggleItem extends StatelessWidget {
+  const _DraftPolishToggleItem({
+    required this.label,
+    required this.selected,
+    required this.tokens,
+    required this.onPressed,
+  });
+
+  final String label;
+  final bool selected;
+  final FluentTokens tokens;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return HoverButton(
+      onPressed: onPressed,
+      builder: (context, states) {
+        return AnimatedContainer(
+          duration: const Duration(milliseconds: 100),
+          padding: const EdgeInsets.fromLTRB(10, 4, 10, 6),
+          decoration: BoxDecoration(
+            border: Border(
+              bottom: BorderSide(
+                color: selected ? tokens.primary : const Color(0x00000000),
+                width: 2,
               ),
-              ?trailing,
-            ],
+            ),
           ),
-          const SizedBox(height: 6),
-          child,
-        ],
-      ),
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+              color: selected ? tokens.primary : tokens.inkSecondary,
+              fontFamily: tokens.fontFamily,
+            ),
+          ),
+        );
+      },
     );
   }
 }

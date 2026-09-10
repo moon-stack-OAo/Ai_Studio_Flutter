@@ -146,7 +146,7 @@ class OpenAiCompatibleVideoClient {
       baseUrl: baseUrl,
       videoModel: modelId,
     );
-    final agnes = isAgnesProvider(baseUrl: baseUrl, videoModel: modelId);
+    final agnes = isAgnesVideoProvider(baseUrl: baseUrl, videoModel: modelId);
     final effectiveClient = client ?? _client;
     final reqTimeout = timeout ?? httpTimeout;
 
@@ -267,22 +267,39 @@ class OpenAiCompatibleVideoClient {
       return job;
     }
 
-    // Agnes：JSON POST /videos；文生 mode=text；图生 mode=keyframe + first_frame
+    // Agnes：JSON POST /videos；v2.0 与 2.5/Flash 请求体不同。
     if (agnes) {
-      final body = <String, dynamic>{
-        'model': modelId,
-        'prompt': text,
-        'seconds': '${clampAgnesVideoSeconds(duration)}',
-        'size': normalizeAgnesVideoSize(size, videoModel: modelId),
-        'n': 1,
-      };
-      final ar = aspectRatio?.trim();
-      if (ar != null && ar.isNotEmpty) body['aspect_ratio'] = ar;
-      if (mode == VideoGenMode.image && compressed != null) {
-        body['mode'] = 'keyframe';
-        body['first_frame'] = compressed.dataUrl;
+      final Map<String, dynamic> body;
+      if (isAgnesVideoV20(modelId)) {
+        final dims = resolveAgnesV20Dimensions(aspectRatio);
+        body = <String, dynamic>{
+          'model': modelId,
+          'prompt': text,
+          'width': dims.width,
+          'height': dims.height,
+          'num_frames': agnesV20NumFramesForSeconds(duration),
+          'frame_rate': 24,
+        };
+        if (mode == VideoGenMode.image && compressed != null) {
+          body['image'] = compressed.dataUrl;
+        }
       } else {
-        body['mode'] = 'text';
+        // 2.5 / Flash：seconds + size + aspect_ratio；图生 keyframe
+        body = <String, dynamic>{
+          'model': modelId,
+          'prompt': text,
+          'seconds': '${clampAgnesVideoSeconds(duration)}',
+          'size': normalizeAgnesVideoSize(size, videoModel: modelId),
+          'n': 1,
+        };
+        final ar = aspectRatio?.trim();
+        if (ar != null && ar.isNotEmpty) body['aspect_ratio'] = ar;
+        if (mode == VideoGenMode.image && compressed != null) {
+          body['mode'] = 'keyframe';
+          body['first_frame'] = compressed.dataUrl;
+        } else {
+          body['mode'] = 'text';
+        }
       }
       final data = await _postJson(
         uri: videosUri(baseUrl),
@@ -375,7 +392,7 @@ class OpenAiCompatibleVideoClient {
       baseUrl: baseUrl,
       videoModel: videoModel,
     );
-    final agnes = isAgnesProvider(baseUrl: baseUrl, videoModel: videoModel);
+    final agnes = isAgnesVideoProvider(baseUrl: baseUrl, videoModel: videoModel);
     final effectiveClient = client ?? _client;
     final reqTimeout = timeout ?? httpTimeout;
     final headers = authHeaders(

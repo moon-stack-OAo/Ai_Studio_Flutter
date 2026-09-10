@@ -309,7 +309,7 @@ void main() {
     test('Agnes：能力探测 + syncParams 校正 duration/size', () async {
       final agnes = await providers.addProvider(
         name: 'Agnes',
-        baseUrl: 'https://api.agnes-ai.com/v1',
+        baseUrl: 'https://apihub.agnes-ai.com/v1',
         apiKey: 'sk-agnes',
         videoModel: 'agnes-video-2.5',
       );
@@ -321,6 +321,7 @@ void main() {
       expect(facade.showSize, isTrue);
       expect(facade.activeDurationOptions, agnesVideoDurationOptions);
       expect(facade.activeAspectOptions, agnesVideoRatios);
+      expect(facade.activeSizeOptions, agnesVideoSizes);
 
       facade.setDuration(10);
       facade.setSize('1280x720');

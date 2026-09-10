@@ -193,8 +193,9 @@ class _ImagePageState extends State<ImagePage> {
                 aspectRatio: _controller.aspectRatio,
                 onAspectRatioChanged: _controller.setAspectRatio,
                 useAspectRatio: _controller.useAspectRatio,
-                sizeOptions: ImageController.sizeOptions,
-                aspectOptions: ImageController.aspectOptions,
+                showSize: _controller.showSize,
+                sizeOptions: _controller.activeSizeOptions,
+                aspectOptions: _controller.activeAspectOptions,
                 quality: _controller.quality,
                 onQualityChanged: _controller.setQuality,
                 supportsQuality: _controller.supportsQuality,
@@ -211,6 +212,7 @@ class _ImagePageState extends State<ImagePage> {
                 generating: generating,
                 onGenerate: _controller.generate,
                 onStop: _controller.stop,
+                onProviderSwitched: _controller.syncParamsToActiveProvider,
                 onPromptAssist: () {
                   showFluentPromptAssist(
                     context,
