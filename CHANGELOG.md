@@ -13,6 +13,22 @@
 
 ### Added
 
+（暂无）
+
+### Changed
+
+（暂无）
+
+### Fixed
+
+（暂无）
+
+---
+
+## [1.0.4] — 2026-09-10
+
+### Added
+
 - **更新确认弹窗 OD 稿**：Fluent / Material × 亮暗共 4 份确认态原型（`FB-UPDATE`），总览入口已挂
 
 ### Changed
