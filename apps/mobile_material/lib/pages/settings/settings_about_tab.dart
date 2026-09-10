@@ -11,6 +11,7 @@ import 'package:path_provider/path_provider.dart';
 
 import '../../app/theme_controller.dart';
 import '../../update/mobile_update_controller.dart';
+import '../../update/update_prompt_dialog.dart';
 import '../chat/widgets/markdown_host.dart';
 
 class SettingsAboutTab extends StatefulWidget {
@@ -187,67 +188,24 @@ class _SettingsAboutTabState extends State<SettingsAboutTab> {
   }
 
   Future<void> _showUpdatePrompt(UpdateCheckResult check) async {
-    final notes = prepareUpdateNotes(check.notes);
     final version = check.latestVersion ?? '';
     final isIos = _updater.isIos || _isIos;
-    final action = await showDialog<_AboutUpdateAction>(
+    final action = await showUpdatePromptDialog(
       context: context,
-      builder: (dialogCtx) {
-        return AlertDialog(
-          title: Text('发现新版本 ${normalizeVersion(version)}'),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  isIos
-                      ? MobileUpdateController.iosNonStoreMessage
-                      : '将下载 APK 并校验完整性后调起系统安装器。'
-                          '请确认已允许「安装未知应用」。',
-                ),
-                if (notes.isNotEmpty) ...[
-                  const SizedBox(height: 12),
-                  MarkdownHost(data: notes, compact: true),
-                ],
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () =>
-                  Navigator.pop(dialogCtx, _AboutUpdateAction.skip),
-              child: const Text('跳过此版本'),
-            ),
-            TextButton(
-              onPressed: () =>
-                  Navigator.pop(dialogCtx, _AboutUpdateAction.later),
-              child: const Text('稍后'),
-            ),
-            if (isIos)
-              const FilledButton(
-                onPressed: null,
-                child: Text('下载并安装'),
-              )
-            else
-              FilledButton(
-                onPressed: () =>
-                    Navigator.pop(dialogCtx, _AboutUpdateAction.install),
-                child: const Text('下载并安装'),
-              ),
-          ],
-        );
-      },
+      result: check,
+      isIos: isIos,
+      iosMessage: MobileUpdateController.iosNonStoreMessage,
     );
-    if (!mounted || action == null) return;
+    if (!mounted) return;
 
-    switch (action) {
-      case _AboutUpdateAction.skip:
+    switch (action ?? UpdatePromptAction.later) {
+      case UpdatePromptAction.skip:
         await _updater.skipUpdateVersion(version);
         _snack('已跳过此版本');
-      case _AboutUpdateAction.later:
+      case UpdatePromptAction.later:
         _snack('可在 设置 → 关于 中安装');
-      case _AboutUpdateAction.install:
+      case UpdatePromptAction.install:
+        if (isIos) return;
         final ok = await _updater.downloadAndInstall(result: check);
         if (!mounted) return;
         if (ok) {
@@ -769,99 +727,123 @@ class _SettingsAboutTabState extends State<SettingsAboutTab> {
                   ],
                 ),
                 if (check != null && check.hasUpdate) ...[
-                  const SizedBox(height: 10),
-                  Text(
-                    '发现新版本 ${check.latestVersion}',
-                    style: TextStyle(fontSize: 13, color: tokens.inkSecondary),
-                  ),
-                  if (notes.isNotEmpty) ...[
-                    const SizedBox(height: 6),
-                    MarkdownHost(data: notes, compact: true),
-                  ],
-                  const SizedBox(height: 8),
-                  if (downloading)
-                    Row(
+                  const SizedBox(height: 12),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Color.lerp(tokens.primary, tokens.surface, 0.92),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: Color.lerp(tokens.primary, tokens.border, 0.55)!,
+                      ),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Expanded(
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(20),
-                            child: SizedBox(
-                              height: 40,
-                              child: Stack(
-                                fit: StackFit.expand,
-                                children: [
-                                  ColoredBox(color: tokens.surfaceMuted),
-                                  if (progress?.fraction != null)
-                                    FractionallySizedBox(
-                                      widthFactor:
-                                          progress!.fraction!.clamp(0.0, 1.0),
-                                      alignment: Alignment.centerLeft,
-                                      child: ColoredBox(color: tokens.primary),
-                                    )
-                                  else
-                                    const Align(
-                                      child: SizedBox(
-                                        width: 18,
-                                        height: 18,
-                                        child: CircularProgressIndicator(
-                                          strokeWidth: 2,
-                                        ),
-                                      ),
-                                    ),
-                                  Center(
-                                    child: Padding(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 12,
-                                      ),
-                                      child: Text(
-                                        progressLabel ??
-                                            (progress?.fraction != null
-                                                ? '正在下载… ${(progress!.fraction! * 100).toStringAsFixed(0)}%'
-                                                : '正在下载…'),
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: TextStyle(
-                                          fontSize: 13,
-                                          fontWeight: FontWeight.w600,
-                                          color: (progress?.fraction ?? 0) > 0.45
-                                              ? tokens.onPrimary
-                                              : tokens.ink,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
+                        Text(
+                          '发现新版本 v${normalizeVersion(check.latestVersion)}',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: tokens.ink,
                           ),
                         ),
-                        const SizedBox(width: 8),
-                        OutlinedButton(
-                          onPressed: _updater.cancelDownload,
-                          child: const Text('取消'),
-                        ),
+                        if (notes.isNotEmpty) ...[
+                          const SizedBox(height: 6),
+                          MarkdownHost(data: notes, compact: true),
+                        ],
+                        const SizedBox(height: 10),
+                        if (downloading)
+                          Row(
+                            children: [
+                              Expanded(
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(20),
+                                  child: SizedBox(
+                                    height: 40,
+                                    child: Stack(
+                                      fit: StackFit.expand,
+                                      children: [
+                                        ColoredBox(color: tokens.surfaceMuted),
+                                        if (progress?.fraction != null)
+                                          FractionallySizedBox(
+                                            widthFactor: progress!.fraction!
+                                                .clamp(0.0, 1.0),
+                                            alignment: Alignment.centerLeft,
+                                            child:
+                                                ColoredBox(color: tokens.primary),
+                                          )
+                                        else
+                                          const Align(
+                                            child: SizedBox(
+                                              width: 18,
+                                              height: 18,
+                                              child: CircularProgressIndicator(
+                                                strokeWidth: 2,
+                                              ),
+                                            ),
+                                          ),
+                                        Center(
+                                          child: Padding(
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 12,
+                                            ),
+                                            child: Text(
+                                              progressLabel ??
+                                                  (progress?.fraction != null
+                                                      ? '正在下载… ${(progress!.fraction! * 100).toStringAsFixed(0)}%'
+                                                      : '正在下载…'),
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: TextStyle(
+                                                fontSize: 13,
+                                                fontWeight: FontWeight.w600,
+                                                color:
+                                                    (progress?.fraction ?? 0) >
+                                                            0.45
+                                                        ? tokens.onPrimary
+                                                        : tokens.ink,
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              OutlinedButton(
+                                onPressed: _updater.cancelDownload,
+                                child: const Text('取消'),
+                              ),
+                            ],
+                          )
+                        else if (!checking)
+                          FilledButton(
+                            onPressed: () async {
+                              if (_isIos) {
+                                await _showUpdatePrompt(check);
+                                return;
+                              }
+                              if (_updater.isDownloading) return;
+                              final ok = await _updater.downloadAndInstall(
+                                result: check,
+                              );
+                              if (!mounted) return;
+                              if (ok) {
+                                _snack('已调起安装器，请按系统提示完成安装');
+                              } else {
+                                final err = _updater.lastError ?? '下载或安装失败';
+                                _snack(err);
+                              }
+                            },
+                            child: Text(_isIos ? '查看更新说明' : '下载并安装'),
+                          ),
                       ],
-                    )
-                  else if (!checking)
-                    OutlinedButton(
-                      onPressed: () async {
-                        if (_isIos) {
-                          await _showUpdatePrompt(check);
-                          return;
-                        }
-                        if (_updater.isDownloading) return;
-                        final ok =
-                            await _updater.downloadAndInstall(result: check);
-                        if (!mounted) return;
-                        if (ok) {
-                          _snack('已调起安装器，请按系统提示完成安装');
-                        } else {
-                          final err = _updater.lastError ?? '下载或安装失败';
-                          _snack(err);
-                        }
-                      },
-                      child: Text(_isIos ? '查看更新说明' : '下载并安装'),
                     ),
+                  ),
                 ],
               ],
             ),
@@ -903,8 +885,6 @@ class _SettingsAboutTabState extends State<SettingsAboutTab> {
     );
   }
 }
-
-enum _AboutUpdateAction { skip, later, install }
 
 enum _ImportExportAction { export, import }
 

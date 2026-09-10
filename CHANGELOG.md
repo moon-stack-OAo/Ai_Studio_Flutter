@@ -13,15 +13,15 @@
 
 ### Added
 
-（暂无）
+- **更新确认弹窗 OD 稿**：Fluent / Material × 亮暗共 4 份确认态原型（`FB-UPDATE`），总览入口已挂
 
 ### Changed
 
-（暂无）
+- **更新确认弹窗对齐 OD**：双端标题/文案统一；移动端抽离共用 `update_prompt_dialog`；桌面去掉无效 `installing` 态，下载中由 InfoBar + 关于页进度承接
 
 ### Fixed
 
-（暂无）
+- **桌面视频预览黑屏**：Windows 上 `VideoPlayer` 经 `ClipRRect` + `FittedBox(原生像素尺寸)` 时纹理常不显示（进度条仍走）；内嵌/放大播放改为 `AspectRatio` 定框直接铺纹理
 
 ---
 

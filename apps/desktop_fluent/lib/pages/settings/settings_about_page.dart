@@ -169,6 +169,7 @@ class _SettingsAboutPageState extends State<SettingsAboutPage> {
       case UpdatePromptAction.later:
         _showInfoBar('可在 设置 → 关于与更新 中安装', InfoBarSeverity.info);
       case UpdatePromptAction.install:
+        _showInfoBar('正在下载更新…', InfoBarSeverity.info);
         final ok = await updater.downloadAndInstall(result: result);
         if (!mounted) return;
         if (!ok) {
@@ -593,8 +594,8 @@ class _SettingsAboutPageState extends State<SettingsAboutPage> {
         (check?.hasUpdate ?? false) || (updater?.hasAvailableUpdate ?? false);
     final bg = hasUpdate
         ? Color.lerp(tokens.primary, tokens.surface, 0.82)!
-        : Color.lerp(const Color(0xFF107C10), tokens.surface, 0.85)!;
-    final fg = hasUpdate ? tokens.primaryPressed : const Color(0xFF0B6A0B);
+        : Color.lerp(tokens.success, tokens.surface, 0.85)!;
+    final fg = hasUpdate ? tokens.primaryPressed : tokens.success;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       decoration: BoxDecoration(

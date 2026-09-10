@@ -330,12 +330,12 @@ class _InlinePlayerState extends State<_InlinePlayer> {
         children: [
           AspectRatio(
             aspectRatio: _stageAspectRatio(),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(10),
-              child: ColoredBox(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
                 color: const Color(0xFF0F1115),
-                child: _buildStage(tokens),
+                borderRadius: BorderRadius.circular(10),
               ),
+              child: _buildStage(tokens),
             ),
           ),
           if (_ready && _controller != null && _guard != null) ...[
@@ -387,20 +387,7 @@ class _InlinePlayerState extends State<_InlinePlayer> {
     if (!_ready || _controller == null) {
       return const Center(child: ProgressRing());
     }
-    final ctrl = _controller!;
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        FittedBox(
-          fit: BoxFit.contain,
-          child: SizedBox(
-            width: ctrl.value.size.width,
-            height: ctrl.value.size.height,
-            child: VideoPlayer(ctrl),
-          ),
-        ),
-      ],
-    );
+    return VideoPlayer(_controller!);
   }
 }
 

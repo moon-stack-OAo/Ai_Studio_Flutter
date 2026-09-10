@@ -7,11 +7,11 @@ import 'package:flutter/services.dart';
 
 import '../app/theme_controller.dart';
 import '../pages/chat/chat_page.dart';
-import '../pages/chat/widgets/markdown_host.dart';
 import '../pages/image/image_page.dart';
 import '../pages/settings/settings_page.dart';
 import '../pages/video/video_page.dart';
 import '../update/mobile_update_controller.dart';
+import '../update/update_prompt_dialog.dart';
 import 'app_section.dart';
 
 /// Material 壳：Scaffold + 四入口 NavigationBar；IME 升起时随 viewInsets 收起底栏。
@@ -211,70 +211,25 @@ class _AppShellState extends State<AppShell> {
     if (version == null || version.trim().isEmpty) return;
 
     _promptShowing = true;
-    final notes = prepareUpdateNotes(result.notes);
-    final isIos = _updater.isIos;
-    final action = await showDialog<_UpdatePromptAction>(
+    final action = await showUpdatePromptDialog(
       context: context,
-      barrierDismissible: true,
-      builder: (dialogCtx) {
-        return AlertDialog(
-          title: Text('发现新版本 ${normalizeVersion(version)}'),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  isIos
-                      ? MobileUpdateController.iosNonStoreMessage
-                      : '可下载并安装更新包。请确认已允许「安装未知应用」。',
-                ),
-                if (notes.isNotEmpty) ...[
-                  const SizedBox(height: 12),
-                  MarkdownHost(data: notes, compact: true),
-                ],
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () =>
-                  Navigator.pop(dialogCtx, _UpdatePromptAction.skip),
-              child: const Text('跳过此版本'),
-            ),
-            TextButton(
-              onPressed: () =>
-                  Navigator.pop(dialogCtx, _UpdatePromptAction.later),
-              child: const Text('稍后'),
-            ),
-            if (isIos)
-              const FilledButton(
-                onPressed: null,
-                child: Text('下载并安装'),
-              )
-            else
-              FilledButton(
-                onPressed: () =>
-                    Navigator.pop(dialogCtx, _UpdatePromptAction.install),
-                child: const Text('下载并安装'),
-              ),
-          ],
-        );
-      },
+      result: result,
+      isIos: _updater.isIos,
+      iosMessage: MobileUpdateController.iosNonStoreMessage,
     );
     _promptShowing = false;
     if (!mounted) return;
 
-    switch (action) {
-      case _UpdatePromptAction.skip:
+    switch (action ?? UpdatePromptAction.later) {
+      case UpdatePromptAction.skip:
         await _updater.skipUpdateVersion(version);
-      case _UpdatePromptAction.later:
+      case UpdatePromptAction.later:
         final messenger = ScaffoldMessenger.of(context);
         messenger.hideCurrentSnackBar();
         messenger.showSnackBar(
           const SnackBar(content: Text('可在 设置 → 关于 中安装')),
         );
-      case _UpdatePromptAction.install:
+      case UpdatePromptAction.install:
         if (_updater.isIos) return;
         final ok = await _updater.downloadAndInstall(result: result);
         if (!mounted) return;
@@ -289,8 +244,6 @@ class _AppShellState extends State<AppShell> {
             SnackBar(content: Text(_updater.lastError ?? '下载或安装失败')),
           );
         }
-      case null:
-        break;
     }
   }
 
@@ -400,5 +353,3 @@ class _AppShellState extends State<AppShell> {
     );
   }
 }
-
-enum _UpdatePromptAction { skip, later, install }

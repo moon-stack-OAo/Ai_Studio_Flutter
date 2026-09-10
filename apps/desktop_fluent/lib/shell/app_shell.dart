@@ -279,6 +279,7 @@ class _AppShellState extends State<AppShell> {
             InfoBarSeverity.info,
           );
         case UpdatePromptAction.install:
+          _showInfoBar('正在下载更新…', InfoBarSeverity.info);
           final ok = await updater.downloadAndInstall(result: result);
           if (!mounted) return;
           if (!ok) {

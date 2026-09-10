@@ -155,24 +155,20 @@ class _VideoPlayerBodyState extends State<_VideoPlayerBody> {
     }
     final ctrl = _controller!;
     final guard = _guard!;
-    final size = ctrl.value.size;
-    final vw = size.width <= 0 ? 16.0 : size.width;
-    final vh = size.height <= 0 ? 9.0 : size.height;
+    final ar = ctrl.value.aspectRatio > 0 ? ctrl.value.aspectRatio : (16 / 9);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Expanded(
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(8),
-            child: ColoredBox(
+          child: DecoratedBox(
+            decoration: BoxDecoration(
               color: const Color(0xFF0F1115),
-              child: FittedBox(
-                fit: BoxFit.contain,
-                child: SizedBox(
-                  width: vw,
-                  height: vh,
-                  child: VideoPlayer(ctrl),
-                ),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Center(
+              child: AspectRatio(
+                aspectRatio: ar,
+                child: VideoPlayer(ctrl),
               ),
             ),
           ),
