@@ -13,14 +13,17 @@
 
 ### Added
 
-（暂无）
+- **Agnes 生图协议**：`agnes-image-*` 走 size 档位（1K–4K）+ `ratio`；图生图参考图写入 `extra_body.image`；双端作曲器按活跃提供商同步 size / 比例选项
+- **生图 / 生视频回合提示复制**：双端用户提示气泡可复制（桌面 Flyout / 悬浮；移动长按底栏 + SnackBar）
 
 ### Changed
 
-（暂无）
+- **Agnes 视频参数**：补齐 1080P / 1K 等 size、默认时长与 v2.0 推荐时长；模型识别收紧为 `agnes-video*` / `agnes-image*`，避免对话模型误入视频协议
+- **提示词辅助（草稿 | 润色）**：上区改为下划线 Tab 切换；工具行按钮统一高度；「应用润色结果」与「填入」同处行尾；Material Sheet 默认约 88% 屏高贴底
 
 ### Fixed
 
+- **提示词辅助结构化 chip 底部大块留白**：上区去掉与 chip 区争 flex 的 `Flexible`，高度跟内容封顶，剩余空间交给 chip 滚动区
 - **视频预览播完首尾帧来回跳**：Windows `video_player_win` 在 `completed` 后再 `seekTo(duration)` 会强制续播；双端播放器加守卫，接近片尾主动暂停并钉住末态；进度条用墙钟插值对齐画面，钉住时强制满格
 
 ---
