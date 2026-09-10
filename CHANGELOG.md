@@ -13,6 +13,22 @@
 
 ### Added
 
+（暂无）
+
+### Changed
+
+（暂无）
+
+### Fixed
+
+（暂无）
+
+---
+
+## [1.0.3] — 2026-09-10
+
+### Added
+
 - **Agnes 生图协议**：`agnes-image-*` 走 size 档位（1K–4K）+ `ratio`；图生图参考图写入 `extra_body.image`；双端作曲器按活跃提供商同步 size / 比例选项
 - **生图 / 生视频回合提示复制**：双端用户提示气泡可复制（桌面 Flyout / 悬浮；移动长按底栏 + SnackBar）
 
