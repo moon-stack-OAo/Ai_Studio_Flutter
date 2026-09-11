@@ -17,6 +17,18 @@
 
 ### Changed
 
+（暂无）
+
+### Fixed
+
+（暂无）
+
+---
+
+## [1.0.5] — 2026-09-11
+
+### Changed
+
 - **CI / 发版钉死 Flutter 3.44.5**：`ci.yml` / `build.yml` / `release.yml` 的 `flutter-action` 增加 `flutter-version: "3.44.5"`，避免 `channel: stable` 漂到 3.47.x
 
 ### Fixed
