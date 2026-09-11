@@ -107,6 +107,9 @@ class ImageRef {
   }
 }
 
+/// Composer / 回合气泡参考图上限（与 `IMG-REF` 对齐；当前单张）。
+const int maxTurnReferenceImages = 1;
+
 class ImageItem {
   const ImageItem({
     required this.id,
@@ -116,6 +119,7 @@ class ImageItem {
     this.model = '',
     this.providerName = '',
     this.images = const [],
+    this.referenceImages = const [],
     this.refPreview,
     this.n = 1,
     this.size,
@@ -132,6 +136,8 @@ class ImageItem {
   final String model;
   final String providerName;
   final List<ImageRef> images;
+  /// 本回合用户提交的参考图资产引用（`IMG-TURN-REF`）；旧数据可为空。
+  final List<ImageRef> referenceImages;
   final String? refPreview;
   final int n;
   final String? size;
@@ -148,6 +154,7 @@ class ImageItem {
     String? model,
     String? providerName,
     List<ImageRef>? images,
+    List<ImageRef>? referenceImages,
     String? refPreview,
     int? n,
     String? size,
@@ -169,6 +176,7 @@ class ImageItem {
       model: model ?? this.model,
       providerName: providerName ?? this.providerName,
       images: images ?? this.images,
+      referenceImages: referenceImages ?? this.referenceImages,
       refPreview:
           clearRefPreview ? null : (refPreview ?? this.refPreview),
       n: n ?? this.n,
@@ -191,6 +199,9 @@ class ImageItem {
         'model': model,
         'providerName': providerName,
         'images': images.map((e) => e.toJson()).toList(),
+        if (referenceImages.isNotEmpty)
+          'referenceImages':
+              referenceImages.map((e) => e.toJson()).toList(),
         if (refPreview != null) 'refPreview': refPreview,
         'n': n,
         if (size != null) 'size': size,
@@ -210,6 +221,15 @@ class ImageItem {
         }
       }
     }
+    final refs = <ImageRef>[];
+    final rawRefs = json['referenceImages'];
+    if (rawRefs is List) {
+      for (final e in rawRefs) {
+        if (e is Map) {
+          refs.add(ImageRef.fromJson(Map<String, dynamic>.from(e)));
+        }
+      }
+    }
     return ImageItem(
       id: json['id']?.toString() ?? '',
       createdAt:
@@ -220,6 +240,7 @@ class ImageItem {
       model: json['model']?.toString() ?? '',
       providerName: json['providerName']?.toString() ?? '',
       images: imgs,
+      referenceImages: refs,
       refPreview: json['refPreview']?.toString(),
       n: (json['n'] is num) ? (json['n'] as num).toInt() : 1,
       size: json['size']?.toString(),

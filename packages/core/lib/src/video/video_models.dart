@@ -1,5 +1,7 @@
 /// 生视频会话与条目模型。
 
+import '../image/image_models.dart';
+
 enum VideoGenMode {
   text,
   image;
@@ -108,6 +110,7 @@ class VideoJob {
     this.videoUrl,
     this.remoteVideoUrl,
     this.localPath,
+    this.posterUrl,
     this.errorMessage,
     this.needsMaterialize = false,
   });
@@ -118,6 +121,8 @@ class VideoJob {
   final String? videoUrl;
   final String? remoteVideoUrl;
   final String? localPath;
+  /// CDN / 任务返回的海报图 URL（若有）。
+  final String? posterUrl;
   final String? errorMessage;
   final bool needsMaterialize;
 
@@ -128,12 +133,14 @@ class VideoJob {
     String? videoUrl,
     String? remoteVideoUrl,
     String? localPath,
+    String? posterUrl,
     String? errorMessage,
     bool? needsMaterialize,
     bool clearProgress = false,
     bool clearVideoUrl = false,
     bool clearRemoteVideoUrl = false,
     bool clearLocalPath = false,
+    bool clearPosterUrl = false,
     bool clearErrorMessage = false,
   }) {
     return VideoJob(
@@ -145,6 +152,7 @@ class VideoJob {
           ? null
           : (remoteVideoUrl ?? this.remoteVideoUrl),
       localPath: clearLocalPath ? null : (localPath ?? this.localPath),
+      posterUrl: clearPosterUrl ? null : (posterUrl ?? this.posterUrl),
       errorMessage: clearErrorMessage
           ? null
           : (errorMessage ?? this.errorMessage),
@@ -172,6 +180,9 @@ class VideoItem {
     this.videoUrl,
     this.remoteVideoUrl,
     this.localPath,
+    this.posterUrl,
+    this.posterLocalPath,
+    this.referenceImages = const [],
     this.refPreview,
     this.errorMessage,
     this.needsResume = false,
@@ -195,6 +206,12 @@ class VideoItem {
   final String? videoUrl;
   final String? remoteVideoUrl;
   final String? localPath;
+  /// 任务/CDN 返回的海报 URL（若有）。
+  final String? posterUrl;
+  /// 本机抽帧封面路径（`video_poster_cache` 或 memory key）。
+  final String? posterLocalPath;
+  /// 本回合用户提交的参考图资产引用（`VID-TURN-REF`）；旧数据可为空。
+  final List<ImageRef> referenceImages;
   final String? refPreview;
   final String? errorMessage;
   final bool needsResume;
@@ -219,6 +236,9 @@ class VideoItem {
     String? videoUrl,
     String? remoteVideoUrl,
     String? localPath,
+    String? posterUrl,
+    String? posterLocalPath,
+    List<ImageRef>? referenceImages,
     String? refPreview,
     String? errorMessage,
     bool? needsResume,
@@ -232,6 +252,8 @@ class VideoItem {
     bool clearVideoUrl = false,
     bool clearRemoteVideoUrl = false,
     bool clearLocalPath = false,
+    bool clearPosterUrl = false,
+    bool clearPosterLocalPath = false,
     bool clearRefPreview = false,
     bool clearErrorMessage = false,
   }) {
@@ -257,6 +279,11 @@ class VideoItem {
           ? null
           : (remoteVideoUrl ?? this.remoteVideoUrl),
       localPath: clearLocalPath ? null : (localPath ?? this.localPath),
+      posterUrl: clearPosterUrl ? null : (posterUrl ?? this.posterUrl),
+      posterLocalPath: clearPosterLocalPath
+          ? null
+          : (posterLocalPath ?? this.posterLocalPath),
+      referenceImages: referenceImages ?? this.referenceImages,
       refPreview:
           clearRefPreview ? null : (refPreview ?? this.refPreview),
       errorMessage: clearErrorMessage
@@ -286,6 +313,12 @@ class VideoItem {
         if (remoteVideoUrl != null && remoteVideoUrl!.isNotEmpty)
           'remoteVideoUrl': remoteVideoUrl,
         if (localPath != null && localPath!.isNotEmpty) 'localPath': localPath,
+        if (posterUrl != null && posterUrl!.isNotEmpty) 'posterUrl': posterUrl,
+        if (posterLocalPath != null && posterLocalPath!.isNotEmpty)
+          'posterLocalPath': posterLocalPath,
+        if (referenceImages.isNotEmpty)
+          'referenceImages':
+              referenceImages.map((e) => e.toJson()).toList(),
         if (refPreview != null) 'refPreview': refPreview,
         if (errorMessage != null) 'errorMessage': errorMessage,
         'needsResume': needsResume,
@@ -293,6 +326,15 @@ class VideoItem {
       };
 
   factory VideoItem.fromJson(Map<String, dynamic> json) {
+    final refs = <ImageRef>[];
+    final rawRefs = json['referenceImages'];
+    if (rawRefs is List) {
+      for (final e in rawRefs) {
+        if (e is Map) {
+          refs.add(ImageRef.fromJson(Map<String, dynamic>.from(e)));
+        }
+      }
+    }
     return VideoItem(
       id: json['id']?.toString() ?? '',
       createdAt:
@@ -317,6 +359,11 @@ class VideoItem {
       videoUrl: json['videoUrl']?.toString(),
       remoteVideoUrl: json['remoteVideoUrl']?.toString(),
       localPath: json['localPath']?.toString(),
+      posterUrl: json['posterUrl']?.toString() ??
+          json['thumbnailUrl']?.toString() ??
+          json['coverUrl']?.toString(),
+      posterLocalPath: json['posterLocalPath']?.toString(),
+      referenceImages: refs,
       refPreview: json['refPreview']?.toString(),
       errorMessage: json['errorMessage']?.toString(),
       needsResume: json['needsResume'] == true,

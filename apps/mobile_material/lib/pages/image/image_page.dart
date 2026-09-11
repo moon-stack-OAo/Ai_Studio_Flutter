@@ -162,6 +162,18 @@ class _ImagePageState extends State<ImagePage> {
     );
   }
 
+  Future<void> _openReferenceLightbox(
+    ImageItem item,
+    int index,
+    ImageRef ref,
+  ) async {
+    await ImageLightbox.show(
+      context,
+      ref: ref,
+      loadBytes: () => widget.sessionRepository.readImageBytes(ref),
+    );
+  }
+
   Future<void> _onUseAsReference(
     ImageItem item,
     int index,
@@ -452,6 +464,7 @@ class _ImagePageState extends State<ImagePage> {
                         items: items,
                         loadBytes: widget.sessionRepository.readImageBytes,
                         onPreview: _openLightbox,
+                        onPreviewReference: _openReferenceLightbox,
                         onSaveAlbum: _onSaveAlbum,
                         onShare: _onShare,
                         onUseAsReference: _onUseAsReference,
@@ -476,6 +489,7 @@ class _TimelineSliver extends StatelessWidget {
     required this.onSaveAlbum,
     this.onShare,
     this.onUseAsReference,
+    this.onPreviewReference,
   });
 
   final List<ImageItem> items;
@@ -485,6 +499,8 @@ class _TimelineSliver extends StatelessWidget {
   final void Function(ImageItem item, int index, ImageRef ref)? onShare;
   final void Function(ImageItem item, int index, ImageRef ref)?
       onUseAsReference;
+  final void Function(ImageItem item, int index, ImageRef ref)?
+      onPreviewReference;
 
   @override
   Widget build(BuildContext context) {
@@ -514,6 +530,7 @@ class _TimelineSliver extends StatelessWidget {
               onSaveAlbum: onSaveAlbum,
               onShare: onShare,
               onUseAsReference: onUseAsReference,
+              onPreviewReference: onPreviewReference,
             ),
           );
         },

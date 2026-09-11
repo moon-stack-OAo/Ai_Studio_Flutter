@@ -88,6 +88,21 @@ class _ImagePageState extends State<ImagePage> {
     );
   }
 
+  Future<void> _openReferenceLightbox(
+    ImageItem item,
+    int index,
+    ImageRef ref,
+  ) async {
+    await ImageLightbox.show(
+      context,
+      ref: ref,
+      refs: item.referenceImages,
+      initialIndex: index,
+      loadBytes: () => widget.sessionRepository.readImageBytes(ref),
+      loadBytesFor: widget.sessionRepository.readImageBytes,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final tokens = fluentTokensOf(context);
@@ -152,6 +167,7 @@ class _ImagePageState extends State<ImagePage> {
                         items: items,
                         loadBytes: widget.sessionRepository.readImageBytes,
                         onPreview: _openLightbox,
+                        onPreviewReference: _openReferenceLightbox,
                         onSave: (item, index, ref) async {
                           final ok = await _controller.saveImageAs(ref);
                           if (ok && context.mounted) {

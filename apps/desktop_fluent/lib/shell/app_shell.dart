@@ -28,6 +28,7 @@ class AppShell extends StatefulWidget {
     required this.chatDefaultsRepository,
     required this.appLogRepository,
     required this.dataBackupService,
+    this.videoPosterService,
     required this.generation,
     this.chatClient,
     this.imageClient,
@@ -47,6 +48,7 @@ class AppShell extends StatefulWidget {
   final ChatDefaultsRepository chatDefaultsRepository;
   final AppLogRepository appLogRepository;
   final DataBackupService dataBackupService;
+  final VideoPosterService? videoPosterService;
   final GenerationRuntime generation;
   final OpenAiCompatibleChatClient? chatClient;
   final OpenAiCompatibleImageClient? imageClient;
@@ -120,6 +122,7 @@ class _AppShellState extends State<AppShell> {
         generation: widget.generation,
         chatClient: widget.chatClient,
         videoClient: widget.videoClient,
+        videoPosterService: widget.videoPosterService,
         onOpenProviders: _openProviders,
       ),
       // SettingsShell 依赖可变 category，单独在 build 中组装。

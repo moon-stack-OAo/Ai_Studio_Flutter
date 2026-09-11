@@ -1,11 +1,13 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:core/core.dart';
 import 'package:design_fluent/design_fluent.dart';
 import 'package:fluent_ui/fluent_ui.dart';
-import 'package:video_player/video_player.dart';
+import 'package:media_kit/media_kit.dart';
+import 'package:media_kit_video/media_kit_video.dart';
 
-import 'video_playback_guard.dart';
+import 'video_desktop_fullscreen.dart';
 
 /// 从 [VideoItem] 解析可播放路径（Dialog / Panel 共用）。
 String? resolveVideoItemPlayablePath(VideoItem item) {
@@ -65,10 +67,95 @@ class _VideoPlayerBody extends StatefulWidget {
 }
 
 class _VideoPlayerBodyState extends State<_VideoPlayerBody> {
-  VideoPlayerController? _controller;
-  VideoPlaybackGuard? _guard;
+  Player? _player;
+  VideoController? _videoController;
+  final List<StreamSubscription<dynamic>> _subs = [];
   String? _error;
   bool _ready = false;
+  double _volume = 100;
+  double _volumeBeforeMute = 100;
+  bool _muted = false;
+
+  bool _isHttp(String path) {
+    return RegExp(r'^https?://', caseSensitive: false).hasMatch(path);
+  }
+
+  String _toMediaUri(String path) {
+    if (_isHttp(path)) return path;
+    if (path.startsWith('file:')) return path;
+    return Uri.file(path).toString();
+  }
+
+  void _clearSubs() {
+    for (final s in _subs) {
+      unawaited(s.cancel());
+    }
+    _subs.clear();
+  }
+
+  void _attachSubs(Player player) {
+    void tick([Object? _]) {
+      if (mounted) setState(() {});
+    }
+
+    _subs.addAll([
+      player.stream.playing.listen(tick),
+      player.stream.completed.listen(tick),
+      player.stream.position.listen(tick),
+      player.stream.duration.listen(tick),
+      player.stream.buffer.listen(tick),
+      player.stream.buffering.listen(tick),
+      player.stream.width.listen(tick),
+      player.stream.height.listen(tick),
+      player.stream.volume.listen((v) {
+        if (!mounted || _muted) return;
+        setState(() => _volume = v.clamp(0.0, 100.0));
+      }),
+      player.stream.error.listen((msg) {
+        if (!mounted || msg.trim().isEmpty) return;
+        setState(() => _error = '播放出错：$msg');
+      }),
+    ]);
+  }
+
+  Future<void> _setVolume(double value) async {
+    final v = value.clamp(0.0, 100.0);
+    setState(() {
+      _volume = v;
+      _muted = v <= 0;
+      if (v > 0) _volumeBeforeMute = v;
+    });
+    final player = _player;
+    if (player == null) return;
+    try {
+      await player.setVolume(v);
+    } catch (_) {}
+  }
+
+  Future<void> _toggleMute() async {
+    if (_muted) {
+      final restore = _volumeBeforeMute <= 0 ? 100.0 : _volumeBeforeMute;
+      await _setVolume(restore);
+      return;
+    }
+    _volumeBeforeMute = _volume <= 0 ? 100.0 : _volume;
+    await _setVolume(0);
+  }
+
+  Future<void> _enterFullscreen() async {
+    final player = _player;
+    if (player != null) {
+      try {
+        await player.pause();
+      } catch (_) {}
+    }
+    if (!mounted) return;
+    await showVideoDesktopFullscreen(
+      context,
+      item: widget.item,
+      initialVolume: _muted ? 0 : _volume,
+    );
+  }
 
   @override
   void initState() {
@@ -87,37 +174,37 @@ class _VideoPlayerBodyState extends State<_VideoPlayerBody> {
       return;
     }
     try {
-      final VideoPlayerController ctrl;
-      if (RegExp(r'^https?://', caseSensitive: false).hasMatch(path)) {
-        ctrl = VideoPlayerController.networkUrl(Uri.parse(path));
-      } else {
-        final filePath = path.startsWith('file:')
-            ? Uri.parse(path).toFilePath()
-            : path;
+      if (!_isHttp(path)) {
+        final filePath =
+            path.startsWith('file:') ? Uri.parse(path).toFilePath() : path;
         final f = File(filePath);
         if (!await f.exists()) {
           setState(() => _error = '本地文件不存在');
           return;
         }
-        ctrl = VideoPlayerController.file(f);
       }
-      _controller = ctrl;
-      await ctrl.initialize();
+
+      final player = Player();
+      await player.setPlaylistMode(PlaylistMode.none);
+      await player.setVolume(_muted ? 0 : _volume);
       if (!mounted) {
-        await ctrl.dispose();
+        await player.dispose();
         return;
       }
-      await ctrl.setLooping(false);
+      final video = VideoController(player);
+      _player = player;
+      _videoController = video;
+      _attachSubs(player);
+
+      await player.open(Media(_toMediaUri(path)), play: true);
       if (!mounted) {
-        await ctrl.dispose();
+        _clearSubs();
+        _player = null;
+        _videoController = null;
+        await player.dispose();
         return;
       }
-      final guard = VideoPlaybackGuard(ctrl);
-      _guard = guard;
       setState(() => _ready = true);
-      // 先起墙钟再 await play，避免开头长时间停在 0。
-      guard.notePlayStarted();
-      await ctrl.play();
     } catch (e) {
       if (!mounted) return;
       setState(() => _error = '播放器初始化失败：$e');
@@ -126,13 +213,35 @@ class _VideoPlayerBodyState extends State<_VideoPlayerBody> {
 
   @override
   void dispose() {
-    final g = _guard;
-    final c = _controller;
-    _guard = null;
-    _controller = null;
-    g?.dispose();
-    c?.dispose();
+    _clearSubs();
+    final p = _player;
+    _player = null;
+    _videoController = null;
+    if (p != null) {
+      unawaited(() async {
+        try {
+          await p.dispose();
+        } catch (_) {}
+      }());
+    }
     super.dispose();
+  }
+
+  Future<void> _toggle() async {
+    final player = _player;
+    if (player == null) return;
+    final state = player.state;
+    if (state.playing) {
+      await player.pause();
+      return;
+    }
+    if (state.completed ||
+        (state.duration > Duration.zero &&
+            state.position >=
+                state.duration - const Duration(milliseconds: 80))) {
+      await player.seek(Duration.zero);
+    }
+    await player.play();
   }
 
   @override
@@ -147,15 +256,19 @@ class _VideoPlayerBodyState extends State<_VideoPlayerBody> {
         ),
       );
     }
-    if (!_ready || _controller == null || _guard == null) {
+    if (!_ready || _player == null || _videoController == null) {
       return const SizedBox(
         height: 200,
         child: Center(child: ProgressRing()),
       );
     }
-    final ctrl = _controller!;
-    final guard = _guard!;
-    final ar = ctrl.value.aspectRatio > 0 ? ctrl.value.aspectRatio : (16 / 9);
+    final player = _player!;
+    final w = player.state.width;
+    final h = player.state.height;
+    final ar = (w != null && h != null && w > 0 && h > 0) ? (w / h) : (16 / 9);
+    final playing = player.state.playing && !player.state.completed;
+    final position = player.state.position;
+    final duration = player.state.duration;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -168,61 +281,128 @@ class _VideoPlayerBodyState extends State<_VideoPlayerBody> {
             child: Center(
               child: AspectRatio(
                 aspectRatio: ar,
-                child: VideoPlayer(ctrl),
+                child: Video(
+                  controller: _videoController!,
+                  controls: NoVideoControls,
+                  fit: BoxFit.contain,
+                ),
               ),
             ),
           ),
         ),
         const SizedBox(height: 12),
-        AnimatedBuilder(
-          animation: Listenable.merge([ctrl, guard]),
-          builder: (context, _) {
-            final playing = guard.uiPlaying;
-            return Row(
-              children: [
-                Tooltip(
-                  message: playing ? '暂停' : '播放',
-                  child: Semantics(
-                    button: true,
-                    label: playing ? '暂停' : '播放',
-                    excludeSemantics: true,
-                    child: IconButton(
-                      icon: Icon(
-                        playing ? FluentIcons.pause : FluentIcons.play,
-                      ),
-                      onPressed: () => guard.togglePlayPause(),
-                    ),
+        Row(
+          children: [
+            Tooltip(
+              message: playing ? '暂停' : '播放',
+              child: Semantics(
+                button: true,
+                label: playing ? '暂停' : '播放',
+                excludeSemantics: true,
+                child: IconButton(
+                  icon: Icon(
+                    playing ? FluentIcons.pause : FluentIcons.play,
                   ),
+                  onPressed: () => _toggle(),
                 ),
-                Expanded(
-                  child: _DialogScrubber(
-                    controller: ctrl,
-                    guard: guard,
-                    playedColor: tokens.primary,
-                    bufferedColor: tokens.primary.withValues(alpha: 0.25),
-                    backgroundColor: tokens.surfaceMuted,
+              ),
+            ),
+            Expanded(
+              child: _DialogScrubber(
+                player: player,
+                playedColor: tokens.primary,
+                bufferedColor: tokens.primary.withValues(alpha: 0.25),
+                backgroundColor: tokens.surfaceMuted,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              '${_fmt(position)} / ${_fmt(duration)}',
+              style: TextStyle(
+                fontSize: 11,
+                color: tokens.inkMuted,
+                fontFamily: tokens.fontFamily,
+                fontFeatures: const [FontFeature.tabularFigures()],
+              ),
+            ),
+            Tooltip(
+              message: '全屏',
+              child: Semantics(
+                button: true,
+                label: '全屏',
+                excludeSemantics: true,
+                child: IconButton(
+                  icon: const Icon(FluentIcons.full_screen, size: 14),
+                  onPressed: () => _enterFullscreen(),
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        Row(
+          children: [
+            Tooltip(
+              message: _muted ? '取消静音' : '静音',
+              child: Semantics(
+                button: true,
+                label: _muted ? '取消静音' : '静音',
+                excludeSemantics: true,
+                child: IconButton(
+                  icon: Icon(
+                    _muted
+                        ? FluentIcons.volume_disabled
+                        : FluentIcons.volume2,
+                    size: 14,
                   ),
+                  onPressed: () => _toggleMute(),
                 ),
-              ],
-            );
-          },
+              ),
+            ),
+            Expanded(
+              child: Slider(
+                value: _muted ? 0 : _volume,
+                min: 0,
+                max: 100,
+                label: '${(_muted ? 0 : _volume).round()}',
+                onChanged: (v) => _setVolume(v),
+              ),
+            ),
+            SizedBox(
+              width: 36,
+              child: Text(
+                '${(_muted ? 0 : _volume).round()}',
+                textAlign: TextAlign.end,
+                style: TextStyle(
+                  fontSize: 11,
+                  color: tokens.inkMuted,
+                  fontFamily: tokens.fontFamily,
+                  fontFeatures: const [FontFeature.tabularFigures()],
+                ),
+              ),
+            ),
+          ],
         ),
       ],
     );
+  }
+
+  String _fmt(Duration d) {
+    final m = d.inMinutes.remainder(60).toString().padLeft(2, '0');
+    final s = d.inSeconds.remainder(60).toString().padLeft(2, '0');
+    return '$m:$s';
   }
 }
 
 class _DialogScrubber extends StatefulWidget {
   const _DialogScrubber({
-    required this.controller,
-    required this.guard,
+    required this.player,
     required this.playedColor,
     required this.bufferedColor,
     required this.backgroundColor,
   });
 
-  final VideoPlayerController controller;
-  final VideoPlaybackGuard guard;
+  final Player player;
   final Color playedColor;
   final Color bufferedColor;
   final Color backgroundColor;
@@ -242,69 +422,80 @@ class _DialogScrubberState extends State<_DialogScrubber> {
     return (local.dx / box.size.width).clamp(0.0, 1.0);
   }
 
+  double _progressFraction() {
+    final d = widget.player.state.duration.inMilliseconds;
+    if (d <= 0) return 0;
+    if (widget.player.state.completed) return 1;
+    return (widget.player.state.position.inMilliseconds / d).clamp(0.0, 1.0);
+  }
+
+  double _bufferedFraction() {
+    final d = widget.player.state.duration.inMilliseconds;
+    if (d <= 0) return 0;
+    return (widget.player.state.buffer.inMilliseconds / d).clamp(0.0, 1.0);
+  }
+
+  Future<void> _seekFraction(double fraction, {required bool resume}) async {
+    final d = widget.player.state.duration;
+    if (d <= Duration.zero) return;
+    final clamped = fraction.clamp(0.0, 1.0);
+    final target = Duration(milliseconds: (d.inMilliseconds * clamped).round());
+    await widget.player.seek(target);
+    final atEnd = target >= d - const Duration(milliseconds: 80);
+    if (!resume || atEnd) {
+      await widget.player.pause();
+    } else {
+      await widget.player.play();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: Listenable.merge([widget.controller, widget.guard]),
-      builder: (context, _) {
-        final value = widget.controller.value;
-        final fraction =
-            _dragFraction ?? widget.guard.progressFraction(value);
-        final durationMs = value.duration.inMilliseconds;
-        final buffered = durationMs <= 0
-            ? 0.0
-            : value.buffered
-                    .map((r) => r.end.inMilliseconds)
-                    .fold<int>(0, (a, b) => a > b ? a : b) /
-                durationMs;
-        return GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onHorizontalDragStart: (_) {
-            _wasPlaying = widget.guard.uiPlaying;
-            setState(() => _dragFraction = fraction);
-          },
-          onHorizontalDragUpdate: (details) {
-            setState(() => _dragFraction = _fractionOf(details.globalPosition));
-          },
-          onHorizontalDragEnd: (_) async {
-            final f = _dragFraction ?? fraction;
-            setState(() => _dragFraction = null);
-            await widget.guard.seekFraction(f, resume: _wasPlaying);
-          },
-          onTapDown: (details) async {
-            final f = _fractionOf(details.globalPosition);
-            await widget.guard.seekFraction(
-              f,
-              resume: widget.guard.uiPlaying,
-            );
-          },
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 8),
-            child: SizedBox(
-              height: 4,
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(2),
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    ColoredBox(color: widget.backgroundColor),
-                    FractionallySizedBox(
-                      widthFactor: buffered.clamp(0.0, 1.0),
-                      alignment: Alignment.centerLeft,
-                      child: ColoredBox(color: widget.bufferedColor),
-                    ),
-                    FractionallySizedBox(
-                      widthFactor: fraction.clamp(0.0, 1.0),
-                      alignment: Alignment.centerLeft,
-                      child: ColoredBox(color: widget.playedColor),
-                    ),
-                  ],
+    final fraction = _dragFraction ?? _progressFraction();
+    final buffered = _bufferedFraction();
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onHorizontalDragStart: (_) {
+        _wasPlaying = widget.player.state.playing;
+        setState(() => _dragFraction = fraction);
+      },
+      onHorizontalDragUpdate: (details) {
+        setState(() => _dragFraction = _fractionOf(details.globalPosition));
+      },
+      onHorizontalDragEnd: (_) async {
+        final f = _dragFraction ?? fraction;
+        setState(() => _dragFraction = null);
+        await _seekFraction(f, resume: _wasPlaying);
+      },
+      onTapDown: (details) async {
+        final f = _fractionOf(details.globalPosition);
+        await _seekFraction(f, resume: widget.player.state.playing);
+      },
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        child: SizedBox(
+          height: 4,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(2),
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                ColoredBox(color: widget.backgroundColor),
+                FractionallySizedBox(
+                  widthFactor: buffered,
+                  alignment: Alignment.centerLeft,
+                  child: ColoredBox(color: widget.bufferedColor),
                 ),
-              ),
+                FractionallySizedBox(
+                  widthFactor: fraction.clamp(0.0, 1.0),
+                  alignment: Alignment.centerLeft,
+                  child: ColoredBox(color: widget.playedColor),
+                ),
+              ],
             ),
           ),
-        );
-      },
+        ),
+      ),
     );
   }
 }

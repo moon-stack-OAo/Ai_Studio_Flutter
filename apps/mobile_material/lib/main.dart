@@ -4,8 +4,10 @@ import 'package:core/core.dart';
 import 'package:design_material/design_material.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:media_kit/media_kit.dart';
 
 import 'app/theme_controller.dart';
+import 'pages/video/media_kit_video_frame_extractor.dart';
 import 'shell/app_shell.dart';
 import 'shell/brand_intro_gate.dart';
 import 'update/mobile_update_controller.dart';
@@ -13,7 +15,11 @@ import 'update/mobile_update_controller.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  // VID-PLAYER：须在创建 Player 之前。
+  MediaKit.ensureInitialized();
+
   // 仅预加载外观，尽快画出 BrandIntro（正确亮/暗）
+
   final appearance =
       AppearanceRepository(storage: PrefsAppearanceStorage());
   await appearance.load();
@@ -23,13 +29,20 @@ Future<void> main() async {
 
   final providers = ProviderRepository(storage: SecureProviderStorage());
   final sessions = ChatSessionRepository(storage: PrefsChatSessionStorage());
+  final imageAssetStore = FileImageAssetStore();
   final imageSessions = ImageSessionRepository(
     storage: PrefsImageSessionStorage(),
-    assetStore: FileImageAssetStore(),
+    assetStore: imageAssetStore,
   );
   final videoSessions = VideoSessionRepository(
     storage: PrefsVideoSessionStorage(),
     assetStore: FileVideoAssetStore(),
+    referenceImageStore: imageAssetStore,
+  );
+  final videoPosterStore = FileVideoPosterStore();
+  final videoPosterService = VideoPosterService(
+    store: videoPosterStore,
+    extractor: MediaKitVideoFrameExtractor(),
   );
   final chatDefaults =
       ChatDefaultsRepository(storage: PrefsChatDefaultsStorage());
@@ -48,6 +61,7 @@ Future<void> main() async {
     imageSessions: imageSessions,
     videoSessions: videoSessions,
     logs: appLogs,
+    videoPosterStore: videoPosterStore,
   );
 
   final updateController = MobileUpdateController(
@@ -65,6 +79,7 @@ Future<void> main() async {
       appearanceRepository: appearance,
       appLogRepository: appLogs,
       dataBackupService: dataBackup,
+      videoPosterService: videoPosterService,
       generation: generation,
       chatClient: chatClient,
       imageClient: imageClient,
@@ -102,6 +117,7 @@ class AiStudioApp extends StatefulWidget {
     required this.appearanceRepository,
     required this.appLogRepository,
     required this.dataBackupService,
+    this.videoPosterService,
     required this.generation,
     this.chatClient,
     this.imageClient,
@@ -122,6 +138,7 @@ class AiStudioApp extends StatefulWidget {
   final AppearanceRepository appearanceRepository;
   final AppLogRepository appLogRepository;
   final DataBackupService dataBackupService;
+  final VideoPosterService? videoPosterService;
   final GenerationRuntime generation;
   final OpenAiCompatibleChatClient? chatClient;
   final OpenAiCompatibleImageClient? imageClient;
@@ -214,6 +231,7 @@ class _AiStudioAppState extends State<AiStudioApp> {
                       appearanceRepository: widget.appearanceRepository,
                       appLogRepository: widget.appLogRepository,
                       dataBackupService: widget.dataBackupService,
+                      videoPosterService: widget.videoPosterService,
                       generation: widget.generation,
                       chatClient: widget.chatClient,
                       imageClient: widget.imageClient,

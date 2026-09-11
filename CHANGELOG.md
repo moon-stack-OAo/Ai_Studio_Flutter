@@ -13,12 +13,17 @@
 
 ### Added
 
+- **`IMG-TURN-REF` / `VID-TURN-REF`（P4）**：提交图生图/图生视频时将参考图落盘为会话资产（`referenceImages: List<ImageRef>`），双端用户气泡展示缩略并可点开灯箱；旧回合无资产仅显示提示词；删除会话/清数据时一并清理；备份导出省略本地 file 字节
 - **DESIGN P4 规格**：`VID-PLAYER` 音量 + 系统级全屏；`VID-QUEUE` 成功项封面缩略；`IMG-TURN-REF` / `VID-TURN-REF`（图生图/图生视频用户气泡回看参考图）；对话气泡附图本期不做
-- **DESIGN `SHELL-SINGLE`**：桌面（Win/macOS）单实例——第二进程退出并唤起已有窗口（含托盘恢复）；移动不做
+- **`VID-QUEUE` 成功项封面缩略（P2.3）**：双端队列对 `success` 条目显示小封面；来源优先 CDN/`posterUrl` → 本机成片抽帧 JPEG 缓存（`video_poster_cache`）→ 占位；点击封面等同播放；`VideoPosterStore`/`VideoPosterService` 在 core，抽帧由双端注入 `media_kit`；清数据/`SET-DATA` 一并清理封面缓存
+- **桌面单实例（`SHELL-SINGLE`）**：`desktop_fluent` 启动早期握手；次进程退出并唤起首实例（含托盘隐藏恢复）；IPC/锁失败降级允许启动并记运行日志
+- **`SET-ABOUT` 第三方播放/编解码库许可**：双端关于页「开源许可」入口；列出 `media_kit` 家族、libmpv、FFmpeg 及许可类型与官方主页 URL（可复制）
+- **`VID-PLAYER` 音量 + 真全屏（P2.1 / P2.2）**：双端控件条静音切换 + 0–100 音量滑杆（`media_kit` `setVolume`，默认跟随内核 100，不跨启动持久化）；桌面 `window_manager.setFullScreen` 系统级全屏（内嵌/放大弹窗均可进入，Esc / 退出按钮还原；与窗内「放大」并存）；移动 `SystemChrome` 沉浸 + 可横屏，系统返回或退出全屏按钮还原
 
 ### Changed
 
-（暂无）
+- **双端 `VID-PLAYER` 迁 `media_kit`**：`desktop_fluent` 内嵌 / 放大弹窗与 `mobile_material` 推页播放均改用 `media_kit` + `media_kit_video` + `media_kit_libs_video`；移除 `video_player` / `video_player_win` 与 `VideoPlaybackGuard`；桌面弹窗独立 Player（关闭 dispose，打开时内嵌暂停），移动推页 pop 即 dispose
+
 
 ### Fixed
 

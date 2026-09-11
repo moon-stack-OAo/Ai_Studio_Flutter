@@ -16,7 +16,9 @@ import '../provider/provider_connection.dart';
 import '../provider/provider_models_cache.dart';
 import '../provider/provider_repository.dart';
 import '../provider/xai_profile.dart';
+import '../image/image_models.dart';
 import '../security/safe_http_client.dart';
+import '../util/id.dart';
 import 'video_client.dart';
 import 'video_models.dart';
 import 'video_resume.dart';
@@ -471,6 +473,7 @@ class VideoJobFacade {
       final playable = resolvePlayableVideoPath(out);
       final nextRemote = pickRemoteVideoUrl(out, item);
       if (playable.isNotEmpty && !out.needsMaterialize) {
+        final poster = (out.posterUrl ?? item.posterUrl)?.trim();
         await _sessions.completeItem(
           sessionId,
           item.id,
@@ -478,6 +481,8 @@ class VideoJobFacade {
           remoteVideoUrl: nextRemote.isEmpty ? null : nextRemote,
           localPath: out.localPath ??
               (playable.startsWith('http') ? null : playable),
+          posterUrl: (poster != null && poster.isNotEmpty) ? poster : null,
+          posterLocalPath: item.posterLocalPath,
           needsMaterialize: false,
         );
         onInfo?.call('视频已重新加载');
@@ -609,8 +614,15 @@ class VideoJobFacade {
         ? clampAgnesVideoSeconds(useDuration)
         : useDuration;
 
+    final pendingId = createId('vgen');
+    final persistedRefs = refBytes != null
+        ? await _sessions.persistReferenceImages(pendingId, [refBytes])
+        : const <ImageRef>[];
+    final refPreview =
+        refBytes != null ? 'ref:${refBytes.length}' : null;
     final pending = await _sessions.appendLoadingItem(
       sessionId,
+      id: pendingId,
       mode: mode,
       prompt: text,
       model: creds.videoModel,
@@ -620,6 +632,8 @@ class VideoJobFacade {
       size: passSize ? effectiveSize : null,
       aspectRatio: passAspect ? useAspect : null,
       resolution: passResolution,
+      referenceImages: persistedRefs,
+      refPreview: refPreview,
     );
     if (pending == null || _disposed) return;
 

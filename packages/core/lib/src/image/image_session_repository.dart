@@ -201,6 +201,9 @@ class ImageSessionRepository extends ChangeNotifier {
   }
 
   /// 追加 loading 条目；首条非空 prompt 截 24 字作 title。
+  ///
+  /// [referenceImages] 为本回合参考图资产（已落盘为 file 优先）；会截到
+  /// [maxTurnReferenceImages]。
   Future<ImageItem?> appendLoadingItem(
     String sessionId, {
     required ImageGenMode mode,
@@ -211,6 +214,7 @@ class ImageSessionRepository extends ChangeNotifier {
     String? size,
     String? aspectRatio,
     String? quality,
+    List<ImageRef> referenceImages = const [],
     String? refPreview,
     String? id,
     int? createdAt,
@@ -218,6 +222,9 @@ class ImageSessionRepository extends ChangeNotifier {
     final index = _indexOf(sessionId);
     if (index < 0) return null;
     final session = _sessions[index];
+    final refs = referenceImages.length > maxTurnReferenceImages
+        ? referenceImages.sublist(0, maxTurnReferenceImages)
+        : List<ImageRef>.from(referenceImages);
     final item = ImageItem(
       id: id ?? createId('imgi'),
       createdAt: createdAt ?? _now(),
@@ -229,6 +236,7 @@ class ImageSessionRepository extends ChangeNotifier {
       size: size,
       aspectRatio: aspectRatio,
       quality: quality,
+      referenceImages: refs,
       refPreview: refPreview,
       status: ImageItemStatus.loading,
     );
@@ -254,6 +262,7 @@ class ImageSessionRepository extends ChangeNotifier {
     String sessionId,
     String itemId, {
     List<ImageRef>? images,
+    List<ImageRef>? referenceImages,
     ImageItemStatus? status,
     String? errorMessage,
     bool clearErrorMessage = false,
@@ -266,8 +275,14 @@ class ImageSessionRepository extends ChangeNotifier {
     final itemIndex = session.items.indexWhere((i) => i.id == itemId);
     if (itemIndex < 0) return;
     final items = List<ImageItem>.from(session.items);
+    final cappedRefs = referenceImages == null
+        ? null
+        : (referenceImages.length > maxTurnReferenceImages
+            ? referenceImages.sublist(0, maxTurnReferenceImages)
+            : referenceImages);
     items[itemIndex] = items[itemIndex].copyWith(
       images: images,
+      referenceImages: cappedRefs,
       status: status,
       errorMessage: errorMessage,
       clearErrorMessage: clearErrorMessage,
@@ -342,7 +357,7 @@ class ImageSessionRepository extends ChangeNotifier {
 
   Future<void> _deleteItemAssets(List<ImageItem> items) async {
     for (final item in items) {
-      for (final img in item.images) {
+      for (final img in [...item.images, ...item.referenceImages]) {
         if (img.type == ImageRefType.file && img.src.isNotEmpty) {
           try {
             await _assetStore.delete(img.src);
@@ -350,6 +365,24 @@ class ImageSessionRepository extends ChangeNotifier {
         }
       }
     }
+  }
+
+  /// 将参考图字节落盘为会话资产，返回 file 型 [ImageRef] 列表。
+  Future<List<ImageRef>> persistReferenceImages(
+    String itemId,
+    List<Uint8List> byteList,
+  ) async {
+    final out = <ImageRef>[];
+    final limit = byteList.length > maxTurnReferenceImages
+        ? maxTurnReferenceImages
+        : byteList.length;
+    for (var i = 0; i < limit; i++) {
+      final bytes = byteList[i];
+      if (bytes.isEmpty) continue;
+      final path = await _assetStore.savePng(bytes, '${itemId}_ref_$i');
+      out.add(ImageRef(type: ImageRefType.file, src: path));
+    }
+    return out;
   }
 
   /// 读取条目图片字节（file / b64）；url 返回 null。

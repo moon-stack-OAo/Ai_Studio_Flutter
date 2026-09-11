@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:core/core.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -9,11 +10,17 @@ void main() {
   late VideoSessionRepository repo;
   late MemoryVideoSessionStorage storage;
   late MemoryVideoAssetStore assets;
+  late MemoryImageAssetStore refImages;
 
   setUp(() async {
     storage = MemoryVideoSessionStorage();
     assets = MemoryVideoAssetStore();
-    repo = VideoSessionRepository(storage: storage, assetStore: assets);
+    refImages = MemoryImageAssetStore();
+    repo = VideoSessionRepository(
+      storage: storage,
+      assetStore: assets,
+      referenceImageStore: refImages,
+    );
     await repo.load();
   });
 
@@ -60,6 +67,33 @@ void main() {
     final done = repo.activeSession!.items.last;
     expect(done.status, VideoItemStatus.success);
     expect(done.videoUrl, 'https://cdn.example/v.mp4');
+  });
+
+  test('persistReferenceImages + 旧 JSON 无 referenceImages', () async {
+    final sid = repo.activeId;
+    final bytes = Uint8List.fromList([9, 8, 7]);
+    final refs = await repo.persistReferenceImages('vref1', [bytes]);
+    expect(refs.single.type, ImageRefType.file);
+    final item = await repo.appendLoadingItem(
+      sid,
+      id: 'vref1',
+      mode: VideoGenMode.image,
+      prompt: '图生视频',
+      referenceImages: refs,
+      refPreview: 'ref:3',
+    );
+    expect(item!.referenceImages, hasLength(1));
+    final read = await repo.readReferenceImageBytes(item.referenceImages.single);
+    expect(read, bytes);
+
+    final legacy = VideoItem.fromJson({
+      'id': 'legacy',
+      'createdAt': 1,
+      'mode': 'text',
+      'prompt': '旧',
+      'status': 'success',
+    });
+    expect(legacy.referenceImages, isEmpty);
   });
 
   test('hydrate：loading+jobId → pending_resume；无 jobId → error', () async {

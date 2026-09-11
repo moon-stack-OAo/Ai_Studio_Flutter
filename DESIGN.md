@@ -255,6 +255,7 @@ Flutter 落点：`packages/design_fluent` 与 `packages/design_material` 的 `Th
 
 **图生视频**：同生图，参考图在**该回合用户气泡**回看（`VID-TURN-REF`，语义对齐 `IMG-TURN-REF`）。  
 **播放**：内嵌/推页之外支持音量与系统级全屏；队列成功项可展示封面缩略（见 `VID-PLAYER` / `VID-QUEUE`）。
+
 ### 3.5 设置与更新
 
 能力块（两套系统都要有对应界面，信息架构可不同）：
@@ -337,16 +338,16 @@ Flutter 落点：`packages/design_fluent` 与 `packages/design_material` 的 `Th
 
 ### 5.3 壳层与导航
 
-| 能力 ID               | 职责         | Fluent（F）                                                         | Material（M）                                           | 关键状态                            |
-|---------------------|------------|-------------------------------------------------------------------|-------------------------------------------------------|---------------------------------|
-| `NAV-ROOT`          | 四能力入口切换    | `F-NavView`：左侧 NavigationView，**常驻 compact ~56px**（不可展开/折叠）；当前项高亮 | `M-NavBar`：底部 NavigationBar 四项；IME 可见时可隐藏             | 对话 / 生图 / 生视频 / 设置              |
-| `NAV-TITLE`         | 当前区标题与全局动作 | `F-TitleBar` + 可选窗口控点；内容区 `F-CommandBar`                          | `M-TopAppBar`：标题 + 溢出 `More`；可叠搜索                     | 普通 / 选择模式（若有）                   |
-| `NAV-BACK`          | 关闭层、返回上一级  | 无系统返回；Esc 关 Dialog/Flyout；窗格关闭按钮                                  | `M-BackHost`：系统返回 / 边缘滑动先 pop 层；根页「再按一次退出」进最近任务（不清数据） | 无层 / 有层栈 / 待确认退出                |
-| `SHELL-SAFE`        | 避让系统 UI    | 窗口边距即可                                                            | `M-SafeArea`：顶底 inset；不遮挡 NavBar/Composer             | 竖屏 / 横屏 / 刘海                    |
-| `SHELL-TRAY`        | 托盘与关闭（仅桌面） | `F-TrayMenu` + `F-CloseConfirm`（退出 / 托盘 / 询问）                     | —（不适用）                                                | Ask / Quit / Tray               |
-| `SHELL-SINGLE`      | **单实例**（仅桌面） | `F-SingleInstance`：第二进程不拉起新 UI，唤起已有窗口                         | —（不适用；系统任务模型已单前台）                                 | 首实例 / 次实例移交 / 唤起失败回退         |
-| `SHELL-THEME`       | 亮暗切换入口     | `F-ThemeToggle`（设置内 + 可选 CommandBar）                              | `M-ThemePref`（设置内）                                    | **light / dark only**（无 system） |
-| `SHELL-BRAND-INTRO` | 冷启动品牌首屏    | `F-BrandIntro`（可跳过短覆层）                                            | `M-BrandIntro`（可跳过短覆层）                                | 原生纯色底→短品牌→壳                     |
+| 能力 ID               | 职责           | Fluent（F）                                                         | Material（M）                                           | 关键状态                            |
+|---------------------|--------------|-------------------------------------------------------------------|-------------------------------------------------------|---------------------------------|
+| `NAV-ROOT`          | 四能力入口切换      | `F-NavView`：左侧 NavigationView，**常驻 compact ~56px**（不可展开/折叠）；当前项高亮 | `M-NavBar`：底部 NavigationBar 四项；IME 可见时可隐藏             | 对话 / 生图 / 生视频 / 设置              |
+| `NAV-TITLE`         | 当前区标题与全局动作   | `F-TitleBar` + 可选窗口控点；内容区 `F-CommandBar`                          | `M-TopAppBar`：标题 + 溢出 `More`；可叠搜索                     | 普通 / 选择模式（若有）                   |
+| `NAV-BACK`          | 关闭层、返回上一级    | 无系统返回；Esc 关 Dialog/Flyout；窗格关闭按钮                                  | `M-BackHost`：系统返回 / 边缘滑动先 pop 层；根页「再按一次退出」进最近任务（不清数据） | 无层 / 有层栈 / 待确认退出                |
+| `SHELL-SAFE`        | 避让系统 UI      | 窗口边距即可                                                            | `M-SafeArea`：顶底 inset；不遮挡 NavBar/Composer             | 竖屏 / 横屏 / 刘海                    |
+| `SHELL-TRAY`        | 托盘与关闭（仅桌面）   | `F-TrayMenu` + `F-CloseConfirm`（退出 / 托盘 / 询问）                     | —（不适用）                                                | Ask / Quit / Tray               |
+| `SHELL-SINGLE`      | **单实例**（仅桌面） | `F-SingleInstance`：第二进程不拉起新 UI，唤起已有窗口                             | —（不适用；系统任务模型已单前台）                                     | 首实例 / 次实例移交 / 唤起失败回退            |
+| `SHELL-THEME`       | 亮暗切换入口       | `F-ThemeToggle`（设置内 + 可选 CommandBar）                              | `M-ThemePref`（设置内）                                    | **light / dark only**（无 system） |
+| `SHELL-BRAND-INTRO` | 冷启动品牌首屏      | `F-BrandIntro`（可跳过短覆层）                                            | `M-BrandIntro`（可跳过短覆层）                                | 原生纯色底→短品牌→壳                     |
 
 **`SHELL-SINGLE`（已决 · 仅 Fluent 桌面）**
 
@@ -379,17 +380,17 @@ Flutter 落点：`packages/design_fluent` 与 `packages/design_material` 的 `Th
 
 ### 5.5 生图
 
-| 能力 ID          | 职责                 | Fluent（F）                               | Material（M）                                | 关键状态           |
-|----------------|--------------------|-----------------------------------------|--------------------------------------------|----------------|
-| `IMG-PARAMS`   | 数量、尺寸/比例、质量等       | `F-ImageParams`：侧翼窗格或分割视图属性栏            | `M-ImageParams`：折叠区或 Modal BottomSheet     | 按模型能力显隐字段      |
-| `IMG-PROMPT`   | 提示词 + 辅助           | `F-PromptBox` + `F-PromptAssist`（面板/折叠） | `M-PromptBox` + `M-PromptAssist`（sheet/折叠） | 编辑中 / 辅助加载     |
-| `IMG-REF`      | Composer 参考图增删           | `F-RefImage`：拖放 + 缩略图 + 清除                         | `M-RefImage`：点选相册/文件 + 预览 + 清除                    | 无 / 有参考图              |
-| `IMG-TURN-REF` | **用户气泡**回看本回合参考图         | `F-TurnRefThumbs`：提示词下方横滑/折行缩略；点击进 `IMG-LIGHTBOX` | `M-TurnRefThumbs`：同语义；触控间距友好                      | 无图（旧数据） / 加载中 / 有图 / 损坏占位 |
-| `IMG-GENERATE` | 生成 / 停止                 | `F-GenPrimary`：窗格底主按钮；忙时停止                         | `M-GenPrimary`：底栏上方主按钮；忙时停止                       | 空闲 / 忙 / 停止中          |
-| `IMG-TIMELINE` | 结果时间线（**按回合时间分隔**）      | `F-ImageTimeline`：每回合 = 用户提示（± `IMG-TURN-REF`）+ 结果块 | `M-ImageTimeline`：竖向卡片流；回合分隔可读                    | 空 / 生成中占位 / 有图        |
-| `IMG-LIGHTBOX` | 大图浏览                    | `F-Lightbox`：遮罩 + 左右键切换                              | `M-Lightbox`：全屏 + 滑动切换                            | 开 / 关                 |
-| `IMG-ACTIONS`  | 下载、另存、作参考               | 悬停工具条 + 右键                                         | 长按 / 顶栏 / 预览内动作；**存相册**                           | 权限拒绝时提示               |
-| `IMG-SESSION`  | 生图会话列表（若保留多会话）          | 对齐 `CHAT-SESSION-LIST` 的 Fluent 窗格模式                 | 对齐 Material 列表层模式                                 | 同对话会话态                |
+| 能力 ID          | 职责                 | Fluent（F）                                           | Material（M）                                | 关键状态                      |
+|----------------|--------------------|-----------------------------------------------------|--------------------------------------------|---------------------------|
+| `IMG-PARAMS`   | 数量、尺寸/比例、质量等       | `F-ImageParams`：侧翼窗格或分割视图属性栏                        | `M-ImageParams`：折叠区或 Modal BottomSheet     | 按模型能力显隐字段                 |
+| `IMG-PROMPT`   | 提示词 + 辅助           | `F-PromptBox` + `F-PromptAssist`（面板/折叠）             | `M-PromptBox` + `M-PromptAssist`（sheet/折叠） | 编辑中 / 辅助加载                |
+| `IMG-REF`      | Composer 参考图增删     | `F-RefImage`：拖放 + 缩略图 + 清除                          | `M-RefImage`：点选相册/文件 + 预览 + 清除             | 无 / 有参考图                  |
+| `IMG-TURN-REF` | **用户气泡**回看本回合参考图   | `F-TurnRefThumbs`：提示词下方横滑/折行缩略；点击进 `IMG-LIGHTBOX`   | `M-TurnRefThumbs`：同语义；触控间距友好               | 无图（旧数据） / 加载中 / 有图 / 损坏占位 |
+| `IMG-GENERATE` | 生成 / 停止            | `F-GenPrimary`：窗格底主按钮；忙时停止                          | `M-GenPrimary`：底栏上方主按钮；忙时停止                | 空闲 / 忙 / 停止中              |
+| `IMG-TIMELINE` | 结果时间线（**按回合时间分隔**） | `F-ImageTimeline`：每回合 = 用户提示（± `IMG-TURN-REF`）+ 结果块 | `M-ImageTimeline`：竖向卡片流；回合分隔可读             | 空 / 生成中占位 / 有图            |
+| `IMG-LIGHTBOX` | 大图浏览               | `F-Lightbox`：遮罩 + 左右键切换                             | `M-Lightbox`：全屏 + 滑动切换                     | 开 / 关                     |
+| `IMG-ACTIONS`  | 下载、另存、作参考          | 悬停工具条 + 右键                                          | 长按 / 顶栏 / 预览内动作；**存相册**                    | 权限拒绝时提示                   |
+| `IMG-SESSION`  | 生图会话列表（若保留多会话）     | 对齐 `CHAT-SESSION-LIST` 的 Fluent 窗格模式                | 对齐 Material 列表层模式                          | 同对话会话态                    |
 
 **`IMG-TURN-REF` / 参考图持久化（已决）**
 
@@ -405,15 +406,15 @@ Flutter 落点：`packages/design_fluent` 与 `packages/design_material` 的 `Th
 
 ### 5.6 生视频
 
-| 能力 ID            | 职责                   | Fluent（F）                                                     | Material（M）                                              | 关键状态                                                                                                                                                |
-|------------------|----------------------|---------------------------------------------------------------|----------------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------|
-| `VID-PARAMS`     | 时长、比例等                    | `F-VideoParams`：属性窗格                                                                 | `M-VideoParams`：sheet / 折叠                                                    | 按能力显隐                                                                                                                                               |
-| `VID-PROMPT-REF` | Composer 提示词 + 参考图         | 复用 Prompt/Ref 的 Fluent 变体                                                            | 复用 Material 变体                                                                | 同生图                                                                                                                                                 |
-| `VID-TURN-REF`   | **用户气泡**回看本回合参考图          | 对齐 `IMG-TURN-REF` 的 Fluent 变体                                                        | 对齐 Material 变体                                                                | 同 `IMG-TURN-REF`                                                                                                                                   |
-| `VID-GENERATE`   | 创建任务 / 取消                 | `F-VideoPrimary`                                                                     | `M-VideoPrimary`                                                                | 空闲 / 提交中                                                                                                                                            |
-| `VID-QUEUE`      | 任务队列与进度（**按回合时间分隔**）      | `F-VideoQueue`：筛选 Chip + 每回合提示词（± `VID-TURN-REF`）+ 任务卡（可含封面）+ ProgressBar + 放弃/重试 | `M-VideoQueue`：筛选 Chip + 卡片列表（可含封面）+ LinearProgress + 放弃/重试                    | 筛选：全部 / 生成中 / 待恢复 / 已完成 / 失败 / 已放弃；条目态 loading / pending_resume / success / error / abandoned（规格文案 queued·running·succeeded·failed·abandoned 为对外表述） |
-| `VID-PLAYER`     | 播放完成片（含音量 / 系统全屏）         | `F-VideoPlayer`：内嵌 + 放大/全屏 + 下载                                                      | `M-VideoPlayer`：推页播放 + 系统沉浸全屏 + 下载/相册                                          | 本地 / 远端 URL；缓冲；音量；全屏开/关                                                                                                                            |
-| `VID-RESUME`     | 启动时恢复未完成                  | 静默续跑 + InfoBar 提示                                                                    | 静默续跑 + Snackbar                                                               | 无可恢复 / 恢复中                                                                                                                                          |
+| 能力 ID            | 职责                   | Fluent（F）                                                                         | Material（M）                                                 | 关键状态                                                                                                                                                |
+|------------------|----------------------|-----------------------------------------------------------------------------------|-------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------|
+| `VID-PARAMS`     | 时长、比例等               | `F-VideoParams`：属性窗格                                                              | `M-VideoParams`：sheet / 折叠                                  | 按能力显隐                                                                                                                                               |
+| `VID-PROMPT-REF` | Composer 提示词 + 参考图   | 复用 Prompt/Ref 的 Fluent 变体                                                         | 复用 Material 变体                                              | 同生图                                                                                                                                                 |
+| `VID-TURN-REF`   | **用户气泡**回看本回合参考图     | 对齐 `IMG-TURN-REF` 的 Fluent 变体                                                     | 对齐 Material 变体                                              | 同 `IMG-TURN-REF`                                                                                                                                    |
+| `VID-GENERATE`   | 创建任务 / 取消            | `F-VideoPrimary`                                                                  | `M-VideoPrimary`                                            | 空闲 / 提交中                                                                                                                                            |
+| `VID-QUEUE`      | 任务队列与进度（**按回合时间分隔**） | `F-VideoQueue`：筛选 Chip + 每回合提示词（± `VID-TURN-REF`）+ 任务卡（可含封面）+ ProgressBar + 放弃/重试 | `M-VideoQueue`：筛选 Chip + 卡片列表（可含封面）+ LinearProgress + 放弃/重试 | 筛选：全部 / 生成中 / 待恢复 / 已完成 / 失败 / 已放弃；条目态 loading / pending_resume / success / error / abandoned（规格文案 queued·running·succeeded·failed·abandoned 为对外表述） |
+| `VID-PLAYER`     | 播放完成片（含音量 / 系统全屏）    | `F-VideoPlayer`：内嵌 + 放大/全屏 + 下载                                                   | `M-VideoPlayer`：推页播放 + 系统沉浸全屏 + 下载/相册                       | 本地 / 远端 URL；缓冲；音量；全屏开/关                                                                                                                             |
+| `VID-RESUME`     | 启动时恢复未完成             | 静默续跑 + InfoBar 提示                                                                 | 静默续跑 + Snackbar                                             | 无可恢复 / 恢复中                                                                                                                                          |
 
 **`VID-PLAYER`（已决增强）**
 
@@ -443,7 +444,7 @@ Flutter 落点：`packages/design_fluent` 与 `packages/design_material` 的 `Th
 | `SET-CHAT-DEFAULTS`  | 温度、系统提示、Max Tokens、超时、上下文裁剪        | `F-ChatDefaults`                                                                             | `M-ChatDefaults`                                | 校验错误                                    |
 | `SET-APPEARANCE`     | 主题、字号、密度                           | `F-Appearance`：主题仅浅/深并联动对侧稿；字号五档；密度=Fluent 疏密                                                | `M-Appearance`：同上；密度=触控疏密                       | **light / dark**（无跟随系统）                 |
 | `SET-LOGS`           | **运行日志**（必有）                       | `F-Logs`：筛选级别/来源、搜索、复制可见、清空；控制台列表最新在上                                                        | `M-Logs`：同能力，触控工具栏更紧凑                           | 空 / 有数据 / 过滤后空；时间 `YYYY-MM-DD HH:mm:ss` |
-| `SET-ABOUT`          | 版本、检查更新、开源说明、**第三方播放/编解码库许可**、数据清理 | `F-About`：自动检查开关、状态 pill、changelog、更新按钮、第三方声明入口；**内嵌关闭行为**                              | `M-About`：同上（无关闭行为）                             | 检查中 / 有更新 / 已最新 / 失败；可跳过版本              |
+| `SET-ABOUT`          | 版本、检查更新、开源说明、**第三方播放/编解码库许可**、数据清理 | `F-About`：自动检查开关、状态 pill、changelog、更新按钮、第三方声明入口；**内嵌关闭行为**                                   | `M-About`：同上（无关闭行为）                             | 检查中 / 有更新 / 已最新 / 失败；可跳过版本              |
 | `SET-DATA`           | 导入导出、清数据                           | Dialog 确认                                                                                    | Dialog / 确认 sheet                               | 危险操作二次确认                                |
 | `SET-CLOSE-BEHAVIOR` | 关闭行为                               | **仅 Fluent** `F-CloseBehavior`，**嵌在关于页**（非独立分类）                                              | —                                               | Ask / Quit / Tray                       |
 
@@ -478,11 +479,11 @@ Flutter 落点：`packages/design_fluent` 与 `packages/design_material` 的 `Th
 | `SessionOverridesPanel`                            | `CHAT-OVERRIDE`                                   |
 | `PromptAssist` / `PromptBuilder*`                  | `IMG-PROMPT` / `VID-PROMPT-REF`                   |
 | `GenerateParamsPanel` / `Drawer`                   | `IMG-PARAMS` / `VID-PARAMS`                       |
-| `GenerateTimeline*`                                | `IMG-TIMELINE` / `IMG-TURN-REF`                    |
-| （视频队列 / 播放）                                      | `VID-QUEUE`（含封面） / `VID-PLAYER` / `VID-TURN-REF` |
+| `GenerateTimeline*`                                | `IMG-TIMELINE` / `IMG-TURN-REF`                   |
+| （视频队列 / 播放）                                        | `VID-QUEUE`（含封面） / `VID-PLAYER` / `VID-TURN-REF`  |
 | `ProvidersSettings` 等 settings/*                   | `SET-*`                                           |
 | `TitleBar` / `CloseConfirm` / `TrayActionListener` | `NAV-TITLE` / `SHELL-TRAY` / `SET-CLOSE-BEHAVIOR` |
-| （桌面单实例）                                           | `SHELL-SINGLE`                                    |
+| （桌面单实例）                                            | `SHELL-SINGLE`                                    |
 | `UpdateChecker`                                    | `FB-UPDATE` / `SET-ABOUT`                         |
 | Android `SessionTopBar` / `useBackCloseLayer`      | `M-TopAppBar` / `NAV-BACK`                        |
 
@@ -571,31 +572,31 @@ Flutter 落点：`packages/design_fluent` 与 `packages/design_material` 的 `Th
 - ~~**`FB-UPDATE`**：对齐现网检查更新 UX——冷启动/托盘弹窗（跳过 / 稍后 / 下载并安装）、设置入口 NEW 角标、关于页自动检查开关与 changelog；`UpdatePrefs` 持久化~~（已落地；横幅组件保留可复用，启动路径改为弹窗）
 - （可选）评估是否另开 Cupertino——默认不做
 
-### P4 — 播放与回合附图增强 · **规格已决 / 实现未落地**
+### P4 — 播放与回合附图增强 · **规格已决 / 已落地**
 
 顺序建议（换栈与增强解耦，便于归因）：
 
 1. **播放内核迁移**（可选但推荐先做）：双端 `VID-PLAYER` 迁跨端内核（如 `media_kit`），能力不缩水；关于页补充第三方编解码库许可说明（`SET-ABOUT`）。
-2. **`VID-PLAYER` 音量 + 真全屏**。
-3. **`VID-QUEUE` 成功项封面缩略**（抽帧/poster 缓存）。
-4. **`IMG-TURN-REF` / `VID-TURN-REF`**：参考图会话资产持久化 + 用户气泡缩略（双端）。
+2. ~~**`VID-PLAYER` 音量 + 真全屏**~~（已落地：双端音量条；桌面 `window_manager` 系统全屏；移动 `SystemChrome` 沉浸）。
+3. ~~**`VID-QUEUE` 成功项封面缩略**~~（已落地：CDN poster → 本机抽帧缓存 → 占位；点击等同播放；清数据可清）。
+4. ~~**`IMG-TURN-REF` / `VID-TURN-REF`**~~（已落地：`referenceImages` 落盘 + 双端用户气泡缩略 + 灯箱；旧无图回合仅提示词）。
 
 **验收**：安装包/真机可播；全屏可进可退；成功队列有封面；图生图/图生视频回合气泡可回看参考图；旧无图回合不报错。
 
-### P4b — 桌面单实例 · **规格已决 / 实现未落地**
+### P4b — 桌面单实例 · **规格已决 / desktop_fluent 已落地**
 
 - 落地 `SHELL-SINGLE`（仅 `desktop_fluent`）：次进程退出并唤起首实例窗口（含托盘恢复）。
-- 可与 P4 并行；建议在 **1.0.5 安装包验证后**单独小 PR，勿与 media_kit 同批。
+- 实现：`flutter_single_instance` + `shell/single_instance_guard.dart`（握手早于窗口/仓库初始化；失败降级允许启动）。
 - **验收**：已运行时再开快捷方式/安装目录 exe → 仅一进程，已有窗前置；托盘隐藏后再开 → 主窗显示；锁失败仍可启动。
 
 ### 9.1 实现对照（2026-09-07 核对 §5；更新 UX 2026-09-09 再对齐；P4 规格 2026-09-11）
 
-| 范围                              | 结论                                                                                  |
-|---------------------------------|-------------------------------------------------------------------------------------|
-| §5.3–5.7 壳 / 对话 / 生图 / 生视频 / 设置 | 双端 ✅（含 `SHELL-BRAND-INTRO`；Material `NAV-BACK`：`BackHost` / `M-BackHost`）           |
-| §5.8 反馈与系统力                     | ✅（含 Material `SYS-SHARE`）；`FB-UPDATE`：冷启动/托盘弹窗 + 设置 NEW 角标 + 关于页/自动检查开关；跳过版本与静默失败降噪 |
-| 易漏项                             | 耗时自适应、用户末条撤回、回合时间分隔、IME 藏底栏、关闭嵌关于、三模型可搜索、托盘三态均已落地                                   |
-| P4 `VID-PLAYER` / `VID-QUEUE` 封面 / `*-TURN-REF` | **规格已写入 §3.3–3.4 / §5.5–5.6**；实现未落地 |
+| 范围                                              | 结论                                                                                  |
+|-------------------------------------------------|-------------------------------------------------------------------------------------|
+| §5.3–5.7 壳 / 对话 / 生图 / 生视频 / 设置                 | 双端 ✅（含 `SHELL-BRAND-INTRO`；Material `NAV-BACK`：`BackHost` / `M-BackHost`）           |
+| §5.8 反馈与系统力                                     | ✅（含 Material `SYS-SHARE`）；`FB-UPDATE`：冷启动/托盘弹窗 + 设置 NEW 角标 + 关于页/自动检查开关；跳过版本与静默失败降噪 |
+| 易漏项                                             | 耗时自适应、用户末条撤回、回合时间分隔、IME 藏底栏、关闭嵌关于、三模型可搜索、托盘三态均已落地                                   |
+| P4 `VID-PLAYER` / `VID-QUEUE` 封面 / `*-TURN-REF` | **`VID-PLAYER` 音量+真全屏已落地**；**`VID-QUEUE` 封面已落地**；**`*-TURN-REF` 已落地**（资产持久化 + 双端气泡缩略）              |
 
 ---
 
@@ -660,7 +661,7 @@ packages/design_material/
 | Q1 | 实现栈：Flutter 新仓库 vs Tauri 扩平台？           | **已决：Flutter 新仓库** → `D:\Moon\tools\Ai_Studio_Flutter`                                              |
 | Q2 | iOS / macOS 上架 Store 还是直链 / TestFlight？ | **已决：不上架**；延续现网 **直链 / 清单自动更新**（桌面 updater + Android 侧载清单；iOS 若分发则同属非 Store 策略，另定企业/TestFlight 仅内测） |
 | Q3 | 移动设置 Tab 数量？                            | **已决：五 Tab**（提供商 / 对话 / 外观 / 日志 / 关于）；Fluent 为同序五分类侧栏                                               |
-| Q4 | 多窗口桌面？                                  | 首期单窗口；另见 `SHELL-SINGLE` 单实例唤起                                                                 |
+| Q4 | 多窗口桌面？                                  | 首期单窗口；另见 `SHELL-SINGLE` 单实例唤起                                                                       |
 | Q5 | iOS 是否另做 Cupertino？                     | **已决：否，移动统一 Material**                                                                              |
 | Q6 | macOS 是否坚持 Fluent 还是更接近 AppKit 气质？      | 默认仍归 Fluent 系统，控件按 Mac 惯例微调                                                                         |
 
@@ -668,28 +669,31 @@ packages/design_material/
 
 ## 13. 修订记录
 
-| 日期         | 说明                                                                                                                                     |
-|------------|----------------------------------------------------------------------------------------------------------------------------------------|
-| 2026-09-04 | 初稿：四端、分端气质、桌面 MVP、双端对照原型                                                                                                               |
-| 2026-09-04 | **独立设计系统**：Fluent ∪ Material；能力对等 UI 不对齐；iOS 跟 Material；禁止换皮冒充                                                                         |
-| 2026-09-04 | 补齐 §5 双系统组件规格表（壳/对话/生图/生视频/设置/反馈）及现网映射、原型标注约定                                                                                          |
-| 2026-09-04 | 色彩气质：**亮色仿 Claude**、**暗色仿 Cursor**；写入 token 起点与原型色板约束                                                                                  |
-| 2026-09-04 | **已决**：Flutter → `D:\Moon\tools\Ai_Studio_Flutter`；不上架；直链/侧载自动更新；OpenDesign 跳过 collect_brief                                           |
-| 2026-09-04 | 对齐原型审稿：设置五分类/五 Tab；日志必有；关闭行为并入关于；提供商三模型；字号五档；生图/视频回合分隔；OpenDesign 清单与联动约定                                                              |
-| 2026-09-04 | **字体栈按设计系统拆分**（§2.2.2）：Fluent=Segoe 系；Material=Roboto/Noto；系统字体、不内嵌专有字库；原型 HTML 已分栈                                                    |
-| 2026-09-04 | 提供商模型：拉取后 **可搜索下拉** 点选；输入=搜索过滤，对齐现网 `filterable` + `tag`                                                                               |
-| 2026-09-04 | 主题：**仅浅色 / 深色**，去掉「跟随系统」                                                                                                               |
-| 2026-09-04 | Logo：从现网 `src-tauri/icons` 拷入 `design/brand/`；原型标题栏改用 `assets/logo.png`；Windows `app_icon.ico` 已替换                                     |
-| 2026-09-04 | 各端图标批量生成：Windows ICO · macOS AppIcon · iOS AppIcon（desktop+mobile）· Android mipmap（mobile+desktop scaffold）均基于 `design/brand/icon.png` |
-| 2026-09-04 | 审稿修补：§2.1 分层图对齐 `design_*`/`apps/*`；端矩阵 iOS/Android 分发与「不上架」一致；文档状态标注关键已决；补 `docs/architecture.md` 与 `SECURITY.md` 占位                  |
-| 2026-09-07 | **实现对照**：P0–P2 主路径已满足；`SYS-SHARE` 列入 P3；§9 标注分期状态并补 §9.1；文档状态更新                                                                        |
-| 2026-09-07 | Material `SYS-SHARE`：`share_plus` + 生图/生视频分享入口落地；§5.8 / §9 / Changelog 同步                                                              |
-| 2026-09-07 | P3 空态/动效部分落地：未配置 vs 无数据语义对齐；壳切换/灯箱/列表短动效；§9 标注                                                                                         |
-| 2026-09-07 | P3 无障碍部分落地：主路径 Semantics/tooltip/焦点；Windows ExcludeSemantics 仅 debug；§7 备注                                                             |
-| 2026-09-07 | P3 无障碍全路径自证：双端补语义/触控48/liveRegion/对比度 token；§7.1 自证清单；不宣称第三方认证                                                                         |
-| 2026-09-07 | P3 主题/密度部分落地：`scrim`、InfoBar/Snackbar token、密度作用到会话/Composer/设置；空态 `illustration` 插槽                                                   |
-| 2026-09-07 | P3 空态插画落地：双端 CustomPainter 简易线稿接入 `illustration`；§9 标注                                                                                 |
-| 2026-09-08 | `VID-QUEUE`：双端任务队列增加按状态筛选（全部 / 生成中 / 待恢复 / 已完成 / 失败 / 已放弃）                                                                             |
-| 2026-09-08 | Material 根页返回：`NAV-BACK` 增加「再按一次退出」确认（约 2s），确认后进最近任务、不清数据；键盘可见时优先收 IME                                                                 |
-| 2026-09-11 | **P4 规格**：`VID-PLAYER` 音量+真全屏；`VID-QUEUE` 成功项封面；新增 `IMG-TURN-REF` / `VID-TURN-REF`（用户气泡参考图）；§3.3–3.4 / §5.5–5.6 / §9 P4；CHAT 附图不做；实现未落地 |
-| 2026-09-11 | **`SHELL-SINGLE`**：桌面单实例（次进程唤起已有窗/托盘恢复）；§5.3 / §9 P4b；移动不做；实现未落地 |
+| 日期         | 说明                                                                                                                                      |
+|------------|-----------------------------------------------------------------------------------------------------------------------------------------|
+| 2026-09-04 | 初稿：四端、分端气质、桌面 MVP、双端对照原型                                                                                                                |
+| 2026-09-04 | **独立设计系统**：Fluent ∪ Material；能力对等 UI 不对齐；iOS 跟 Material；禁止换皮冒充                                                                          |
+| 2026-09-04 | 补齐 §5 双系统组件规格表（壳/对话/生图/生视频/设置/反馈）及现网映射、原型标注约定                                                                                           |
+| 2026-09-04 | 色彩气质：**亮色仿 Claude**、**暗色仿 Cursor**；写入 token 起点与原型色板约束                                                                                   |
+| 2026-09-04 | **已决**：Flutter → `D:\Moon\tools\Ai_Studio_Flutter`；不上架；直链/侧载自动更新；OpenDesign 跳过 collect_brief                                            |
+| 2026-09-04 | 对齐原型审稿：设置五分类/五 Tab；日志必有；关闭行为并入关于；提供商三模型；字号五档；生图/视频回合分隔；OpenDesign 清单与联动约定                                                               |
+| 2026-09-04 | **字体栈按设计系统拆分**（§2.2.2）：Fluent=Segoe 系；Material=Roboto/Noto；系统字体、不内嵌专有字库；原型 HTML 已分栈                                                     |
+| 2026-09-04 | 提供商模型：拉取后 **可搜索下拉** 点选；输入=搜索过滤，对齐现网 `filterable` + `tag`                                                                                |
+| 2026-09-04 | 主题：**仅浅色 / 深色**，去掉「跟随系统」                                                                                                                |
+| 2026-09-04 | Logo：从现网 `src-tauri/icons` 拷入 `design/brand/`；原型标题栏改用 `assets/logo.png`；Windows `app_icon.ico` 已替换                                      |
+| 2026-09-04 | 各端图标批量生成：Windows ICO · macOS AppIcon · iOS AppIcon（desktop+mobile）· Android mipmap（mobile+desktop scaffold）均基于 `design/brand/icon.png`  |
+| 2026-09-04 | 审稿修补：§2.1 分层图对齐 `design_*`/`apps/*`；端矩阵 iOS/Android 分发与「不上架」一致；文档状态标注关键已决；补 `docs/architecture.md` 与 `SECURITY.md` 占位                   |
+| 2026-09-07 | **实现对照**：P0–P2 主路径已满足；`SYS-SHARE` 列入 P3；§9 标注分期状态并补 §9.1；文档状态更新                                                                         |
+| 2026-09-07 | Material `SYS-SHARE`：`share_plus` + 生图/生视频分享入口落地；§5.8 / §9 / Changelog 同步                                                               |
+| 2026-09-07 | P3 空态/动效部分落地：未配置 vs 无数据语义对齐；壳切换/灯箱/列表短动效；§9 标注                                                                                          |
+| 2026-09-07 | P3 无障碍部分落地：主路径 Semantics/tooltip/焦点；Windows ExcludeSemantics 仅 debug；§7 备注                                                              |
+| 2026-09-07 | P3 无障碍全路径自证：双端补语义/触控48/liveRegion/对比度 token；§7.1 自证清单；不宣称第三方认证                                                                          |
+| 2026-09-07 | P3 主题/密度部分落地：`scrim`、InfoBar/Snackbar token、密度作用到会话/Composer/设置；空态 `illustration` 插槽                                                    |
+| 2026-09-07 | P3 空态插画落地：双端 CustomPainter 简易线稿接入 `illustration`；§9 标注                                                                                  |
+| 2026-09-08 | `VID-QUEUE`：双端任务队列增加按状态筛选（全部 / 生成中 / 待恢复 / 已完成 / 失败 / 已放弃）                                                                              |
+| 2026-09-08 | Material 根页返回：`NAV-BACK` 增加「再按一次退出」确认（约 2s），确认后进最近任务、不清数据；键盘可见时优先收 IME                                                                  |
+| 2026-09-11 | **P4 规格**：`VID-PLAYER` 音量+真全屏；`VID-QUEUE` 成功项封面；新增 `IMG-TURN-REF` / `VID-TURN-REF`（用户气泡参考图）；§3.3–3.4 / §5.5–5.6 / §9 P4；CHAT 附图不做 |
+| 2026-09-11 | **P4 实现**：`VID-PLAYER` 音量（静音+0–100）+ 真全屏（桌面系统全屏 / 移动沉浸）；音量不跨启动持久化 |
+| 2026-09-11 | **P4 实现**：`VID-QUEUE` 成功项封面（CDN poster → 本机抽帧缓存 → 占位；点击等同播放；`SET-DATA` 可清） |
+| 2026-09-11 | **P4 实现**：IMG-TURN-REF / VID-TURN-REF（eferenceImages 落盘 + 双端用户气泡缩略/灯箱；旧无图回合兼容） |
+| 2026-09-11 | **`SHELL-SINGLE`**：桌面单实例（次进程唤起已有窗/托盘恢复）；§5.3 / §9 P4b；移动不做；`desktop_fluent` 已落地（`flutter_single_instance`）                              |

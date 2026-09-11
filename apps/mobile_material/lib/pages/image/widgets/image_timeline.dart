@@ -19,6 +19,7 @@ class ImageTimeline extends StatefulWidget {
     required this.onSaveAlbum,
     this.onShare,
     this.onUseAsReference,
+    this.onPreviewReference,
     this.emptyHint = '还没有生成结果',
     this.emptySubtitle = '在上方填写提示词后生成。',
   });
@@ -30,6 +31,9 @@ class ImageTimeline extends StatefulWidget {
   final void Function(ImageItem item, int index, ImageRef ref)? onShare;
   final void Function(ImageItem item, int index, ImageRef ref)?
       onUseAsReference;
+  /// 预览本回合参考图（`IMG-TURN-REF`）；与结果图分轨。
+  final void Function(ImageItem item, int index, ImageRef ref)?
+      onPreviewReference;
   final String emptyHint;
   final String? emptySubtitle;
 
@@ -113,6 +117,7 @@ class _ImageTimelineState extends State<ImageTimeline> {
             onSaveAlbum: widget.onSaveAlbum,
             onShare: widget.onShare,
             onUseAsReference: widget.onUseAsReference,
+            onPreviewReference: widget.onPreviewReference,
           ),
         );
       },
@@ -131,6 +136,7 @@ class ImageTimelineTurn extends StatelessWidget {
     required this.onSaveAlbum,
     this.onShare,
     this.onUseAsReference,
+    this.onPreviewReference,
   });
 
   final ImageItem item;
@@ -141,6 +147,8 @@ class ImageTimelineTurn extends StatelessWidget {
   final void Function(ImageItem item, int index, ImageRef ref)? onShare;
   final void Function(ImageItem item, int index, ImageRef ref)?
       onUseAsReference;
+  final void Function(ImageItem item, int index, ImageRef ref)?
+      onPreviewReference;
 
   String _timeLabel(int ms) {
     if (ms <= 0) return '';
@@ -171,6 +179,12 @@ class ImageTimelineTurn extends StatelessWidget {
                   '你 · 回合 $turnIndex · ${_timeLabel(item.createdAt)}'
                   '${item.mode == ImageGenMode.edit ? ' · 图生图' : ' · 文生图'}'
                   '${item.n > 1 ? ' · ${item.n}张' : ''}',
+              referenceImages: item.referenceImages,
+              loadBytes: loadBytes,
+              onPreviewReference: onPreviewReference == null
+                  ? null
+                  : (index, ref) =>
+                      onPreviewReference!(item, index, ref),
             ),
             const SizedBox(height: 10),
             if (item.status == ImageItemStatus.error)
@@ -540,10 +554,16 @@ class _UserPromptBubble extends StatelessWidget {
   const _UserPromptBubble({
     required this.prompt,
     required this.header,
+    this.referenceImages = const [],
+    this.loadBytes,
+    this.onPreviewReference,
   });
 
   final String prompt;
   final String header;
+  final List<ImageRef> referenceImages;
+  final Future<Uint8List?> Function(ImageRef ref)? loadBytes;
+  final void Function(int index, ImageRef ref)? onPreviewReference;
 
   Future<void> _copy(BuildContext context) async {
     if (prompt.isEmpty) return;
@@ -606,8 +626,164 @@ class _UserPromptBubble extends StatelessWidget {
             ),
             linkColor: tokens.primary,
           ),
+          if (referenceImages.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            _TurnRefThumbs(
+              refs: referenceImages,
+              loadBytes: loadBytes,
+              onTap: onPreviewReference,
+            ),
+          ],
         ],
       ),
     );
+  }
+}
+
+/// M-TurnRefThumbs：提示词下方参考图缩略（触控间距友好）。
+class _TurnRefThumbs extends StatelessWidget {
+  const _TurnRefThumbs({
+    required this.refs,
+    this.loadBytes,
+    this.onTap,
+  });
+
+  final List<ImageRef> refs;
+  final Future<Uint8List?> Function(ImageRef ref)? loadBytes;
+  final void Function(int index, ImageRef ref)? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = materialTokensOf(context);
+    final shown = refs.length > maxTurnReferenceImages
+        ? refs.sublist(0, maxTurnReferenceImages)
+        : refs;
+    return SizedBox(
+      height: 64,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: shown.length,
+        separatorBuilder: (_, _) => const SizedBox(width: 10),
+        itemBuilder: (context, index) {
+          final ref = shown[index];
+          return Semantics(
+            button: onTap != null,
+            label: '参考图 ${index + 1}',
+            child: InkWell(
+              onTap: onTap == null ? null : () => onTap!(index, ref),
+              borderRadius: BorderRadius.circular(8),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: Container(
+                  width: 64,
+                  height: 64,
+                  decoration: BoxDecoration(
+                    color: tokens.surfaceMuted,
+                    border: Border.all(color: tokens.border),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: _TurnRefThumb(ref: ref, loadBytes: loadBytes),
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _TurnRefThumb extends StatefulWidget {
+  const _TurnRefThumb({required this.ref, this.loadBytes});
+
+  final ImageRef ref;
+  final Future<Uint8List?> Function(ImageRef ref)? loadBytes;
+
+  @override
+  State<_TurnRefThumb> createState() => _TurnRefThumbState();
+}
+
+class _TurnRefThumbState extends State<_TurnRefThumb> {
+  Uint8List? _bytes;
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  @override
+  void didUpdateWidget(covariant _TurnRefThumb oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.ref.src != widget.ref.src ||
+        oldWidget.ref.type != widget.ref.type) {
+      _load();
+    }
+  }
+
+  Future<void> _load() async {
+    setState(() {
+      _loading = true;
+      _bytes = null;
+    });
+    try {
+      if (widget.ref.type == ImageRefType.url) {
+        if (mounted) setState(() => _loading = false);
+        return;
+      }
+      if (widget.ref.type == ImageRefType.file) {
+        final f = File(widget.ref.src);
+        if (await f.exists()) {
+          final b = await f.readAsBytes();
+          if (mounted) {
+            setState(() {
+              _bytes = b;
+              _loading = false;
+            });
+          }
+          return;
+        }
+      }
+      final loader = widget.loadBytes;
+      if (loader != null) {
+        final b = await loader(widget.ref);
+        if (mounted) {
+          setState(() {
+            _bytes = b;
+            _loading = false;
+          });
+        }
+        return;
+      }
+      if (mounted) setState(() => _loading = false);
+    } catch (_) {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_loading) {
+      return const Center(
+        child: SizedBox(
+          width: 18,
+          height: 18,
+          child: CircularProgressIndicator(strokeWidth: 2),
+        ),
+      );
+    }
+    if (_bytes != null && _bytes!.isNotEmpty) {
+      return Image.memory(_bytes!, fit: BoxFit.cover);
+    }
+    if (widget.ref.type == ImageRefType.url) {
+      return Image.network(
+        widget.ref.src,
+        fit: BoxFit.cover,
+        errorBuilder: (_, _, _) =>
+            const Center(child: Icon(Icons.broken_image_outlined, size: 20)),
+      );
+    }
+    return const Center(child: Icon(Icons.broken_image_outlined, size: 20));
   }
 }

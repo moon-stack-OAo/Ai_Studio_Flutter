@@ -191,6 +191,7 @@ Future<void> applyVideoJobCompletion({
   if (job.status == VideoJobWireStatus.completed &&
       playable.isNotEmpty &&
       !needsMat) {
+    final poster = (job.posterUrl ?? item.posterUrl)?.trim();
     await repository.completeItem(
       sessionId,
       item.id,
@@ -198,6 +199,8 @@ Future<void> applyVideoJobCompletion({
       remoteVideoUrl: remote.isEmpty ? null : remote,
       localPath: job.localPath ??
           (playable.startsWith('http') ? null : playable),
+      posterUrl: (poster != null && poster.isNotEmpty) ? poster : null,
+      posterLocalPath: item.posterLocalPath,
       needsMaterialize: false,
     );
     return;

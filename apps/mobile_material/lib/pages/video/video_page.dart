@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:core/core.dart';
@@ -11,6 +12,7 @@ import '../../widgets/empty_illustrations.dart';
 import '../../widgets/material_empty_states.dart';
 import '../../widgets/media_model_picker_sheet.dart';
 import '../../widgets/prompt_assist_sheet.dart';
+import '../image/widgets/image_lightbox.dart';
 import 'video_controller.dart';
 import 'widgets/video_composer.dart';
 import 'widgets/video_player_page.dart';
@@ -26,6 +28,7 @@ class VideoPage extends StatefulWidget {
     this.appLogRepository,
     this.chatClient,
     this.videoClient,
+    this.videoPosterService,
     this.onOpenProviders,
   });
 
@@ -36,6 +39,7 @@ class VideoPage extends StatefulWidget {
   final AppLogRepository? appLogRepository;
   final OpenAiCompatibleChatClient? chatClient;
   final OpenAiCompatibleVideoClient? videoClient;
+  final VideoPosterService? videoPosterService;
   final VoidCallback? onOpenProviders;
 
   @override
@@ -178,6 +182,19 @@ class _VideoPageState extends State<VideoPage> {
       providers: widget.providerRepository,
       modelsCache: _controller.modelsCache,
       kind: ModelKind.video,
+    );
+  }
+
+  Future<void> _openReferenceLightbox(
+    VideoItem item,
+    int index,
+    ImageRef ref,
+  ) async {
+    await ImageLightbox.show(
+      context,
+      ref: ref,
+      loadBytes: () =>
+          widget.sessionRepository.readReferenceImageBytes(ref),
     );
   }
 
@@ -448,6 +465,21 @@ class _VideoPageState extends State<VideoPage> {
                       sliver: SliverToBoxAdapter(
                         child: VideoQueue(
                           items: items,
+                          posterService: widget.videoPosterService,
+                          loadReferenceBytes: widget
+                              .sessionRepository.readReferenceImageBytes,
+                          onPreviewReference: _openReferenceLightbox,
+                          onPosterCached: (item, path) {
+                            final sid = widget.sessionRepository.activeId;
+                            if (sid.isEmpty) return;
+                            unawaited(
+                              widget.sessionRepository.setPosterLocalPath(
+                                sid,
+                                item.id,
+                                path,
+                              ),
+                            );
+                          },
                           onPlay: (item) {
                             Navigator.of(context).push<void>(
                               materialFadeSlideRoute(

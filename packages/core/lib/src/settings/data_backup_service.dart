@@ -11,6 +11,7 @@ import '../provider/provider_repository.dart';
 import '../provider/provider_storage.dart';
 import '../video/video_asset_store.dart';
 import '../video/video_models.dart';
+import '../video/video_poster_store.dart';
 import '../video/video_session_repository.dart';
 import 'appearance_repository.dart';
 import 'chat_defaults_repository.dart';
@@ -33,6 +34,7 @@ class DataBackupService {
     AppLogRepository? logs,
     ImageAssetStore? imageAssetStore,
     VideoAssetStore? videoAssetStore,
+    this._videoPosterStore,
   })  : _providers = providers,
         _appearance = appearance,
         _chatDefaults = chatDefaults,
@@ -52,6 +54,7 @@ class DataBackupService {
   final AppLogRepository? _logs;
   final ImageAssetStore _imageAssetStore;
   final VideoAssetStore _videoAssetStore;
+  final VideoPosterStore? _videoPosterStore;
 
   /// 导出备份为 [DataBackupPayload]（再 [DataBackupPayload.encodeJson]）。
   Future<DataBackupPayload> exportBackup([
@@ -232,13 +235,21 @@ class DataBackupService {
         clearMediaCache: flags.mediaCache,
       );
       clearedSessions = true;
-      if (flags.mediaCache) clearedMedia = true;
+      if (flags.mediaCache) {
+        try {
+          await _videoPosterStore?.clearAll();
+        } catch (_) {}
+        clearedMedia = true;
+      }
     } else if (flags.mediaCache) {
       try {
         await _imageAssetStore.clearAll();
       } catch (_) {}
       try {
         await _videoAssetStore.clearAll();
+      } catch (_) {}
+      try {
+        await _videoPosterStore?.clearAll();
       } catch (_) {}
       clearedMedia = true;
     }
@@ -338,6 +349,10 @@ class DataBackupService {
 
     final imageBytes = await _safeEstimate(_imageAssetStore.estimateBytes);
     final videoBytes = await _safeEstimate(_videoAssetStore.estimateBytes);
+    final posterStore = _videoPosterStore;
+    final posterBytes = posterStore == null
+        ? 0
+        : await _safeEstimate(posterStore.estimateBytes);
 
     return StorageUsageEstimate(
       chatSessionCount: _chatSessions.sessions.length,
@@ -347,7 +362,7 @@ class DataBackupService {
       providerCount: _providers.providers.length,
       logEntryCount: _logs?.totalCount ?? 0,
       imageCacheBytes: imageBytes,
-      videoCacheBytes: videoBytes,
+      videoCacheBytes: videoBytes + posterBytes,
       approxJsonBytes: approxJson,
     );
   }

@@ -29,6 +29,7 @@ class AppShell extends StatefulWidget {
     required this.appearanceRepository,
     required this.appLogRepository,
     required this.dataBackupService,
+    this.videoPosterService,
     required this.generation,
     this.chatClient,
     this.imageClient,
@@ -48,6 +49,7 @@ class AppShell extends StatefulWidget {
   final AppearanceRepository appearanceRepository;
   final AppLogRepository appLogRepository;
   final DataBackupService dataBackupService;
+  final VideoPosterService? videoPosterService;
   final GenerationRuntime generation;
   final OpenAiCompatibleChatClient? chatClient;
   final OpenAiCompatibleImageClient? imageClient;
@@ -306,6 +308,7 @@ class _AppShellState extends State<AppShell> {
                     generation: widget.generation,
                     chatClient: widget.chatClient,
                     videoClient: widget.videoClient,
+                    videoPosterService: widget.videoPosterService,
                     onOpenProviders: _openProviders,
                   )
                 else if (section == AppSection.settings)

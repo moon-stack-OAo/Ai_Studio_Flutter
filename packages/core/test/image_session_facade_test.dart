@@ -215,6 +215,13 @@ void main() {
     final item = sessions.activeSession!.items.last;
     expect(item.mode, ImageGenMode.edit);
     expect(item.status, ImageItemStatus.done);
+    expect(item.referenceImages, isNotEmpty);
+    expect(item.referenceImages.single.type, ImageRefType.file);
+    expect(item.refPreview, startsWith('ref:'));
+    final refBytes =
+        await sessions.readImageBytes(item.referenceImages.single);
+    expect(refBytes, isNotNull);
+    expect(refBytes!.length, 4);
     facade.dispose();
   });
 }

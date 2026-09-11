@@ -1242,6 +1242,64 @@ String _normalizeExtractedVideoUrl(String raw) {
   return s;
 }
 
+/// 从任务响应提取海报 / 缩略图 URL（若有）。
+String extractVideoPosterUrl(Object? data) {
+  if (data is! Map) return '';
+  final m = Map<String, dynamic>.from(data);
+  var root = m;
+  for (var i = 0; i < 2; i++) {
+    final nested = root['data'];
+    if (nested is Map && nested is! List) {
+      root = Map<String, dynamic>.from(nested);
+    } else {
+      break;
+    }
+  }
+  final videoObj =
+      _asStringKeyedMap(root['video']) ?? _asStringKeyedMap(m['video']);
+  final output = _asStringKeyedMap(root['output']);
+  final result = _asStringKeyedMap(root['result']);
+  final metadata = _asStringKeyedMap(root['metadata']);
+  final candidates = <String?>[
+    _mapUrl(root, 'poster'),
+    _mapUrl(root, 'poster_url'),
+    _mapUrl(root, 'posterUrl'),
+    _mapUrl(root, 'thumbnail'),
+    _mapUrl(root, 'thumbnail_url'),
+    _mapUrl(root, 'thumbnailUrl'),
+    _mapUrl(root, 'cover'),
+    _mapUrl(root, 'cover_url'),
+    _mapUrl(root, 'coverUrl'),
+    _mapUrl(videoObj, 'poster'),
+    _mapUrl(videoObj, 'poster_url'),
+    _mapUrl(videoObj, 'posterUrl'),
+    _mapUrl(videoObj, 'thumbnail'),
+    _mapUrl(videoObj, 'thumbnail_url'),
+    _mapUrl(videoObj, 'thumbnailUrl'),
+    _mapUrl(videoObj, 'cover'),
+    _mapUrl(output, 'poster'),
+    _mapUrl(output, 'thumbnail'),
+    _mapUrl(result, 'poster'),
+    _mapUrl(result, 'thumbnail'),
+    _mapUrl(metadata, 'poster'),
+    _mapUrl(metadata, 'thumbnail'),
+  ]
+      .whereType<String>()
+      .map(_normalizeExtractedVideoUrl)
+      .where((v) => v.isNotEmpty)
+      .toList();
+
+  for (final u in candidates) {
+    if (RegExp(r'^https?://', caseSensitive: false).hasMatch(u)) {
+      try {
+        assertSafeHttpUrl(Uri.parse(u));
+        return u;
+      } catch (_) {}
+    }
+  }
+  return '';
+}
+
 /// 递归找可直链播放的 https（中转字段名五花八门时兜底）。
 String _deepFindPlayableVideoUrl(Object? node, {int depth = 0}) {
   if (node == null || depth > 6) return '';
@@ -1345,11 +1403,13 @@ VideoJob normalizeVideoJob(Object? data, {String fallbackId = ''}) {
     if (msg.isEmpty) msg = '视频生成失败';
     errorMessage = msg;
   }
+  final posterUrl = extractVideoPosterUrl(data);
   return VideoJob(
     jobId: jobId.isNotEmpty ? jobId : fallbackId,
     status: status,
     progress: progress,
     videoUrl: videoUrl.isNotEmpty ? videoUrl : null,
+    posterUrl: posterUrl.isNotEmpty ? posterUrl : null,
     errorMessage: errorMessage,
   );
 }

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:core/core.dart';
 import 'package:design_fluent/design_fluent.dart';
 import 'package:fluent_ui/fluent_ui.dart';
@@ -5,6 +7,7 @@ import 'package:fluent_ui/fluent_ui.dart';
 import '../../widgets/empty_illustrations.dart';
 import '../../widgets/fluent_empty_states.dart';
 import '../../widgets/prompt_assist_panel.dart';
+import '../image/widgets/image_lightbox.dart';
 import 'video_controller.dart';
 import 'widgets/video_composer.dart';
 import 'widgets/video_player_dialog.dart';
@@ -21,6 +24,7 @@ class VideoPage extends StatefulWidget {
     this.appLogRepository,
     this.chatClient,
     this.videoClient,
+    this.videoPosterService,
     this.onOpenProviders,
   });
 
@@ -31,6 +35,7 @@ class VideoPage extends StatefulWidget {
   final AppLogRepository? appLogRepository;
   final OpenAiCompatibleChatClient? chatClient;
   final OpenAiCompatibleVideoClient? videoClient;
+  final VideoPosterService? videoPosterService;
   final VoidCallback? onOpenProviders;
 
   @override
@@ -60,6 +65,22 @@ class _VideoPageState extends State<VideoPage> {
   void dispose() {
     _controller.dispose();
     super.dispose();
+  }
+
+  Future<void> _openReferenceLightbox(
+    VideoItem item,
+    int index,
+    ImageRef ref,
+  ) async {
+    await ImageLightbox.show(
+      context,
+      ref: ref,
+      refs: item.referenceImages,
+      initialIndex: index,
+      loadBytes: () =>
+          widget.sessionRepository.readReferenceImageBytes(ref),
+      loadBytesFor: widget.sessionRepository.readReferenceImageBytes,
+    );
   }
 
   void _flashBannersIfNeeded() {
@@ -173,6 +194,24 @@ class _VideoPageState extends State<VideoPage> {
                                 child: VideoQueue(
                                   items: items,
                                   selectedId: _controller.selectedItemId,
+                                  posterService: widget.videoPosterService,
+                                  loadReferenceBytes: widget
+                                      .sessionRepository
+                                      .readReferenceImageBytes,
+                                  onPreviewReference: _openReferenceLightbox,
+                                  onPosterCached: (item, path) {
+                                    final sid =
+                                        widget.sessionRepository.activeId;
+                                    if (sid.isEmpty) return;
+                                    unawaited(
+                                      widget.sessionRepository
+                                          .setPosterLocalPath(
+                                        sid,
+                                        item.id,
+                                        path,
+                                      ),
+                                    );
+                                  },
                                   onSelect: _controller.selectItem,
                                   onPlay: (item) {
                                     _controller.selectItem(item);

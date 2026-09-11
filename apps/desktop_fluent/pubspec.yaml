@@ -24,10 +24,12 @@ dependencies:
   package_info_plus: ^10.2.1
   path_provider: ^2.1.6
   file_selector: ^1.1.0
-  video_player: ^2.14.0
-  video_player_win: ^3.2.2
+  media_kit: ^1.2.6
+  media_kit_video: ^2.0.1
+  media_kit_libs_video: ^1.0.7
   desktop_drop: ^0.8.4
   flutter_native_splash: ^2.4.8
+  flutter_single_instance: ^1.7.0
 
 dev_dependencies:
   flutter_test:

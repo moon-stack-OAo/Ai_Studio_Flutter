@@ -16,23 +16,35 @@ const int maxImageRefPreviewChars = 256;
 /// 单条 b64 src 字符上限（落盘前兜底；优先用 ImageAssetStore）。
 const int maxImageB64SrcChars = 120000;
 
+List<ImageRef> _sanitizeImageRefList(List<ImageRef> list) {
+  final out = <ImageRef>[];
+  for (final img in list) {
+    if (img.type == ImageRefType.b64 &&
+        img.src.length > maxImageB64SrcChars) {
+      // 过大 b64 丢弃，避免 prefs 爆仓；应由 assetStore 落盘为 file。
+      continue;
+    }
+    out.add(img);
+  }
+  return out;
+}
+
 ImageItem sanitizeImageItem(ImageItem item) {
   var next = item;
   final ref = next.refPreview;
   if (ref != null && ref.length > maxImageRefPreviewChars) {
     next = next.copyWith(clearRefPreview: true);
   }
-  final imgs = <ImageRef>[];
-  for (final img in next.images) {
-    if (img.type == ImageRefType.b64 &&
-        img.src.length > maxImageB64SrcChars) {
-      // 过大 b64 丢弃，避免 prefs 爆仓；应由 assetStore 落盘为 file。
-      continue;
-    }
-    imgs.add(img);
-  }
+  final imgs = _sanitizeImageRefList(next.images);
   if (imgs.length != next.images.length) {
     next = next.copyWith(images: imgs);
+  }
+  var refs = _sanitizeImageRefList(next.referenceImages);
+  if (refs.length > maxTurnReferenceImages) {
+    refs = refs.sublist(0, maxTurnReferenceImages);
+  }
+  if (refs.length != next.referenceImages.length) {
+    next = next.copyWith(referenceImages: refs);
   }
   return next;
 }

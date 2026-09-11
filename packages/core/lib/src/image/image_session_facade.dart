@@ -16,6 +16,7 @@ import '../provider/provider_models_cache.dart';
 import '../provider/provider_repository.dart';
 import '../provider/provider_type.dart';
 import '../security/safe_http_client.dart';
+import '../util/id.dart';
 import 'image_client.dart';
 import 'image_models.dart';
 import 'image_quality.dart';
@@ -292,8 +293,13 @@ class ImageSessionFacade {
     final effectiveSize = agnes ? normalizeAgnesImageSize(useSize) : useSize;
     final effectiveAspect =
         agnes ? normalizeAgnesImageRatio(useAspect) : useAspect;
+    final pendingId = createId('imgi');
+    final persistedRefs = isEdit
+        ? await _sessions.persistReferenceImages(pendingId, [refBytes])
+        : const <ImageRef>[];
     final pending = await _sessions.appendLoadingItem(
       sessionId,
+      id: pendingId,
       mode: isEdit ? ImageGenMode.edit : ImageGenMode.text,
       prompt: text,
       model: creds.imageModel,
@@ -302,6 +308,7 @@ class ImageSessionFacade {
       size: passSize ? effectiveSize : null,
       aspectRatio: passAspect ? effectiveAspect : null,
       quality: qualityParam,
+      referenceImages: persistedRefs,
       refPreview: refPreview,
     );
     if (pending == null) return;

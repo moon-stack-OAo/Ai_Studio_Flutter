@@ -1,5 +1,7 @@
 import 'package:flutter/foundation.dart';
 
+import '../image/image_asset_store.dart';
+import '../image/image_models.dart';
 import '../util/id.dart';
 import 'video_asset_store.dart';
 import 'video_models.dart';
@@ -10,13 +12,19 @@ class VideoSessionRepository extends ChangeNotifier {
   VideoSessionRepository({
     required VideoSessionStorage storage,
     VideoAssetStore? assetStore,
+    ImageAssetStore? referenceImageStore,
   })  : _storage = storage,
-        _assetStore = assetStore ?? MemoryVideoAssetStore();
+        _assetStore = assetStore ?? MemoryVideoAssetStore(),
+        _referenceImageStore =
+            referenceImageStore ?? MemoryImageAssetStore();
 
   final VideoSessionStorage _storage;
   final VideoAssetStore _assetStore;
+  final ImageAssetStore _referenceImageStore;
 
   VideoAssetStore get assetStore => _assetStore;
+
+  ImageAssetStore get referenceImageStore => _referenceImageStore;
 
   List<VideoSession> _sessions = const [];
   String _activeId = '';
@@ -208,6 +216,8 @@ class VideoSessionRepository extends ChangeNotifier {
       try {
         await _assetStore.clearAll();
       } catch (_) {}
+      // 参考图可能与生图共用 ImageAssetStore；仅删本会话已知路径
+      //（见 _deleteItemAssets），勿 clearAll 以免清空生图缓存。
     }
     final session = _newSession();
     _sessions = [session];
@@ -217,6 +227,9 @@ class VideoSessionRepository extends ChangeNotifier {
   }
 
   /// 追加 loading 条目；首条非空 prompt 截 24 字作 title。
+  ///
+  /// [referenceImages] 为本回合参考图资产（已落盘为 file 优先）；会截到
+  /// [maxTurnReferenceImages]。
   Future<VideoItem?> appendLoadingItem(
     String sessionId, {
     required VideoGenMode mode,
@@ -228,6 +241,7 @@ class VideoSessionRepository extends ChangeNotifier {
     String? size,
     String? aspectRatio,
     String? resolution,
+    List<ImageRef> referenceImages = const [],
     String? refPreview,
     String? id,
     int? createdAt,
@@ -235,6 +249,9 @@ class VideoSessionRepository extends ChangeNotifier {
     final index = _indexOf(sessionId);
     if (index < 0) return null;
     final session = _sessions[index];
+    final refs = referenceImages.length > maxTurnReferenceImages
+        ? referenceImages.sublist(0, maxTurnReferenceImages)
+        : List<ImageRef>.from(referenceImages);
     final item = VideoItem(
       id: id ?? createId('vgen'),
       createdAt: createdAt ?? _now(),
@@ -247,6 +264,7 @@ class VideoSessionRepository extends ChangeNotifier {
       size: size,
       aspectRatio: aspectRatio,
       resolution: resolution,
+      referenceImages: refs,
       refPreview: refPreview,
       status: VideoItemStatus.loading,
       progress: 0,
@@ -279,6 +297,8 @@ class VideoSessionRepository extends ChangeNotifier {
     String? videoUrl,
     String? remoteVideoUrl,
     String? localPath,
+    String? posterUrl,
+    String? posterLocalPath,
     String? errorMessage,
     bool? needsResume,
     bool? needsMaterialize,
@@ -287,6 +307,8 @@ class VideoSessionRepository extends ChangeNotifier {
     bool clearVideoUrl = false,
     bool clearRemoteVideoUrl = false,
     bool clearLocalPath = false,
+    bool clearPosterUrl = false,
+    bool clearPosterLocalPath = false,
     bool clearErrorMessage = false,
     bool persist = true,
   }) async {
@@ -304,6 +326,12 @@ class VideoSessionRepository extends ChangeNotifier {
             : remoteVideoUrl;
     final nextLocalPath =
         (localPath != null && localPath == prev.localPath) ? null : localPath;
+    final nextPosterUrl =
+        (posterUrl != null && posterUrl == prev.posterUrl) ? null : posterUrl;
+    final nextPosterLocalPath =
+        (posterLocalPath != null && posterLocalPath == prev.posterLocalPath)
+            ? null
+            : posterLocalPath;
     var next = prev.copyWith(
       status: status,
       jobId: jobId,
@@ -311,6 +339,8 @@ class VideoSessionRepository extends ChangeNotifier {
       videoUrl: nextVideoUrl,
       remoteVideoUrl: nextRemoteVideoUrl,
       localPath: nextLocalPath,
+      posterUrl: nextPosterUrl,
+      posterLocalPath: nextPosterLocalPath,
       errorMessage: errorMessage,
       needsResume: needsResume,
       needsMaterialize: needsMaterialize,
@@ -319,6 +349,8 @@ class VideoSessionRepository extends ChangeNotifier {
       clearVideoUrl: clearVideoUrl,
       clearRemoteVideoUrl: clearRemoteVideoUrl,
       clearLocalPath: clearLocalPath,
+      clearPosterUrl: clearPosterUrl,
+      clearPosterLocalPath: clearPosterLocalPath,
       clearErrorMessage: clearErrorMessage,
     );
     // 禁止用空串清掉已有 https remoteVideoUrl
@@ -350,6 +382,8 @@ class VideoSessionRepository extends ChangeNotifier {
         a.videoUrl == b.videoUrl &&
         a.remoteVideoUrl == b.remoteVideoUrl &&
         a.localPath == b.localPath &&
+        a.posterUrl == b.posterUrl &&
+        a.posterLocalPath == b.posterLocalPath &&
         a.errorMessage == b.errorMessage &&
         a.needsResume == b.needsResume &&
         a.needsMaterialize == b.needsMaterialize;
@@ -361,6 +395,8 @@ class VideoSessionRepository extends ChangeNotifier {
     required String videoUrl,
     String? remoteVideoUrl,
     String? localPath,
+    String? posterUrl,
+    String? posterLocalPath,
     double progress = 100,
     bool needsMaterialize = false,
   }) async {
@@ -371,10 +407,27 @@ class VideoSessionRepository extends ChangeNotifier {
       videoUrl: videoUrl,
       remoteVideoUrl: remoteVideoUrl,
       localPath: localPath,
+      posterUrl: posterUrl,
+      posterLocalPath: posterLocalPath,
       progress: progress,
       needsResume: false,
       needsMaterialize: needsMaterialize,
       clearErrorMessage: true,
+    );
+  }
+
+  /// 写入本机抽帧封面路径（不清空已有远程 posterUrl）。
+  Future<void> setPosterLocalPath(
+    String sessionId,
+    String itemId,
+    String path,
+  ) async {
+    final trimmed = path.trim();
+    if (trimmed.isEmpty) return;
+    await updateItem(
+      sessionId,
+      itemId,
+      posterLocalPath: trimmed,
     );
   }
 
@@ -452,6 +505,39 @@ class VideoSessionRepository extends ChangeNotifier {
     );
   }
 
+  /// 将参考图字节落盘为会话资产，返回 file 型 [ImageRef] 列表。
+  Future<List<ImageRef>> persistReferenceImages(
+    String itemId,
+    List<Uint8List> byteList,
+  ) async {
+    final out = <ImageRef>[];
+    final limit = byteList.length > maxTurnReferenceImages
+        ? maxTurnReferenceImages
+        : byteList.length;
+    for (var i = 0; i < limit; i++) {
+      final bytes = byteList[i];
+      if (bytes.isEmpty) continue;
+      final path = await _referenceImageStore.savePng(
+        bytes,
+        'vref_${itemId}_$i',
+      );
+      out.add(ImageRef(type: ImageRefType.file, src: path));
+    }
+    return out;
+  }
+
+  /// 读取参考图字节（file / b64）；url 返回 null。
+  Future<Uint8List?> readReferenceImageBytes(ImageRef ref) async {
+    switch (ref.type) {
+      case ImageRefType.file:
+        return _referenceImageStore.read(ref.src);
+      case ImageRefType.b64:
+        return decodeImageB64(ref.src);
+      case ImageRefType.url:
+        return null;
+    }
+  }
+
   Future<void> _deleteItemAssets(List<VideoItem> items) async {
     for (final item in items) {
       final path = item.localPath ?? item.videoUrl;
@@ -462,6 +548,13 @@ class VideoSessionRepository extends ChangeNotifier {
         try {
           await _assetStore.delete(path);
         } catch (_) {}
+      }
+      for (final img in item.referenceImages) {
+        if (img.type == ImageRefType.file && img.src.isNotEmpty) {
+          try {
+            await _referenceImageStore.delete(img.src);
+          } catch (_) {}
+        }
       }
     }
   }

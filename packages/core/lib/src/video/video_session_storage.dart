@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../image/image_models.dart';
 import 'video_models.dart';
 
 /// 最多保留会话数。
@@ -12,6 +13,9 @@ const int maxVideoItemsPerSession = 50;
 
 /// refPreview 字符上限。
 const int maxVideoRefPreviewChars = 256;
+
+/// 单条参考图 b64 src 字符上限（落盘前兜底）。
+const int maxVideoRefB64SrcChars = 120000;
 
 VideoItem sanitizeVideoItem(VideoItem item) {
   var next = item;
@@ -35,6 +39,28 @@ VideoItem sanitizeVideoItem(VideoItem item) {
       remote.isNotEmpty &&
       !RegExp(r'^https?://', caseSensitive: false).hasMatch(remote)) {
     next = next.copyWith(clearRemoteVideoUrl: true);
+  }
+  final refs = <ImageRef>[];
+  for (final img in next.referenceImages) {
+    if (img.type == ImageRefType.b64 &&
+        img.src.length > maxVideoRefB64SrcChars) {
+      continue;
+    }
+    refs.add(img);
+  }
+  final capped = refs.length > maxTurnReferenceImages
+      ? refs.sublist(0, maxTurnReferenceImages)
+      : refs;
+  if (capped.length != next.referenceImages.length) {
+    next = next.copyWith(referenceImages: capped);
+  } else {
+    for (var i = 0; i < capped.length; i++) {
+      if (capped[i].type != next.referenceImages[i].type ||
+          capped[i].src != next.referenceImages[i].src) {
+        next = next.copyWith(referenceImages: capped);
+        break;
+      }
+    }
   }
   return next;
 }

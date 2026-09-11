@@ -126,4 +126,38 @@ void main() {
     expect(b.activeSession!.items.first.prompt, '持久化');
     expect(b.activeSession!.items.first.status, ImageItemStatus.done);
   });
+
+  test('persistReferenceImages + JSON 兼容旧无 referenceImages', () async {
+    final sid = repo.activeId;
+    final itemId = 'imgi_ref_test';
+    final pngBytes = Uint8List.fromList(base64Decode(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+    ));
+    final refs = await repo.persistReferenceImages(itemId, [pngBytes]);
+    expect(refs, hasLength(1));
+    expect(refs.single.type, ImageRefType.file);
+
+    final item = await repo.appendLoadingItem(
+      sid,
+      id: itemId,
+      mode: ImageGenMode.edit,
+      prompt: '有参考图',
+      referenceImages: refs,
+      refPreview: 'ref:${pngBytes.length}',
+    );
+    expect(item!.referenceImages, hasLength(1));
+
+    final roundtrip = ImageItem.fromJson(item.toJson());
+    expect(roundtrip.referenceImages.single.src, refs.single.src);
+
+    final legacy = ImageItem.fromJson({
+      'id': 'legacy',
+      'createdAt': 1,
+      'mode': 'text',
+      'prompt': '旧数据',
+      'images': <dynamic>[],
+      'status': 'done',
+    });
+    expect(legacy.referenceImages, isEmpty);
+  });
 }

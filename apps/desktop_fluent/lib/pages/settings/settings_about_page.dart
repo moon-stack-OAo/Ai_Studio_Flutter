@@ -5,6 +5,7 @@ import 'package:core/core.dart';
 import 'package:design_fluent/design_fluent.dart';
 import 'package:file_selector/file_selector.dart';
 import 'package:fluent_ui/fluent_ui.dart';
+import 'package:flutter/services.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
 import '../../app/theme_controller.dart';
@@ -246,6 +247,71 @@ class _SettingsAboutPageState extends State<SettingsAboutPage> {
       if (!mounted) return;
       _showInfoBar('保存失败：$e', InfoBarSeverity.error);
     }
+  }
+
+  Future<void> _onOpenLicenses() async {
+    await showDialog<void>(
+      context: context,
+      builder: (dialogCtx) {
+        final tokens = fluentTokensOf(dialogCtx);
+        return ContentDialog(
+          title: const Text(ThirdPartyLicenses.dialogTitle),
+          constraints: const BoxConstraints(maxWidth: 520, maxHeight: 520),
+          content: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  ThirdPartyLicenses.playbackSectionTitle,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: tokens.ink,
+                    fontFamily: tokens.fontFamily,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  ThirdPartyLicenses.playbackLead,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: tokens.inkSecondary,
+                    fontFamily: tokens.fontFamily,
+                    height: 1.45,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                for (final e in ThirdPartyLicenses.playbackLibraries) ...[
+                  _LicenseEntryBlock(entry: e),
+                  const SizedBox(height: 10),
+                ],
+              ],
+            ),
+          ),
+          actions: [
+            Button(
+              onPressed: () async {
+                await Clipboard.setData(
+                  ClipboardData(
+                    text: ThirdPartyLicenses.copyablePlaybackNotice(),
+                  ),
+                );
+                if (!dialogCtx.mounted) return;
+                Navigator.pop(dialogCtx);
+                if (!mounted) return;
+                _showInfoBar('已复制许可说明', InfoBarSeverity.success);
+              },
+              child: const Text('复制全部'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(dialogCtx),
+              child: const Text('关闭'),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   void _stopGenerationIfBusy() {
@@ -695,6 +761,11 @@ class _SettingsAboutPageState extends State<SettingsAboutPage> {
                       ),
                     ),
                     const Spacer(),
+                    Button(
+                      onPressed: _onOpenLicenses,
+                      child: const Text('开源许可'),
+                    ),
+                    const SizedBox(width: 8),
                     FilledButton(
                       onPressed: (!configured || checking || downloading)
                           ? null
@@ -1048,6 +1119,94 @@ const _closeOptions = <({String wire, String label, String subtitle})>[
     subtitle: '窗口隐藏，托盘菜单可还原 / 退出',
   ),
 ];
+
+class _LicenseEntryBlock extends StatelessWidget {
+  const _LicenseEntryBlock({required this.entry});
+
+  final ThirdPartyLicenseEntry entry;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = fluentTokensOf(context);
+    final url = entry.homepageUrl;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: tokens.surfaceMuted,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: tokens.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            entry.name,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: tokens.ink,
+              fontFamily: tokens.fontFamily,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            '许可：${entry.license}',
+            style: TextStyle(
+              fontSize: 12,
+              color: tokens.inkSecondary,
+              fontFamily: tokens.fontFamily,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            entry.note,
+            style: TextStyle(
+              fontSize: 12,
+              color: tokens.inkMuted,
+              fontFamily: tokens.fontFamily,
+              height: 1.4,
+            ),
+          ),
+          if (url != null && url.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Row(
+              children: [
+                Expanded(
+                  child: SelectableText(
+                    url,
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: tokens.primaryPressed,
+                      fontFamily: tokens.fontFamily,
+                    ),
+                  ),
+                ),
+                Button(
+                  onPressed: () async {
+                    await Clipboard.setData(ClipboardData(text: url));
+                    if (!context.mounted) return;
+                    displayInfoBar(
+                      context,
+                      builder: (ctx, close) {
+                        return InfoBar(
+                          title: const Text('已复制链接'),
+                          severity: InfoBarSeverity.success,
+                          onClose: close,
+                        );
+                      },
+                    );
+                  },
+                  child: const Text('复制'),
+                ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
 
 class _SectionCard extends StatelessWidget {
   const _SectionCard({

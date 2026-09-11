@@ -6,6 +6,7 @@ import 'package:design_material/design_material.dart';
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path_provider/path_provider.dart';
 
@@ -146,6 +147,68 @@ class _SettingsAboutTabState extends State<SettingsAboutTab> {
 
   Future<void> _onToggleAutoCheck(bool value) async {
     await _updater.setAutoCheckUpdate(value);
+  }
+
+  Future<void> _onOpenLicenses() async {
+    await showDialog<void>(
+      context: context,
+      builder: (dialogCtx) {
+        final tokens = materialTokensOf(dialogCtx);
+        return AlertDialog(
+          title: const Text(ThirdPartyLicenses.dialogTitle),
+          content: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  ThirdPartyLicenses.playbackSectionTitle,
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: tokens.ink,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  ThirdPartyLicenses.playbackLead,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: tokens.inkSecondary,
+                    height: 1.45,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                for (final e in ThirdPartyLicenses.playbackLibraries) ...[
+                  _LicenseEntryTile(entry: e),
+                  const SizedBox(height: 10),
+                ],
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () async {
+                await Clipboard.setData(
+                  ClipboardData(
+                    text: ThirdPartyLicenses.copyablePlaybackNotice(),
+                  ),
+                );
+                if (!dialogCtx.mounted) return;
+                Navigator.pop(dialogCtx);
+                if (!mounted) return;
+                _snack('已复制许可说明');
+              },
+              child: const Text('复制全部'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(dialogCtx),
+              child: const Text('关闭'),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   Future<void> _onCheckUpdate() async {
@@ -720,9 +783,9 @@ class _SettingsAboutTabState extends State<SettingsAboutTab> {
                             )
                           : const Text('检查更新'),
                     ),
-                    const OutlinedButton(
-                      onPressed: null,
-                      child: Text('开源许可'),
+                    OutlinedButton(
+                      onPressed: _onOpenLicenses,
+                      child: const Text('开源许可'),
                     ),
                   ],
                 ),
@@ -882,6 +945,77 @@ class _SettingsAboutTabState extends State<SettingsAboutTab> {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _LicenseEntryTile extends StatelessWidget {
+  const _LicenseEntryTile({required this.entry});
+
+  final ThirdPartyLicenseEntry entry;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = materialTokensOf(context);
+    final url = entry.homepageUrl;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: tokens.surfaceMuted,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: tokens.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            entry.name,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: tokens.ink,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            '许可：${entry.license}',
+            style: TextStyle(fontSize: 12, color: tokens.inkSecondary),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            entry.note,
+            style: TextStyle(
+              fontSize: 12,
+              color: tokens.inkMuted,
+              height: 1.4,
+            ),
+          ),
+          if (url != null && url.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Row(
+              children: [
+                Expanded(
+                  child: SelectableText(
+                    url,
+                    style: TextStyle(fontSize: 11, color: tokens.primary),
+                  ),
+                ),
+                TextButton(
+                  onPressed: () async {
+                    await Clipboard.setData(ClipboardData(text: url));
+                    if (!context.mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('已复制链接')),
+                    );
+                  },
+                  child: const Text('复制'),
+                ),
+              ],
+            ),
+          ],
+        ],
+      ),
     );
   }
 }

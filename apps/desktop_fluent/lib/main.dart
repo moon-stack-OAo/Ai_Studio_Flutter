@@ -5,10 +5,13 @@ import 'package:design_fluent/design_fluent.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter_native_splash/flutter_native_splash.dart';
+import 'package:media_kit/media_kit.dart';
 
 import 'app/theme_controller.dart';
 import 'shell/app_shell.dart';
 import 'shell/brand_intro_gate.dart';
+import 'shell/single_instance_guard.dart';
+import 'pages/video/media_kit_video_frame_extractor.dart';
 import 'shell/window_bootstrap.dart';
 import 'shell/window_close_coordinator.dart';
 import 'update/update_controller.dart';
@@ -16,6 +19,14 @@ import 'update/update_controller.dart';
 Future<void> main() async {
   final widgetsBinding = WidgetsFlutterBinding.ensureInitialized();
   FlutterNativeSplash.preserve(widgetsBinding: widgetsBinding);
+
+  // SHELL-SINGLE：须在窗口 / 仓库初始化之前完成握手。
+  final mayContinue = await ensureDesktopSingleInstance();
+  if (!mayContinue) return;
+
+  // VID-PLAYER：须在创建 Player 之前；次实例已退出则不必初始化。
+  MediaKit.ensureInitialized();
+
   await bootstrapDesktopWindow();
 
   final providers = ProviderRepository(storage: SecureProviderStorage());
@@ -24,17 +35,25 @@ Future<void> main() async {
   final sessions = ChatSessionRepository(storage: PrefsChatSessionStorage());
   await sessions.load();
 
+  final imageAssetStore = FileImageAssetStore();
   final imageSessions = ImageSessionRepository(
     storage: PrefsImageSessionStorage(),
-    assetStore: FileImageAssetStore(),
+    assetStore: imageAssetStore,
   );
   await imageSessions.load();
 
   final videoSessions = VideoSessionRepository(
     storage: PrefsVideoSessionStorage(),
     assetStore: FileVideoAssetStore(),
+    referenceImageStore: imageAssetStore,
   );
   await videoSessions.load();
+
+  final videoPosterStore = FileVideoPosterStore();
+  final videoPosterService = VideoPosterService(
+    store: videoPosterStore,
+    extractor: MediaKitVideoFrameExtractor(),
+  );
 
   final chatDefaults =
       ChatDefaultsRepository(storage: PrefsChatDefaultsStorage());
@@ -51,6 +70,15 @@ Future<void> main() async {
     source: AppLogSources.system,
     message: '应用启动',
   );
+  final pending = pendingSingleInstanceLog;
+  if (pending != null && pending.isNotEmpty) {
+    pendingSingleInstanceLog = null;
+    await appLogs.append(
+      level: AppLogLevel.warn,
+      source: AppLogSources.system,
+      message: pending,
+    );
+  }
 
   final themeController = ThemeController(repository: appearance);
   themeController.loadFrom(appearance.settings);
@@ -66,6 +94,7 @@ Future<void> main() async {
     navigatorKey: navigatorKey,
     onBeforeQuit: () => generation.abort(),
   );
+  desktopSingleInstanceShow = closeCoordinator.showMainWindow;
 
   final updateController = UpdateController(
     client: UpdateClient(manifestUrl: kDesktopUpdateManifestUrl),
@@ -81,6 +110,7 @@ Future<void> main() async {
     imageSessions: imageSessions,
     videoSessions: videoSessions,
     logs: appLogs,
+    videoPosterStore: videoPosterStore,
   );
 
   // P3：正式构建保持语义树开启；Windows debug 整树关闭，规避已知 AXTree 刷错
@@ -95,6 +125,7 @@ Future<void> main() async {
     chatDefaultsRepository: chatDefaults,
     appLogRepository: appLogs,
     dataBackupService: dataBackup,
+    videoPosterService: videoPosterService,
     generation: generation,
     chatClient: chatClient,
     imageClient: imageClient,
@@ -121,6 +152,7 @@ class AiStudioApp extends StatelessWidget {
     required this.chatDefaultsRepository,
     required this.appLogRepository,
     required this.dataBackupService,
+    this.videoPosterService,
     required this.generation,
     this.chatClient,
     this.imageClient,
@@ -140,6 +172,7 @@ class AiStudioApp extends StatelessWidget {
   final ChatDefaultsRepository chatDefaultsRepository;
   final AppLogRepository appLogRepository;
   final DataBackupService dataBackupService;
+  final VideoPosterService? videoPosterService;
   final GenerationRuntime generation;
   final OpenAiCompatibleChatClient? chatClient;
   final OpenAiCompatibleImageClient? imageClient;
@@ -166,6 +199,7 @@ class AiStudioApp extends StatelessWidget {
           chatDefaultsRepository: chatDefaultsRepository,
           appLogRepository: appLogRepository,
           dataBackupService: dataBackupService,
+          videoPosterService: videoPosterService,
           generation: generation,
           chatClient: chatClient,
           imageClient: imageClient,

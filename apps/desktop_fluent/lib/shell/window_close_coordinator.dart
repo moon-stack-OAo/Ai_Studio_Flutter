@@ -189,6 +189,7 @@ class WindowCloseCoordinator with WindowListener {
       if (await windowManager.isMinimized()) {
         await windowManager.restore();
       }
+      await windowManager.setSkipTaskbar(false);
       await windowManager.show();
       await windowManager.focus();
     } catch (e, st) {

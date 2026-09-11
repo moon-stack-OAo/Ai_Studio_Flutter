@@ -1,3 +1,6 @@
+import 'dart:async';
+import 'dart:io';
+
 import 'package:core/core.dart';
 import 'package:design_fluent/design_fluent.dart';
 import 'package:fluent_ui/fluent_ui.dart';
@@ -21,6 +24,10 @@ class VideoQueue extends StatefulWidget {
     this.selectedId,
     this.onReload,
     this.isReloading,
+    this.posterService,
+    this.onPosterCached,
+    this.loadReferenceBytes,
+    this.onPreviewReference,
     this.emptyHint = '还没有视频任务',
     this.emptySubtitle = '在右侧参数区填写提示词后创建任务。',
   });
@@ -35,6 +42,12 @@ class VideoQueue extends StatefulWidget {
   final String? selectedId;
   final void Function(VideoItem item)? onReload;
   final bool Function(VideoItem item)? isReloading;
+  final VideoPosterService? posterService;
+  final void Function(VideoItem item, String localPath)? onPosterCached;
+  /// 读取本回合参考图像素（`VID-TURN-REF`）。
+  final Future<Uint8List?> Function(ImageRef ref)? loadReferenceBytes;
+  final void Function(VideoItem item, int index, ImageRef ref)?
+      onPreviewReference;
   final String emptyHint;
   final String? emptySubtitle;
 
@@ -119,6 +132,10 @@ class _VideoQueueState extends State<VideoQueue> {
             onSelect: widget.onSelect,
             onReload: widget.onReload,
             isReloading: widget.isReloading,
+            posterService: widget.posterService,
+            onPosterCached: widget.onPosterCached,
+            loadReferenceBytes: widget.loadReferenceBytes,
+            onPreviewReference: widget.onPreviewReference,
           ),
         );
       }
@@ -322,6 +339,10 @@ class _TurnBlock extends StatelessWidget {
     this.onSelect,
     this.onReload,
     this.isReloading,
+    this.posterService,
+    this.onPosterCached,
+    this.loadReferenceBytes,
+    this.onPreviewReference,
   });
 
   final VideoItem item;
@@ -336,6 +357,11 @@ class _TurnBlock extends StatelessWidget {
   final void Function(VideoItem item)? onSelect;
   final void Function(VideoItem item)? onReload;
   final bool Function(VideoItem item)? isReloading;
+  final Future<Uint8List?> Function(ImageRef ref)? loadReferenceBytes;
+  final void Function(VideoItem item, int index, ImageRef ref)?
+      onPreviewReference;
+  final VideoPosterService? posterService;
+  final void Function(VideoItem item, String localPath)? onPosterCached;
 
   bool get _canPlay {
     if (onPlay == null) return false;
@@ -410,6 +436,11 @@ class _TurnBlock extends StatelessWidget {
                 '你 · 回合 $turnIndex'
                 '${item.mode == VideoGenMode.image ? ' · 图生视频' : ''}'
                 '${item.duration != null ? ' · ${item.duration}s' : ''}',
+            referenceImages: item.referenceImages,
+            loadBytes: loadReferenceBytes,
+            onPreviewReference: onPreviewReference == null
+                ? null
+                : (index, ref) => onPreviewReference!(item, index, ref),
           ),
           const SizedBox(height: 8),
           Semantics(
@@ -450,6 +481,21 @@ class _TurnBlock extends StatelessWidget {
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
+                        if (item.status == VideoItemStatus.success) ...[
+                          _QueuePosterThumb(
+                            item: item,
+                            tokens: tokens,
+                            posterService: posterService,
+                            onPosterCached: onPosterCached,
+                            canPlay: _canPlay,
+                            onPlay: () {
+                              if (_canPlay) {
+                                (onSelect ?? onPlay)?.call(item);
+                              }
+                            },
+                          ),
+                          const SizedBox(width: 10),
+                        ],
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -637,16 +683,181 @@ class _TurnBlock extends StatelessWidget {
   }
 }
 
+/// VID-QUEUE 成功项封面：posterUrl → 本地抽帧 → 占位；点击等价播放。
+class _QueuePosterThumb extends StatefulWidget {
+  const _QueuePosterThumb({
+    required this.item,
+    required this.tokens,
+    required this.canPlay,
+    required this.onPlay,
+    this.posterService,
+    this.onPosterCached,
+  });
+
+  final VideoItem item;
+  final FluentTokens tokens;
+  final bool canPlay;
+  final VoidCallback onPlay;
+  final VideoPosterService? posterService;
+  final void Function(VideoItem item, String localPath)? onPosterCached;
+
+  @override
+  State<_QueuePosterThumb> createState() => _QueuePosterThumbState();
+}
+
+class _QueuePosterThumbState extends State<_QueuePosterThumb> {
+  String? _path;
+  bool _failed = false;
+  int _token = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _bootstrap();
+  }
+
+  @override
+  void didUpdateWidget(covariant _QueuePosterThumb oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.item.id != widget.item.id ||
+        oldWidget.item.posterUrl != widget.item.posterUrl ||
+        oldWidget.item.posterLocalPath != widget.item.posterLocalPath ||
+        oldWidget.item.localPath != widget.item.localPath ||
+        oldWidget.item.videoUrl != widget.item.videoUrl) {
+      _bootstrap();
+    }
+  }
+
+  void _bootstrap() {
+    final service = widget.posterService;
+    final peeked = service?.peekPoster(widget.item);
+    _path = peeked;
+    _failed = false;
+    _token++;
+    final token = _token;
+    if (service == null) return;
+    if (VideoPosterService.isRemotePosterUrl(peeked)) return;
+    unawaited(_resolve(service, token));
+  }
+
+  Future<void> _resolve(VideoPosterService service, int token) async {
+    final resolved = await service.resolvePoster(widget.item);
+    if (!mounted || token != _token) return;
+    if (resolved == null || resolved.isEmpty) {
+      setState(() {
+        _path = null;
+        _failed = true;
+      });
+      return;
+    }
+    setState(() {
+      _path = resolved;
+      _failed = false;
+    });
+    final isRemote = VideoPosterService.isRemotePosterUrl(resolved);
+    if (!isRemote &&
+        resolved != widget.item.posterLocalPath &&
+        !resolved.startsWith('memory-poster://')) {
+      widget.onPosterCached?.call(widget.item, resolved);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = widget.tokens;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: widget.canPlay ? widget.onPlay : null,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(8),
+        child: Container(
+          width: 72,
+          height: 40,
+          color: tokens.surface,
+          foregroundDecoration: BoxDecoration(
+            border: Border.all(color: tokens.border),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              _buildImage(tokens),
+              if (widget.canPlay)
+                Align(
+                  alignment: Alignment.center,
+                  child: Container(
+                    width: 22,
+                    height: 22,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF000000).withValues(alpha: 0.45),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      FluentIcons.play,
+                      size: 10,
+                      color: Color(0xFFFFFFFF),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildImage(FluentTokens tokens) {
+    final path = _path;
+    if (_failed || path == null || path.isEmpty) {
+      return _placeholder(tokens);
+    }
+    if (VideoPosterService.isRemotePosterUrl(path)) {
+      return Image.network(
+        path,
+        fit: BoxFit.cover,
+        errorBuilder: (_, _, _) => _placeholder(tokens),
+      );
+    }
+    if (path.startsWith('memory-poster://')) {
+      return _placeholder(tokens);
+    }
+    final file = File(path);
+    if (!file.existsSync()) return _placeholder(tokens);
+    return Image.file(
+      file,
+      fit: BoxFit.cover,
+      errorBuilder: (_, _, _) => _placeholder(tokens),
+    );
+  }
+
+  Widget _placeholder(FluentTokens tokens) {
+    return ColoredBox(
+      color: tokens.surfaceMuted,
+      child: Icon(
+        FluentIcons.video,
+        size: 16,
+        color: tokens.inkMuted,
+      ),
+    );
+  }
+}
+
 class _UserPromptBubble extends StatefulWidget {
   const _UserPromptBubble({
     required this.prompt,
     required this.tokens,
     required this.header,
+    this.referenceImages = const [],
+    this.loadBytes,
+    this.onPreviewReference,
   });
 
   final String prompt;
   final FluentTokens tokens;
   final String header;
+  final List<ImageRef> referenceImages;
+  final Future<Uint8List?> Function(ImageRef ref)? loadBytes;
+  final void Function(int index, ImageRef ref)? onPreviewReference;
 
   @override
   State<_UserPromptBubble> createState() => _UserPromptBubbleState();
@@ -746,6 +957,15 @@ class _UserPromptBubbleState extends State<_UserPromptBubble> {
                   ),
                   linkColor: tokens.primary,
                 ),
+                if (widget.referenceImages.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  _TurnRefThumbs(
+                    refs: widget.referenceImages,
+                    tokens: tokens,
+                    loadBytes: widget.loadBytes,
+                    onTap: widget.onPreviewReference,
+                  ),
+                ],
                 AnimatedOpacity(
                   opacity: _hovered ? 1 : 0,
                   duration: const Duration(milliseconds: 120),
@@ -766,6 +986,153 @@ class _UserPromptBubbleState extends State<_UserPromptBubble> {
         ),
       ),
     );
+  }
+}
+
+/// 视频回合参考图缩略（`VID-TURN-REF`）。
+class _TurnRefThumbs extends StatelessWidget {
+  const _TurnRefThumbs({
+    required this.refs,
+    required this.tokens,
+    this.loadBytes,
+    this.onTap,
+  });
+
+  final List<ImageRef> refs;
+  final FluentTokens tokens;
+  final Future<Uint8List?> Function(ImageRef ref)? loadBytes;
+  final void Function(int index, ImageRef ref)? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final shown = refs.length > maxTurnReferenceImages
+        ? refs.sublist(0, maxTurnReferenceImages)
+        : refs;
+    return SizedBox(
+      height: 48,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: shown.length,
+        separatorBuilder: (_, _) => const SizedBox(width: 8),
+        itemBuilder: (context, index) {
+          final ref = shown[index];
+          return Semantics(
+            button: onTap != null,
+            label: '参考图 ${index + 1}',
+            child: GestureDetector(
+              onTap: onTap == null ? null : () => onTap!(index, ref),
+              child: MouseRegion(
+                cursor: onTap == null
+                    ? SystemMouseCursors.basic
+                    : SystemMouseCursors.click,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(6),
+                  child: Container(
+                    width: 48,
+                    height: 48,
+                    decoration: BoxDecoration(
+                      color: tokens.surface,
+                      border: Border.all(color: tokens.border),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: _TurnRefThumb(ref: ref, loadBytes: loadBytes),
+                  ),
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _TurnRefThumb extends StatefulWidget {
+  const _TurnRefThumb({required this.ref, this.loadBytes});
+
+  final ImageRef ref;
+  final Future<Uint8List?> Function(ImageRef ref)? loadBytes;
+
+  @override
+  State<_TurnRefThumb> createState() => _TurnRefThumbState();
+}
+
+class _TurnRefThumbState extends State<_TurnRefThumb> {
+  Uint8List? _bytes;
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  @override
+  void didUpdateWidget(covariant _TurnRefThumb oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.ref.src != widget.ref.src ||
+        oldWidget.ref.type != widget.ref.type) {
+      _load();
+    }
+  }
+
+  Future<void> _load() async {
+    setState(() {
+      _loading = true;
+      _bytes = null;
+    });
+    try {
+      if (widget.ref.type == ImageRefType.url) {
+        if (mounted) setState(() => _loading = false);
+        return;
+      }
+      if (widget.ref.type == ImageRefType.file) {
+        final f = File(widget.ref.src);
+        if (await f.exists()) {
+          final b = await f.readAsBytes();
+          if (mounted) {
+            setState(() {
+              _bytes = b;
+              _loading = false;
+            });
+          }
+          return;
+        }
+      }
+      final loader = widget.loadBytes;
+      if (loader != null) {
+        final b = await loader(widget.ref);
+        if (mounted) {
+          setState(() {
+            _bytes = b;
+            _loading = false;
+          });
+        }
+        return;
+      }
+      if (mounted) setState(() => _loading = false);
+    } catch (_) {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_loading) {
+      return const Center(child: ProgressRing(strokeWidth: 2));
+    }
+    if (_bytes != null && _bytes!.isNotEmpty) {
+      return Image.memory(_bytes!, fit: BoxFit.cover);
+    }
+    if (widget.ref.type == ImageRefType.url) {
+      return Image.network(
+        widget.ref.src,
+        fit: BoxFit.cover,
+        errorBuilder: (_, _, _) =>
+            const Center(child: Icon(FluentIcons.photo, size: 16)),
+      );
+    }
+    return const Center(child: Icon(FluentIcons.photo, size: 16));
   }
 }
 

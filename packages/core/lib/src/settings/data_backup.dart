@@ -472,6 +472,7 @@ Map<String, dynamic> _imageSessionMetaJson(ImageSession session) {
     }
     final map = item.toJson();
     map['images'] = images;
+    map['referenceImages'] = _omitLocalImageRefs(item.referenceImages);
     // 截断可能含 dataURL 的预览
     final ref = map['refPreview']?.toString();
     if (ref != null && (ref.startsWith('data:') || ref.length > 256)) {
@@ -488,6 +489,29 @@ Map<String, dynamic> _imageSessionMetaJson(ImageSession session) {
   };
 }
 
+List<Map<String, dynamic>> _omitLocalImageRefs(List<ImageRef> refs) {
+  final out = <Map<String, dynamic>>[];
+  for (final img in refs) {
+    switch (img.type) {
+      case ImageRefType.file:
+        out.add({
+          'type': ImageRefType.file.wire,
+          'src': '',
+          'note': 'local-file-omitted',
+        });
+      case ImageRefType.b64:
+        out.add({
+          'type': ImageRefType.url.wire,
+          'src': '',
+          'note': 'b64-omitted',
+        });
+      case ImageRefType.url:
+        out.add(img.toJson());
+    }
+  }
+  return out;
+}
+
 Map<String, dynamic> _videoSessionMetaJson(VideoSession session) {
   final items = <Map<String, dynamic>>[];
   for (final item in session.items) {
@@ -501,6 +525,7 @@ Map<String, dynamic> _videoSessionMetaJson(VideoSession session) {
             (!url.startsWith('http') && url.isNotEmpty))) {
       map.remove('videoUrl');
     }
+    map['referenceImages'] = _omitLocalImageRefs(item.referenceImages);
     final ref = map['refPreview']?.toString();
     if (ref != null && (ref.startsWith('data:') || ref.length > 256)) {
       map.remove('refPreview');
