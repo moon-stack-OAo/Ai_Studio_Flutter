@@ -89,6 +89,7 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           channel: stable
+          flutter-version: "3.44.5"
           cache: true
 
       - name: Setup Node.js
@@ -176,6 +177,7 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           channel: stable
+          flutter-version: "3.44.5"
           cache: true
 
       - name: Setup Node.js
@@ -298,6 +300,7 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           channel: stable
+          flutter-version: "3.44.5"
           cache: true
 
       - name: Setup Node.js

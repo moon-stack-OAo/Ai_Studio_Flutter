@@ -17,11 +17,11 @@
 
 ### Changed
 
-（暂无）
+- **CI / 发版钉死 Flutter 3.44.5**：`ci.yml` / `build.yml` / `release.yml` 的 `flutter-action` 增加 `flutter-version: "3.44.5"`，避免 `channel: stable` 漂到 3.47.x
 
 ### Fixed
 
-（暂无）
+- **Windows 安装包内嵌视频黑屏**：`v1.0.4` 由 CI 的 Flutter **3.47.3** 构建，同机本机 **3.44.5** 的 `flutter run` / `build windows --release` 可播；安装目录 exe 仍黑。根因是引擎版本漂移（非业务代码 / 非视频文件）；钉版本后重打 Windows 安装包即可
 
 ---
 
