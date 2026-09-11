@@ -35,6 +35,16 @@ body{font-family:var(--font);background:var(--page-bg);color:var(--ink);min-heig
 .bar>i{display:block;height:100%;width:62%;background:var(--primary)}
 .meta{font-size:12px;color:var(--muted);margin-top:6px}
 .badge{display:inline-block;font-size:9px;font-family:var(--mono);border:1px dashed var(--border);padding:1px 5px;border-radius:3px;color:var(--muted);margin-left:4px}
+/* IMG-TURN-REF：meta 通栏；下方左缩略 + 右提示词 */
+.prompt-bubble{background:var(--elev);border:1px solid var(--border);border-radius:12px;padding:10px 12px;margin-bottom:10px}
+.prompt-bubble .m{font-size:11px;color:var(--muted);margin-bottom:6px}
+.prompt-bubble .body{display:flex;align-items:flex-start;gap:10px}
+.prompt-bubble .prompt-text{flex:1;min-width:0;font-size:13px;line-height:1.5;color:var(--ink2)}
+.turn-ref-thumbs{display:flex;gap:6px;flex-shrink:0}
+.turn-ref-thumb{
+  width:48px;height:48px;border-radius:10px;border:1px solid var(--border);cursor:pointer;flex:0 0 auto;
+  background:radial-gradient(circle at 35% 30%, color-mix(in oklch,var(--primary) 42%,transparent), transparent 48%),linear-gradient(145deg,#d8d4cb,#efeeeb);
+}
 .navbar{height:64px;display:grid;grid-template-columns:repeat(4,1fr);background:var(--surface);border-top:1px solid var(--border);padding-bottom:8px}
 a.nav-item{text-decoration:none;color:inherit}
 .nav-item{border:0;background:transparent;color:var(--muted);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font-size:11px;min-height:48px}
@@ -85,10 +95,18 @@ a.back{position:fixed;left:18px;bottom:14px;z-index:20;font-size:12px;color:var(
 </div>
 <div class="card" data-od-id="m-image-timeline">
   <div class="label">时间线 · M-ImageTimeline</div>
+  <div class="prompt-bubble" data-od-id="m-turn-ref-thumbs">
+    <div class="m">你 · 图生图 <span class="badge">IMG-TURN-REF</span></div>
+    <div class="body">
+      <div class="turn-ref-thumbs" title="点击预览参考图">
+        <div class="turn-ref-thumb" role="img" aria-label="参考图缩略"></div>
+      </div>
+      <div class="prompt-text">暖色卡片浮在奶油纸面，克制陶土描边，工具感空态插画</div>
+    </div>
+  </div>
   <div class="grid">
     <div class="thumb">图 1 · 生成中</div>
     <div class="thumb">图 2</div>
-    <div class="thumb">参考图</div>
     <div class="thumb">+</div>
   </div>
   <p class="meta">长按：下载 / 存相册 / 用作参考 · IMG-ACTIONS</p>

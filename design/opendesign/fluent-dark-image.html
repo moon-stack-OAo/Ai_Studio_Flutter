@@ -170,6 +170,20 @@
       padding: 12px 14px; font-size: 13px; line-height: 1.55; color: var(--ink-secondary);
     }
     .prompt-bubble .meta { font-size: 11px; color: var(--ink-muted); margin-bottom: 6px; }
+    /* IMG-TURN-REF：meta 通栏；下方左缩略 + 右提示词 */
+    .prompt-bubble .body {
+      display: flex; align-items: flex-start; gap: 10px;
+    }
+    .prompt-bubble .body .prompt-text { flex: 1; min-width: 0; }
+    .turn-ref-thumb {
+      flex: 0 0 auto; width: 52px; height: 52px; border-radius: 8px;
+      border: 1px solid var(--border); overflow: hidden; cursor: pointer;
+      background:
+        radial-gradient(circle at 35% 30%, color-mix(in oklch, var(--primary) 40%, transparent), transparent 48%),
+        linear-gradient(145deg, #2a2a30, #121218);
+    }
+    .turn-ref-thumb:hover { outline: 2px solid color-mix(in oklch, var(--primary) 55%, transparent); outline-offset: 1px; }
+    .turn-ref-thumbs { display: flex; gap: 6px; flex-shrink: 0; }
     .grid {
       display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px;
     }
@@ -359,9 +373,14 @@
 
           <div class="time-split"><span>今天 11:08</span></div>
           <article class="turn" data-od-id="img-turn-2">
-            <div class="prompt-bubble">
-              <div class="meta">你 · 回合 2 · 11:08</div>
-              暖色卡片浮在奶油纸面，克制陶土描边，工具感空态插画
+            <div class="prompt-bubble" data-od-id="f-turn-ref-thumbs">
+              <div class="meta">你 · 回合 2 · 11:08 · 图生图 <span class="badge-id">IMG-TURN-REF</span></div>
+              <div class="body">
+                <div class="turn-ref-thumbs" title="点击预览参考图">
+                  <div class="turn-ref-thumb" role="img" aria-label="参考图缩略"></div>
+                </div>
+                <div class="prompt-text">暖色卡片浮在奶油纸面，克制陶土描边，工具感空态插画</div>
+              </div>
             </div>
             <div class="grid">
               <div class="card" data-od-id="img-slot-4">

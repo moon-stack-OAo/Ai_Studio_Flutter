@@ -385,7 +385,7 @@ Flutter 落点：`packages/design_fluent` 与 `packages/design_material` 的 `Th
 | `IMG-PARAMS`   | 数量、尺寸/比例、质量等       | `F-ImageParams`：侧翼窗格或分割视图属性栏                        | `M-ImageParams`：折叠区或 Modal BottomSheet     | 按模型能力显隐字段                 |
 | `IMG-PROMPT`   | 提示词 + 辅助           | `F-PromptBox` + `F-PromptAssist`（面板/折叠）             | `M-PromptBox` + `M-PromptAssist`（sheet/折叠） | 编辑中 / 辅助加载                |
 | `IMG-REF`      | Composer 参考图增删     | `F-RefImage`：拖放 + 缩略图 + 清除                          | `M-RefImage`：点选相册/文件 + 预览 + 清除             | 无 / 有参考图                  |
-| `IMG-TURN-REF` | **用户气泡**回看本回合参考图   | `F-TurnRefThumbs`：提示词下方横滑/折行缩略；点击进 `IMG-LIGHTBOX`   | `M-TurnRefThumbs`：同语义；触控间距友好               | 无图（旧数据） / 加载中 / 有图 / 损坏占位 |
+| `IMG-TURN-REF` | **用户气泡**回看本回合参考图   | `F-TurnRefThumbs`：meta 通栏；其下左缩略 + 右提示词；点击进 `IMG-LIGHTBOX` | `M-TurnRefThumbs`：同布局；触控间距友好               | 无图（旧数据） / 加载中 / 有图 / 损坏占位 |
 | `IMG-GENERATE` | 生成 / 停止            | `F-GenPrimary`：窗格底主按钮；忙时停止                          | `M-GenPrimary`：底栏上方主按钮；忙时停止                | 空闲 / 忙 / 停止中              |
 | `IMG-TIMELINE` | 结果时间线（**按回合时间分隔**） | `F-ImageTimeline`：每回合 = 用户提示（± `IMG-TURN-REF`）+ 结果块 | `M-ImageTimeline`：竖向卡片流；回合分隔可读             | 空 / 生成中占位 / 有图            |
 | `IMG-LIGHTBOX` | 大图浏览               | `F-Lightbox`：遮罩 + 左右键切换                             | `M-Lightbox`：全屏 + 滑动切换                     | 开 / 关                     |
@@ -396,7 +396,8 @@ Flutter 落点：`packages/design_fluent` 与 `packages/design_material` 的 `Th
 
 - **范围**：仅生图（及生视频对齐项）；**对话气泡不附带图片**（CHAT 附件另立规格，本期不做）。
 - **写入**：用户提交含参考图的生成时，将参考图写入本机会话资产（稳定 id / 本地路径），并与该回合条目关联；不得仅依赖短文本 `refPreview` 标记作为唯一来源。
-- **数量**：与 Composer `IMG-REF` 上限一致；气泡内缩略按上限展示，溢出可横滑，不另开「全部」页。
+- **布局**：气泡内 **meta 通栏**；其下 **左缩略、右提示词**（顶对齐）；无参考图时仅提示词。
+- **数量**：与 Composer `IMG-REF` 上限一致；气泡内缩略按上限展示，多图时缩略区可并排，不另开「全部」页。
 - **点击**：打开 `IMG-LIGHTBOX`（仅参考图序列或与结果图分轨，实现可选，须可区分来源）。
 - **兼容**：旧回合无资产引用 → 只显示提示词，不报错、不挡滚动。
 - **生命周期**：随生图会话删除而清理；纳入备份/导出若 `SET-DATA` 已覆盖会话资产则一并带走（实现阶段与备份清单对齐）。
@@ -695,5 +696,6 @@ packages/design_material/
 | 2026-09-11 | **P4 规格**：`VID-PLAYER` 音量+真全屏；`VID-QUEUE` 成功项封面；新增 `IMG-TURN-REF` / `VID-TURN-REF`（用户气泡参考图）；§3.3–3.4 / §5.5–5.6 / §9 P4；CHAT 附图不做 |
 | 2026-09-11 | **P4 实现**：`VID-PLAYER` 音量（静音+0–100）+ 真全屏（桌面系统全屏 / 移动沉浸）；音量不跨启动持久化 |
 | 2026-09-11 | **P4 实现**：`VID-QUEUE` 成功项封面（CDN poster → 本机抽帧缓存 → 占位；点击等同播放；`SET-DATA` 可清） |
-| 2026-09-11 | **P4 实现**：IMG-TURN-REF / VID-TURN-REF（eferenceImages 落盘 + 双端用户气泡缩略/灯箱；旧无图回合兼容） |
+| 2026-09-11 | **P4 实现**：IMG-TURN-REF / VID-TURN-REF（`referenceImages` 落盘 + 双端用户气泡缩略/灯箱；旧无图回合兼容） |
+| 2026-09-11 | **`*-TURN-REF` 布局**：气泡改为 meta 通栏 + **左缩略 / 右提示词**（对齐 OD）；双端落地 |
 | 2026-09-11 | **`SHELL-SINGLE`**：桌面单实例（次进程唤起已有窗/托盘恢复）；§5.3 / §9 P4b；移动不做；`desktop_fluent` 已落地（`flutter_single_instance`）                              |

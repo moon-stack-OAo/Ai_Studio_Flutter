@@ -701,25 +701,32 @@ class _UserPromptBubbleState extends State<_UserPromptBubble> {
                   ),
                 ),
                 const SizedBox(height: 6),
-                CollapsiblePrompt(
-                  text: widget.prompt,
-                  style: TextStyle(
-                    fontSize: 13,
-                    height: 1.55,
-                    color: tokens.inkSecondary,
-                    fontFamily: tokens.fontFamily,
-                  ),
-                  linkColor: tokens.primary,
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (widget.referenceImages.isNotEmpty) ...[
+                      _TurnRefThumbs(
+                        refs: widget.referenceImages,
+                        tokens: tokens,
+                        loadBytes: widget.loadBytes,
+                        onTap: widget.onPreviewReference,
+                      ),
+                      const SizedBox(width: 10),
+                    ],
+                    Expanded(
+                      child: CollapsiblePrompt(
+                        text: widget.prompt,
+                        style: TextStyle(
+                          fontSize: 13,
+                          height: 1.55,
+                          color: tokens.inkSecondary,
+                          fontFamily: tokens.fontFamily,
+                        ),
+                        linkColor: tokens.primary,
+                      ),
+                    ),
+                  ],
                 ),
-                if (widget.referenceImages.isNotEmpty) ...[
-                  const SizedBox(height: 8),
-                  _TurnRefThumbs(
-                    refs: widget.referenceImages,
-                    tokens: tokens,
-                    loadBytes: widget.loadBytes,
-                    onTap: widget.onPreviewReference,
-                  ),
-                ],
                 AnimatedOpacity(
                   opacity: _hovered ? 1 : 0,
                   duration: const Duration(milliseconds: 120),
@@ -743,7 +750,7 @@ class _UserPromptBubbleState extends State<_UserPromptBubble> {
   }
 }
 
-/// F-TurnRefThumbs：提示词下方参考图缩略（可横滑）。
+/// F-TurnRefThumbs：提示词左侧参考图缩略（可横滑）。
 class _TurnRefThumbs extends StatelessWidget {
   const _TurnRefThumbs({
     required this.refs,
@@ -757,49 +764,53 @@ class _TurnRefThumbs extends StatelessWidget {
   final Future<Uint8List?> Function(ImageRef ref)? loadBytes;
   final void Function(int index, ImageRef ref)? onTap;
 
+  static const double _size = 52;
+
   @override
   Widget build(BuildContext context) {
     final shown = refs.length > maxTurnReferenceImages
         ? refs.sublist(0, maxTurnReferenceImages)
         : refs;
-    return SizedBox(
-      height: 56,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        itemCount: shown.length,
-        separatorBuilder: (_, _) => const SizedBox(width: 8),
-        itemBuilder: (context, index) {
-          final ref = shown[index];
-          return Semantics(
-            button: onTap != null,
-            label: '参考图 ${index + 1}',
-            child: GestureDetector(
-              onTap: onTap == null ? null : () => onTap!(index, ref),
-              child: MouseRegion(
-                cursor: onTap == null
-                    ? SystemMouseCursors.basic
-                    : SystemMouseCursors.click,
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(6),
-                  child: Container(
-                    width: 56,
-                    height: 56,
-                    decoration: BoxDecoration(
-                      color: tokens.canvas,
-                      border: Border.all(color: tokens.border),
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: _TurnRefThumb(
-                      ref: ref,
-                      loadBytes: loadBytes,
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        for (var index = 0; index < shown.length; index++) ...[
+          if (index > 0) const SizedBox(width: 6),
+          Builder(
+            builder: (context) {
+              final ref = shown[index];
+              return Semantics(
+                button: onTap != null,
+                label: '参考图 ${index + 1}',
+                child: GestureDetector(
+                  onTap: onTap == null ? null : () => onTap!(index, ref),
+                  child: MouseRegion(
+                    cursor: onTap == null
+                        ? SystemMouseCursors.basic
+                        : SystemMouseCursors.click,
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: Container(
+                        width: _size,
+                        height: _size,
+                        decoration: BoxDecoration(
+                          color: tokens.canvas,
+                          border: Border.all(color: tokens.border),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: _TurnRefThumb(
+                          ref: ref,
+                          loadBytes: loadBytes,
+                        ),
+                      ),
                     ),
                   ),
                 ),
-              ),
-            ),
-          );
-        },
-      ),
+              );
+            },
+          ),
+        ],
+      ],
     );
   }
 }

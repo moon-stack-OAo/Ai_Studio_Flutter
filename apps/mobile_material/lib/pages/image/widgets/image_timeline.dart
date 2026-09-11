@@ -616,31 +616,38 @@ class _UserPromptBubble extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 6),
-          CollapsiblePrompt(
-            text: prompt,
-            style: TextStyle(
-              fontSize: 13,
-              height: 1.45,
-              color: tokens.ink,
-              fontFamily: tokens.fontFamily,
-            ),
-            linkColor: tokens.primary,
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (referenceImages.isNotEmpty) ...[
+                _TurnRefThumbs(
+                  refs: referenceImages,
+                  loadBytes: loadBytes,
+                  onTap: onPreviewReference,
+                ),
+                const SizedBox(width: 10),
+              ],
+              Expanded(
+                child: CollapsiblePrompt(
+                  text: prompt,
+                  style: TextStyle(
+                    fontSize: 13,
+                    height: 1.45,
+                    color: tokens.ink,
+                    fontFamily: tokens.fontFamily,
+                  ),
+                  linkColor: tokens.primary,
+                ),
+              ),
+            ],
           ),
-          if (referenceImages.isNotEmpty) ...[
-            const SizedBox(height: 8),
-            _TurnRefThumbs(
-              refs: referenceImages,
-              loadBytes: loadBytes,
-              onTap: onPreviewReference,
-            ),
-          ],
         ],
       ),
     );
   }
 }
 
-/// M-TurnRefThumbs：提示词下方参考图缩略（触控间距友好）。
+/// M-TurnRefThumbs：提示词左侧参考图缩略（触控间距友好）。
 class _TurnRefThumbs extends StatelessWidget {
   const _TurnRefThumbs({
     required this.refs,
@@ -652,43 +659,47 @@ class _TurnRefThumbs extends StatelessWidget {
   final Future<Uint8List?> Function(ImageRef ref)? loadBytes;
   final void Function(int index, ImageRef ref)? onTap;
 
+  static const double _size = 48;
+
   @override
   Widget build(BuildContext context) {
     final tokens = materialTokensOf(context);
     final shown = refs.length > maxTurnReferenceImages
         ? refs.sublist(0, maxTurnReferenceImages)
         : refs;
-    return SizedBox(
-      height: 64,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        itemCount: shown.length,
-        separatorBuilder: (_, _) => const SizedBox(width: 10),
-        itemBuilder: (context, index) {
-          final ref = shown[index];
-          return Semantics(
-            button: onTap != null,
-            label: '参考图 ${index + 1}',
-            child: InkWell(
-              onTap: onTap == null ? null : () => onTap!(index, ref),
-              borderRadius: BorderRadius.circular(8),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(8),
-                child: Container(
-                  width: 64,
-                  height: 64,
-                  decoration: BoxDecoration(
-                    color: tokens.surfaceMuted,
-                    border: Border.all(color: tokens.border),
-                    borderRadius: BorderRadius.circular(8),
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        for (var index = 0; index < shown.length; index++) ...[
+          if (index > 0) const SizedBox(width: 8),
+          Builder(
+            builder: (context) {
+              final ref = shown[index];
+              return Semantics(
+                button: onTap != null,
+                label: '参考图 ${index + 1}',
+                child: InkWell(
+                  onTap: onTap == null ? null : () => onTap!(index, ref),
+                  borderRadius: BorderRadius.circular(10),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(10),
+                    child: Container(
+                      width: _size,
+                      height: _size,
+                      decoration: BoxDecoration(
+                        color: tokens.surfaceMuted,
+                        border: Border.all(color: tokens.border),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: _TurnRefThumb(ref: ref, loadBytes: loadBytes),
+                    ),
                   ),
-                  child: _TurnRefThumb(ref: ref, loadBytes: loadBytes),
                 ),
-              ),
-            ),
-          );
-        },
-      ),
+              );
+            },
+          ),
+        ],
+      ],
     );
   }
 }

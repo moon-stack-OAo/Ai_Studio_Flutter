@@ -97,6 +97,17 @@ label{display:block;font-size:11px;color:var(--muted);margin-bottom:6px;font-wei
 .turn-block{display:flex;flex-direction:column;gap:8px;padding-bottom:4px}
 .prompt-mini{font-size:12px;color:var(--ink2);background:var(--canvas);border:1px solid var(--border);border-radius:8px;padding:8px 10px;line-height:1.45}
 .prompt-mini .m{font-size:10px;color:var(--muted);margin-bottom:4px}
+/* VID-TURN-REF：meta 通栏；下方左缩略 + 右提示词 */
+.prompt-mini .body{display:flex;align-items:flex-start;gap:8px}
+.prompt-mini .body .prompt-text{flex:1;min-width:0}
+.turn-ref-thumbs{display:flex;gap:6px;flex-shrink:0}
+.turn-ref-thumb{
+  flex:0 0 auto;width:44px;height:44px;border-radius:6px;border:1px solid var(--border);cursor:pointer;
+  background:
+    radial-gradient(circle at 35% 30%, color-mix(in oklch,var(--primary) 40%,transparent), transparent 48%),
+    linear-gradient(145deg,#2a2a30,#121218);
+}
+.turn-ref-thumb:hover{outline:2px solid color-mix(in oklch,var(--primary) 55%,transparent);outline-offset:1px}
 .hint{font-size:11px;color:var(--muted);line-height:1.5}
 a.back{position:fixed;left:18px;bottom:14px;z-index:20;font-size:12px;color:var(--ink2);text-decoration:none;background:var(--surface);border:1px solid var(--border);padding:6px 10px;border-radius:8px}
 .corner{position:fixed;right:18px;bottom:14px;z-index:20;font-size:10px;font-family:var(--mono);color:var(--muted);background:var(--surface);border:1px dashed var(--border);padding:4px 8px;border-radius:6px}
@@ -193,7 +204,15 @@ a.back{position:fixed;left:18px;bottom:14px;z-index:20;font-size:12px;color:var(
 
             <div class="time-split"><span>今天 12:15</span></div>
             <div class="turn-block" data-od-id="vid-turn-2">
-              <div class="prompt-mini"><div class="m">你 · 回合 2</div>纸面工作区平移，展示侧栏与内容区节奏</div>
+              <div class="prompt-mini" data-od-id="f-vid-turn-ref">
+                <div class="m">你 · 回合 2 · 图生视频 <span class="badge">VID-TURN-REF</span></div>
+                <div class="body">
+                  <div class="turn-ref-thumbs" title="点击预览参考图">
+                    <div class="turn-ref-thumb" role="img" aria-label="参考图缩略"></div>
+                  </div>
+                  <div class="prompt-text">纸面工作区平移，展示侧栏与内容区节奏</div>
+                </div>
+              </div>
               <div class="job">
                 <div class="job-top">
                   <div>

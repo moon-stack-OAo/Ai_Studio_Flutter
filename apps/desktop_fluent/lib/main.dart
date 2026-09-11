@@ -3,7 +3,6 @@ import 'dart:io' show Platform;
 import 'package:core/core.dart';
 import 'package:design_fluent/design_fluent.dart';
 import 'package:fluent_ui/fluent_ui.dart';
-import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter_native_splash/flutter_native_splash.dart';
 import 'package:media_kit/media_kit.dart';
 
@@ -113,9 +112,9 @@ Future<void> main() async {
     videoPosterStore: videoPosterStore,
   );
 
-  // P3：正式构建保持语义树开启；Windows debug 整树关闭，规避已知 AXTree 刷错
-  //（flutter#182444，Tooltip/ListView 语义嫁接；修复尚未进 stable）。
-  // 局部易炸控件（如模型 tag）仍各自 ExcludeSemantics。
+  // Windows 整树关闭语义：规避 flutter#182444（ListView/Tooltip AXTree 不同步），
+  // release 下曾导致进程闪退；修复 PR #190344 进 stable 前先止血。
+  // 代价：Narrator/NVDA 等读屏不可用；macOS 不受影响。
   Widget app = AiStudioApp(
     themeController: themeController,
     providerRepository: providers,
@@ -134,7 +133,7 @@ Future<void> main() async {
     navigatorKey: navigatorKey,
     closeCoordinator: closeCoordinator,
   );
-  if (kDebugMode && Platform.isWindows) {
+  if (Platform.isWindows) {
     app = ExcludeSemantics(child: app);
   }
   runApp(app);
