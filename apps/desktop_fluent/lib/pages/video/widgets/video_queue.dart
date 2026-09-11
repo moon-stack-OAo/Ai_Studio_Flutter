@@ -29,7 +29,8 @@ class VideoQueue extends StatefulWidget {
     this.loadReferenceBytes,
     this.onPreviewReference,
     this.emptyHint = '还没有视频任务',
-    this.emptySubtitle = '在右侧参数区填写提示词后创建任务。',
+    this.emptySubtitle =
+        '在右侧填写提示词与参数后创建；恢复未完成走命令栏。',
   });
 
   final List<VideoItem> items;
@@ -212,7 +213,7 @@ class _StatusFilterChip extends StatelessWidget {
           final focused = states.isFocused;
           return AnimatedContainer(
             duration: const Duration(milliseconds: 100),
-            height: 28,
+            height: 26,
             padding: const EdgeInsets.symmetric(horizontal: 10),
             alignment: Alignment.center,
             decoration: BoxDecoration(
@@ -232,7 +233,7 @@ class _StatusFilterChip extends StatelessWidget {
             child: Text(
               label,
               style: TextStyle(
-                fontSize: 11,
+                fontSize: 10,
                 color: selected ? tokens.primaryPressed : tokens.inkSecondary,
                 fontFamily: tokens.fontFamily,
               ),
@@ -443,143 +444,147 @@ class _TurnBlock extends StatelessWidget {
                 : (index, ref) => onPreviewReference!(item, index, ref),
           ),
           const SizedBox(height: 8),
-          Semantics(
-            button: item.status == VideoItemStatus.success,
-            selected: selected,
-            label: '视频回合 $turnIndex，$title，状态 ${_statusLabelZh()}，${_metaLine()}',
-            child: GestureDetector(
-              onTap: () {
-                if (item.status == VideoItemStatus.success) {
-                  (onSelect ?? onPlay)?.call(item);
-                }
-              },
-              child: Container(
-                padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
-                decoration: BoxDecoration(
-                  color: tokens.surfaceMuted,
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(
-                    color: selected
-                        ? Color.lerp(tokens.primary, tokens.border, 0.55)!
-                        : item.status == VideoItemStatus.loading
-                            ? Color.lerp(tokens.primary, tokens.border, 0.55)!
-                            : tokens.border,
+          Opacity(
+            opacity: item.status == VideoItemStatus.abandoned ? 0.72 : 1,
+            child: Semantics(
+              button: item.status == VideoItemStatus.success,
+              selected: selected,
+              label:
+                  '视频回合 $turnIndex，$title，状态 ${_statusLabelZh()}，${_metaLine()}',
+              child: GestureDetector(
+                onTap: () {
+                  if (item.status == VideoItemStatus.success) {
+                    (onSelect ?? onPlay)?.call(item);
+                  }
+                },
+                child: Container(
+                  padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+                  decoration: BoxDecoration(
+                    color: tokens.surfaceMuted,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: selected
+                          ? Color.lerp(tokens.primary, tokens.border, 0.55)!
+                          : item.status == VideoItemStatus.loading
+                              ? Color.lerp(tokens.primary, tokens.border, 0.55)!
+                              : tokens.border,
+                    ),
+                    boxShadow: item.status == VideoItemStatus.loading
+                        ? [
+                            BoxShadow(
+                              color: tokens.primary.withValues(alpha: 0.12),
+                              blurRadius: 0,
+                              spreadRadius: 3,
+                            ),
+                          ]
+                        : null,
                   ),
-                  boxShadow: item.status == VideoItemStatus.loading
-                      ? [
-                          BoxShadow(
-                            color: tokens.primary.withValues(alpha: 0.12),
-                            blurRadius: 0,
-                            spreadRadius: 3,
-                          ),
-                        ]
-                      : null,
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        if (item.status == VideoItemStatus.success) ...[
-                          _QueuePosterThumb(
-                            item: item,
-                            tokens: tokens,
-                            posterService: posterService,
-                            onPosterCached: onPosterCached,
-                            canPlay: _canPlay,
-                            onPlay: () {
-                              if (_canPlay) {
-                                (onSelect ?? onPlay)?.call(item);
-                              }
-                            },
-                          ),
-                          const SizedBox(width: 10),
-                        ],
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                title,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w600,
-                                  color: tokens.ink,
-                                  fontFamily: tokens.fontFamily,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          if (item.status == VideoItemStatus.success) ...[
+                            _QueuePosterThumb(
+                              item: item,
+                              tokens: tokens,
+                              posterService: posterService,
+                              onPosterCached: onPosterCached,
+                              canPlay: _canPlay,
+                              onPlay: () {
+                                if (_canPlay) {
+                                  (onSelect ?? onPlay)?.call(item);
+                                }
+                              },
+                            ),
+                            const SizedBox(width: 10),
+                          ],
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  title,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                    color: tokens.ink,
+                                    fontFamily: tokens.fontFamily,
+                                  ),
                                 ),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                _metaLine(),
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  color: tokens.inkMuted,
-                                  fontFamily: tokens.fontFamily,
+                                const SizedBox(height: 4),
+                                Text(
+                                  _metaLine(),
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: tokens.inkMuted,
+                                    fontFamily: tokens.fontFamily,
+                                  ),
                                 ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 3,
-                          ),
-                          decoration: BoxDecoration(
-                            color: _pillColor().withValues(alpha: 0.15),
-                            borderRadius: BorderRadius.circular(999),
-                            border: Border.all(
-                              color: _pillColor().withValues(alpha: 0.4),
+                              ],
                             ),
                           ),
-                          child: Text(
-                            _statusLabel(),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 3,
+                            ),
+                            decoration: BoxDecoration(
+                              color: _pillColor().withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(999),
+                              border: Border.all(
+                                color: _pillColor().withValues(alpha: 0.4),
+                              ),
+                            ),
+                            child: Text(
+                              _statusLabel(),
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w600,
+                                color: _pillColor(),
+                                fontFamily: tokens.fontFamily,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      if (item.status == VideoItemStatus.loading) ...[
+                        const SizedBox(height: 10),
+                        ProgressBar(
+                          value: item.progress == null ? null : progress * 100,
+                        ),
+                      ],
+                      if (item.status == VideoItemStatus.error ||
+                          item.status == VideoItemStatus.pendingResume ||
+                          item.status == VideoItemStatus.abandoned ||
+                          item.needsMaterialize)
+                        if ((item.errorMessage ?? '').isNotEmpty) ...[
+                          const SizedBox(height: 8),
+                          Text(
+                            item.errorMessage!,
                             style: TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w600,
-                              color: _pillColor(),
+                              fontSize: 12,
+                              color: item.status == VideoItemStatus.error ||
+                                      item.needsMaterialize
+                                  ? tokens.danger
+                                  : tokens.inkSecondary,
                               fontFamily: tokens.fontFamily,
                             ),
                           ),
-                        ),
-                      ],
-                    ),
-                  if (item.status == VideoItemStatus.loading) ...[
-                    const SizedBox(height: 10),
-                    ProgressBar(
-                      value: item.progress == null ? null : progress * 100,
-                    ),
-                  ],
-                  if (item.status == VideoItemStatus.error ||
-                      item.status == VideoItemStatus.pendingResume ||
-                      item.status == VideoItemStatus.abandoned ||
-                      item.needsMaterialize)
-                    if ((item.errorMessage ?? '').isNotEmpty) ...[
+                        ],
                       const SizedBox(height: 8),
-                      Text(
-                        item.errorMessage!,
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: item.status == VideoItemStatus.error ||
-                                  item.needsMaterialize
-                              ? tokens.danger
-                              : tokens.inkSecondary,
-                          fontFamily: tokens.fontFamily,
-                        ),
+                      Wrap(
+                        spacing: 6,
+                        runSpacing: 4,
+                        children: _actions(),
                       ),
                     ],
-                  const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 6,
-                    runSpacing: 4,
-                    children: _actions(),
                   ),
-                ],
+                ),
               ),
-            ),
             ),
           ),
         ],
@@ -928,10 +933,10 @@ class _UserPromptBubbleState extends State<_UserPromptBubble> {
           onSecondaryTapUp: (details) =>
               _showContextMenu(details.globalPosition),
           child: Container(
-            padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
+            padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
             decoration: BoxDecoration(
-              color: tokens.canvas,
-              borderRadius: BorderRadius.circular(8),
+              color: tokens.surface,
+              borderRadius: BorderRadius.circular(10),
               border: Border.all(color: tokens.border),
             ),
             child: Column(
@@ -940,12 +945,12 @@ class _UserPromptBubbleState extends State<_UserPromptBubble> {
                 Text(
                   widget.header,
                   style: TextStyle(
-                    fontSize: 10,
+                    fontSize: 11,
                     color: tokens.inkMuted,
                     fontFamily: tokens.fontFamily,
                   ),
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: 6),
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -956,15 +961,15 @@ class _UserPromptBubbleState extends State<_UserPromptBubble> {
                         loadBytes: widget.loadBytes,
                         onTap: widget.onPreviewReference,
                       ),
-                      const SizedBox(width: 8),
+                      const SizedBox(width: 10),
                     ],
                     Expanded(
                       child: CollapsiblePrompt(
                         text: widget.prompt,
                         maxLines: 3,
                         style: TextStyle(
-                          fontSize: 12,
-                          height: 1.45,
+                          fontSize: 13,
+                          height: 1.55,
                           color: tokens.inkSecondary,
                           fontFamily: tokens.fontFamily,
                         ),
@@ -1010,7 +1015,7 @@ class _TurnRefThumbs extends StatelessWidget {
   final Future<Uint8List?> Function(ImageRef ref)? loadBytes;
   final void Function(int index, ImageRef ref)? onTap;
 
-  static const double _size = 44;
+  static const double _size = 52;
 
   @override
   Widget build(BuildContext context) {
@@ -1035,14 +1040,14 @@ class _TurnRefThumbs extends StatelessWidget {
                         ? SystemMouseCursors.basic
                         : SystemMouseCursors.click,
                     child: ClipRRect(
-                      borderRadius: BorderRadius.circular(6),
+                      borderRadius: BorderRadius.circular(8),
                       child: Container(
                         width: _size,
                         height: _size,
                         decoration: BoxDecoration(
                           color: tokens.surface,
                           border: Border.all(color: tokens.border),
-                          borderRadius: BorderRadius.circular(6),
+                          borderRadius: BorderRadius.circular(8),
                         ),
                         child: _TurnRefThumb(ref: ref, loadBytes: loadBytes),
                       ),

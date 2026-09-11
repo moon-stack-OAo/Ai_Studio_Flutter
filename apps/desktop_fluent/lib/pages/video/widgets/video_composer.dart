@@ -274,10 +274,10 @@ class _VideoComposerState extends State<VideoComposer> {
                   height: 36,
                   child: widget.generating
                       ? Tooltip(
-                          message: '取消生成',
+                          message: '停止任务',
                           child: Semantics(
                             button: true,
-                            label: '取消生成',
+                            label: '停止任务',
                             excludeSemantics: true,
                             child: Button(
                               onPressed: widget.onStop,
@@ -287,7 +287,7 @@ class _VideoComposerState extends State<VideoComposer> {
                                 foregroundColor:
                                     const WidgetStatePropertyAll(Colors.white),
                               ),
-                              child: const Text('取消'),
+                              child: const Text('停止任务'),
                             ),
                           ),
                         )
@@ -537,6 +537,26 @@ class _VideoReferenceBoxState extends State<_VideoReferenceBox> {
     await onDrop(path);
   }
 
+  String? _formatLabel(ImageRef ref) {
+    final src = ref.src.trim();
+    if (src.isEmpty) return null;
+    final name = src.replaceAll('\\', '/').split('/').last;
+    final dot = name.lastIndexOf('.');
+    if (dot < 0 || dot >= name.length - 1) return null;
+    final ext = name.substring(dot + 1).toLowerCase();
+    switch (ext) {
+      case 'png':
+        return 'PNG';
+      case 'jpg':
+      case 'jpeg':
+        return 'JPEG';
+      case 'webp':
+        return 'WebP';
+      default:
+        return ext.toUpperCase();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final tokens = widget.tokens;
@@ -544,6 +564,15 @@ class _VideoReferenceBoxState extends State<_VideoReferenceBox> {
     final canPick = widget.enabled && widget.onPick != null && !hasRef;
     final canDrop = widget.onDrop != null;
     final highlight = _dragging && canDrop;
+    final useDashed = !hasRef && !highlight && widget.unsupportedHint == null;
+    final borderColor = highlight ? tokens.primary : tokens.border;
+    final bgColor = highlight
+        ? tokens.primary.withValues(alpha: 0.08)
+        : tokens.canvas;
+    final format = hasRef ? _formatLabel(widget.reference!) : null;
+    final setSubtitle = highlight
+        ? '松开以替换'
+        : (format != null ? '$format · 可替换' : '可替换');
     return DropTarget(
       enable: canDrop,
       onDragEntered: (_) {
@@ -559,8 +588,8 @@ class _VideoReferenceBoxState extends State<_VideoReferenceBox> {
       child: Semantics(
         button: canPick,
         label: hasRef
-            ? '参考图已设置，可清除或拖放替换'
-            : (widget.unsupportedHint ?? '选择或拖放参考图'),
+            ? '首帧已设，可清除或拖放替换'
+            : (widget.unsupportedHint ?? '拖放或选择参考图'),
         excludeSemantics: hasRef || widget.unsupportedHint != null,
         child: GestureDetector(
           onTap: canPick ? widget.onPick : null,
@@ -568,96 +597,142 @@ class _VideoReferenceBoxState extends State<_VideoReferenceBox> {
             cursor: canPick || (canDrop && !hasRef)
                 ? SystemMouseCursors.click
                 : SystemMouseCursors.basic,
-            child: Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(
-                  color: highlight ? tokens.primary : tokens.border,
+            child: CustomPaint(
+              painter: useDashed
+                  ? _DashedRRectBorderPainter(
+                      color: borderColor,
+                      radius: 8,
+                    )
+                  : null,
+              child: Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(8),
+                  border: useDashed
+                      ? null
+                      : Border.all(color: borderColor),
+                  color: bgColor,
                 ),
-                color: highlight
-                    ? tokens.primary.withValues(alpha: 0.08)
-                    : tokens.canvas,
-              ),
-              child: hasRef
-                  ? Row(
-                      children: [
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(6),
-                          child: SizedBox(
-                            width: 56,
-                            height: 56,
-                            child: _VideoRefThumb(ref: widget.reference!),
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                '已设为参考',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w500,
-                                  color: tokens.inkSecondary,
-                                  fontFamily: tokens.fontFamily,
-                                ),
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                highlight ? '松开以替换参考图' : '图生视频 · 可拖放替换',
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  color: tokens.inkMuted,
-                                  fontFamily: tokens.fontFamily,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        if (widget.onClear != null)
-                          Semantics(
-                            button: true,
-                            label: '清除参考图',
-                            child: HyperlinkButton(
-                              onPressed: widget.onClear,
-                              child: const Text('清除'),
+                child: hasRef
+                    ? Row(
+                        children: [
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(6),
+                            child: SizedBox(
+                              width: 56,
+                              height: 56,
+                              child: _VideoRefThumb(ref: widget.reference!),
                             ),
                           ),
-                      ],
-                    )
-                  : Column(
-                      children: [
-                        Text(
-                          widget.unsupportedHint != null
-                              ? '不可用'
-                              : (highlight ? '松开以设为参考' : '选择或拖放文件'),
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w500,
-                            color: tokens.inkSecondary,
-                            fontFamily: tokens.fontFamily,
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  '首帧已设',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w500,
+                                    color: tokens.inkSecondary,
+                                    fontFamily: tokens.fontFamily,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  setSubtitle,
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: tokens.inkMuted,
+                                    fontFamily: tokens.fontFamily,
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          widget.unsupportedHint ??
-                              'PNG / JPEG / WebP · 可选首帧参考',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: tokens.inkMuted,
-                            fontFamily: tokens.fontFamily,
+                          if (widget.onClear != null)
+                            Semantics(
+                              button: true,
+                              label: '清除参考图',
+                              child: HyperlinkButton(
+                                onPressed: widget.onClear,
+                                child: const Text('清除'),
+                              ),
+                            ),
+                        ],
+                      )
+                    : Column(
+                        children: [
+                          Text(
+                            widget.unsupportedHint != null
+                                ? '不可用'
+                                : (highlight ? '松开以设为首帧' : '拖放或选择文件'),
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
+                              color: tokens.inkSecondary,
+                              fontFamily: tokens.fontFamily,
+                            ),
                           ),
-                        ),
-                      ],
-                    ),
+                          const SizedBox(height: 4),
+                          Text(
+                            widget.unsupportedHint ??
+                                'PNG / JPEG / WebP · 仅 1 张',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: tokens.inkMuted,
+                              fontFamily: tokens.fontFamily,
+                            ),
+                          ),
+                        ],
+                      ),
+              ),
             ),
           ),
         ),
       ),
     );
+  }
+}
+
+class _DashedRRectBorderPainter extends CustomPainter {
+  const _DashedRRectBorderPainter({
+    required this.color,
+    required this.radius,
+  });
+
+  final Color color;
+  final double radius;
+
+  static const double _strokeWidth = 1;
+  static const double _dash = 4;
+  static const double _gap = 3;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final rrect = RRect.fromRectAndRadius(
+      Offset.zero & size,
+      Radius.circular(radius),
+    );
+    final path = Path()..addRRect(rrect);
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = _strokeWidth;
+    for (final metric in path.computeMetrics()) {
+      var distance = 0.0;
+      while (distance < metric.length) {
+        final next = (distance + _dash).clamp(0.0, metric.length);
+        canvas.drawPath(metric.extractPath(distance, next), paint);
+        distance = next + _gap;
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _DashedRRectBorderPainter oldDelegate) {
+    return oldDelegate.color != color || oldDelegate.radius != radius;
   }
 }
 

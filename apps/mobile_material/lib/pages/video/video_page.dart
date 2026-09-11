@@ -376,7 +376,7 @@ class _VideoPageState extends State<VideoPage> {
                 Semantics(
                   liveRegion: true,
                   container: true,
-                  label: '任务进行中 · 可取消',
+                  label: '任务进行中 · 可停止',
                   child: Material(
                     color: tokens.surface,
                     child: Padding(
@@ -394,7 +394,7 @@ class _VideoPageState extends State<VideoPage> {
                           const SizedBox(width: 10),
                           Expanded(
                             child: Text(
-                              '任务进行中 · 可取消',
+                              '任务进行中 · 可停止',
                               style: TextStyle(
                                 fontSize: 13,
                                 color: tokens.inkSecondary,

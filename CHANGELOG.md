@@ -22,6 +22,7 @@
 
 ### Changed
 
+- **Fluent 生视频 OD 精修跟版**：对照 `fluent-*-video.html` — 忙态 CTA「停止任务」；参考图空态虚线/「首帧」文案；队列气泡密度与筛选 chip；abandoned 淡化；空舞台两级文案与播放器头 hint；移动端同步「停止任务」文案（不跟 Fluent 视觉密度）
 - **`*-TURN-REF` 气泡布局**：参考图缩略由提示词下方改为 **左侧**（meta 通栏；左缩略 + 右提示词）；对齐 OD 稿；双端生图/生视频用户气泡
 - **双端 `VID-PLAYER` 迁 `media_kit`**：`desktop_fluent` 内嵌 / 放大弹窗与 `mobile_material` 推页播放均改用 `media_kit` + `media_kit_video` + `media_kit_libs_video`；移除 `video_player` / `video_player_win` 与 `VideoPlaybackGuard`；桌面弹窗独立 Player（关闭 dispose，打开时内嵌暂停），移动推页 pop 即 dispose
 

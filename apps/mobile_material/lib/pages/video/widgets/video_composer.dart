@@ -408,7 +408,7 @@ class _VideoComposerState extends State<VideoComposer> {
               child: widget.generating
                   ? Semantics(
                       button: true,
-                      label: '取消生成',
+                      label: '停止任务',
                       excludeSemantics: true,
                       child: FilledButton(
                         style: FilledButton.styleFrom(
@@ -417,7 +417,7 @@ class _VideoComposerState extends State<VideoComposer> {
                           minimumSize: const Size.fromHeight(44),
                         ),
                         onPressed: widget.onStop,
-                        child: const Text('取消'),
+                        child: const Text('停止任务'),
                       ),
                     )
                   : Semantics(

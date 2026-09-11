@@ -105,8 +105,8 @@ class _VideoPlayerPanelState extends State<VideoPlayerPanel> {
 
 String _stageLabel(VideoItem? item) {
   final raw = item?.aspectRatio?.trim();
-  if (raw != null && raw.isNotEmpty) return '$raw 舞台';
-  return '自适应舞台';
+  if (raw != null && raw.isNotEmpty) return '$raw · 音量 / 真全屏';
+  return '音量 / 真全屏';
 }
 
 double? parseVideoAspectRatio(String? raw) {
@@ -147,12 +147,33 @@ class _EmptyStage extends StatelessWidget {
                 ),
               ),
               child: Center(
-                child: Text(
-                  '从左侧队列选择已完成任务播放',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.white.withValues(alpha: 0.65),
-                    fontFamily: tokens.fontFamily,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        '选择左侧已完成任务',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.white.withValues(alpha: 0.88),
+                          fontFamily: tokens.fontFamily,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        '成功项封面或「在右侧播放」会载入此舞台。',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 11,
+                          height: 1.5,
+                          color: Colors.white.withValues(alpha: 0.55),
+                          fontFamily: tokens.fontFamily,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),
