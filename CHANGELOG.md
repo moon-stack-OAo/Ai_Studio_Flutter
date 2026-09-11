@@ -13,7 +13,8 @@
 
 ### Added
 
-（暂无）
+- **DESIGN P4 规格**：`VID-PLAYER` 音量 + 系统级全屏；`VID-QUEUE` 成功项封面缩略；`IMG-TURN-REF` / `VID-TURN-REF`（图生图/图生视频用户气泡回看参考图）；对话气泡附图本期不做
+- **DESIGN `SHELL-SINGLE`**：桌面（Win/macOS）单实例——第二进程退出并唤起已有窗口（含托盘恢复）；移动不做
 
 ### Changed
 
