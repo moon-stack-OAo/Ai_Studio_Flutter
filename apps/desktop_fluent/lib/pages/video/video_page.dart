@@ -77,6 +77,7 @@ class _VideoPageState extends State<VideoPage> {
       ref: ref,
       refs: item.referenceImages,
       initialIndex: index,
+      source: ImageLightboxSource.reference,
       loadBytes: () =>
           widget.sessionRepository.readReferenceImageBytes(ref),
       loadBytesFor: widget.sessionRepository.readReferenceImageBytes,
@@ -261,6 +262,10 @@ class _VideoPageState extends State<VideoPage> {
                                       item.id,
                                     );
                                   },
+                                  onRerun: (item) {
+                                    unawaited(_controller.rerunFromItem(item));
+                                  },
+                                  rerunEnabled: !widget.generation.busy,
                                 ),
                               ),
                             ),
@@ -271,6 +276,10 @@ class _VideoPageState extends State<VideoPage> {
                                 item: _controller.selectedItem,
                                 onOpenSystem: _controller.openVideo,
                                 onSaveAs: _controller.saveVideoAs,
+                                onRerun: (item) {
+                                  unawaited(_controller.rerunFromItem(item));
+                                },
+                                rerunEnabled: !widget.generation.busy,
                                 onExpand: _controller.selectedItem == null
                                     ? null
                                     : () {

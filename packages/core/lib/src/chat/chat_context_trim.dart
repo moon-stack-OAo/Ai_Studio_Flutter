@@ -154,17 +154,42 @@ TrimChatResult trimChatMessages(
 }
 
 /// 组装 API messages：system 前置，history 仅 user/assistant。
-List<Map<String, String>> buildApiMessages({
+///
+/// [attachmentDataUrls]：`messageId → data:` URL 列表；有附图的 user 消息
+/// 使用 parts（text + image_url）；无附图仍用 string content。
+List<Map<String, dynamic>> buildApiMessages({
   required List<ChatMessage> history,
   String? systemPrompt,
+  Map<String, List<String>>? attachmentDataUrls,
 }) {
-  final out = <Map<String, String>>[];
+  final out = <Map<String, dynamic>>[];
   final prompt = systemPrompt?.trim();
   if (prompt != null && prompt.isNotEmpty) {
     out.add({'role': 'system', 'content': prompt});
   }
+  final urlsByMsg = attachmentDataUrls ?? const <String, List<String>>{};
   for (final m in history) {
-    if (m.role == ChatRole.user || m.role == ChatRole.assistant) {
+    if (m.role != ChatRole.user && m.role != ChatRole.assistant) continue;
+    final urls = urlsByMsg[m.id];
+    if (m.role == ChatRole.user && urls != null && urls.isNotEmpty) {
+      final parts = <Map<String, dynamic>>[];
+      final text = m.content;
+      if (text.isNotEmpty) {
+        parts.add({'type': 'text', 'text': text});
+      }
+      for (final url in urls) {
+        if (url.isEmpty) continue;
+        parts.add({
+          'type': 'image_url',
+          'image_url': {'url': url},
+        });
+      }
+      if (parts.isEmpty) {
+        out.add({'role': m.role.wire, 'content': ''});
+      } else {
+        out.add({'role': m.role.wire, 'content': parts});
+      }
+    } else {
       out.add({'role': m.role.wire, 'content': m.content});
     }
   }

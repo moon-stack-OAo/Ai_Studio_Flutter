@@ -16,12 +16,17 @@ class VideoPlayerPage extends StatefulWidget {
     this.onSaveAlbum,
     this.onShare,
     this.onOpenSystem,
+    this.onRerun,
+    this.rerunEnabled = true,
   });
 
   final VideoItem item;
   final void Function(VideoItem item)? onSaveAlbum;
   final void Function(VideoItem item)? onShare;
   final Future<bool> Function(VideoItem item)? onOpenSystem;
+  /// `VID-RERUN`：用此提示重跑。
+  final void Function(VideoItem item)? onRerun;
+  final bool rerunEnabled;
 
   @override
   State<VideoPlayerPage> createState() => _VideoPlayerPageState();
@@ -33,6 +38,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
   final List<StreamSubscription<dynamic>> _subs = [];
   String? _error;
   bool _ready = false;
+  bool _loading = true;
   double _volume = 100;
   double _volumeBeforeMute = 100;
   bool _muted = false;
@@ -75,7 +81,14 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
       }),
       player.stream.error.listen((msg) {
         if (!mounted || msg.trim().isEmpty) return;
-        setState(() => _error = '播放出错：$msg');
+        final path = _resolvePlayable(widget.item);
+        setState(() {
+          _ready = false;
+          _error = VideoPlaybackErrors.streamFailed(
+            msg,
+            isRemote: path != null && _isHttp(path),
+          );
+        });
       }),
     ]);
   }
@@ -86,26 +99,68 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
     _init();
   }
 
+  Future<void> _retryPlayback() async {
+    await _disposeCurrentPlayer();
+    if (!mounted) return;
+    setState(() {
+      _error = null;
+      _ready = false;
+      _loading = true;
+    });
+    await _init();
+  }
+
+  Future<void> _disposeCurrentPlayer() async {
+    _clearSubs();
+    final p = _player;
+    _player = null;
+    _videoController = null;
+    if (p == null) return;
+    try {
+      await p.dispose();
+    } catch (_) {}
+  }
+
   Future<void> _init() async {
+    if (mounted) {
+      setState(() {
+        _error = null;
+        _loading = true;
+        _ready = false;
+      });
+    }
     final path = _resolvePlayable(widget.item);
     if (path == null || path.isEmpty) {
-      setState(() => _error = '没有可播放的视频地址');
+      setState(() {
+        _loading = false;
+        _error = VideoPlaybackErrors.noAddress;
+      });
       return;
     }
     if (path.startsWith('memory://')) {
-      setState(() => _error = '内存视频请先另存或系统打开');
+      setState(() {
+        _loading = false;
+        _error = VideoPlaybackErrors.memoryOnly;
+      });
       return;
     }
+    final remote = _isHttp(path);
     try {
-      if (!_isHttp(path)) {
+      if (!remote) {
         final filePath =
             path.startsWith('file:') ? Uri.parse(path).toFilePath() : path;
         final f = File(filePath);
         if (!await f.exists()) {
-          setState(() => _error = '本地文件不存在');
+          setState(() {
+            _loading = false;
+            _error = VideoPlaybackErrors.localMissing;
+          });
           return;
         }
       }
+
+      await _loadVolumePrefs();
+      if (!mounted) return;
 
       final player = Player();
       await player.setPlaylistMode(PlaylistMode.none);
@@ -127,11 +182,146 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
         await player.dispose();
         return;
       }
-      setState(() => _ready = true);
+      setState(() {
+        _ready = true;
+        _loading = false;
+        _error = null;
+      });
     } catch (e) {
+      await _disposeCurrentPlayer();
       if (!mounted) return;
-      setState(() => _error = '播放器初始化失败：$e');
+      setState(() {
+        _ready = false;
+        _loading = false;
+        _error = VideoPlaybackErrors.initFailed(e, isRemote: remote);
+      });
     }
+  }
+
+  Widget? _buildPoster() {
+    final local = (widget.item.posterLocalPath ?? '').trim();
+    if (local.isNotEmpty && !local.startsWith('memory-poster://')) {
+      final file = File(local);
+      if (file.existsSync()) {
+        return Image.file(
+          file,
+          fit: BoxFit.cover,
+          errorBuilder: (_, _, _) => const SizedBox.shrink(),
+        );
+      }
+    }
+    final url = (widget.item.posterUrl ?? '').trim();
+    if (VideoPosterService.isRemotePosterUrl(url)) {
+      return Image.network(
+        url,
+        fit: BoxFit.cover,
+        errorBuilder: (_, _, _) => const SizedBox.shrink(),
+      );
+    }
+    return null;
+  }
+
+  Widget _buildStage(MaterialTokens tokens) {
+    if (_error != null && !_ready) {
+      return Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              _error!,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: tokens.danger,
+                fontFamily: tokens.fontFamily,
+              ),
+            ),
+            const SizedBox(height: 16),
+            FilledButton.icon(
+              onPressed: _loading ? null : () => _retryPlayback(),
+              icon: const Icon(Icons.refresh),
+              label: const Text('重试'),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final buffering =
+        _ready && _player != null && _player!.state.buffering && !_loading;
+    final showSpinner = _loading || buffering;
+
+    Widget stageCore() {
+      if (_ready && _videoController != null) {
+        return Video(
+          controller: _videoController!,
+          controls: NoVideoControls,
+          fit: BoxFit.contain,
+        );
+      }
+      final poster = _buildPoster();
+      if (poster != null) {
+        return Stack(
+          fit: StackFit.expand,
+          children: [
+            Positioned.fill(child: poster),
+            if (showSpinner)
+              const ColoredBox(
+                color: Color(0x66000000),
+                child: Center(
+                  child: CircularProgressIndicator(color: Colors.white),
+                ),
+              ),
+          ],
+        );
+      }
+      if (showSpinner) {
+        return const Center(
+          child: CircularProgressIndicator(color: Colors.white),
+        );
+      }
+      return const SizedBox.shrink();
+    }
+
+    if (_immersive) {
+      return SizedBox.expand(
+        child: _ready && _videoController != null && showSpinner
+            ? Stack(
+                fit: StackFit.expand,
+                children: [
+                  stageCore(),
+                  const ColoredBox(
+                    color: Color(0x66000000),
+                    child: Center(
+                      child: CircularProgressIndicator(color: Colors.white),
+                    ),
+                  ),
+                ],
+              )
+            : stageCore(),
+      );
+    }
+
+    return AspectRatio(
+      aspectRatio: _stageAspectRatio(),
+      child: DecoratedBox(
+        decoration: const BoxDecoration(color: Color(0xFF0F1115)),
+        child: _ready && _videoController != null && showSpinner
+            ? Stack(
+                fit: StackFit.expand,
+                children: [
+                  stageCore(),
+                  const ColoredBox(
+                    color: Color(0x66000000),
+                    child: Center(
+                      child: CircularProgressIndicator(color: Colors.white),
+                    ),
+                  ),
+                ],
+              )
+            : stageCore(),
+      ),
+    );
   }
 
   String? _resolvePlayable(VideoItem item) {
@@ -184,18 +374,9 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
 
   @override
   void dispose() {
+    unawaited(VideoPlaybackPrefsWriter.instance.flush());
     unawaited(_restoreSystemUi());
-    _clearSubs();
-    final p = _player;
-    _player = null;
-    _videoController = null;
-    if (p != null) {
-      unawaited(() async {
-        try {
-          await p.dispose();
-        } catch (_) {}
-      }());
-    }
+    unawaited(_disposeCurrentPlayer());
     super.dispose();
   }
 
@@ -216,6 +397,27 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
     await player.play();
   }
 
+  Future<void> _loadVolumePrefs() async {
+    final prefs = await VideoPlaybackPrefsWriter.instance.load();
+    if (!mounted) return;
+    setState(() {
+      _volume = prefs.volume;
+      _volumeBeforeMute =
+          prefs.volume <= 0 ? VideoPlaybackPrefs.defaultVolume : prefs.volume;
+      _muted = prefs.muted;
+    });
+  }
+
+  void _persistVolume() {
+    VideoPlaybackPrefsWriter.instance.scheduleSave(
+      VideoPlaybackPrefs.fromUi(
+        volume: _volume,
+        volumeBeforeMute: _volumeBeforeMute,
+        muted: _muted,
+      ),
+    );
+  }
+
   Future<void> _setVolume(double value) async {
     final v = value.clamp(0.0, 100.0);
     setState(() {
@@ -223,6 +425,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
       _muted = v <= 0;
       if (v > 0) _volumeBeforeMute = v;
     });
+    _persistVolume();
     final player = _player;
     if (player == null) return;
     try {
@@ -299,6 +502,19 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
                       icon: const Icon(Icons.open_in_new),
                       onPressed: () => widget.onOpenSystem!(widget.item),
                     ),
+                  if (widget.onRerun != null &&
+                      (widget.item.prompt.trim().isNotEmpty ||
+                          widget.item.referenceImages.isNotEmpty))
+                    IconButton(
+                      tooltip: '用此提示重跑',
+                      icon: const Icon(Icons.replay),
+                      onPressed: widget.rerunEnabled
+                          ? () {
+                              widget.onRerun!(widget.item);
+                              Navigator.of(context).maybePop();
+                            }
+                          : null,
+                    ),
                   if (_ready)
                     IconButton(
                       tooltip: '全屏',
@@ -307,75 +523,49 @@ class _VideoPlayerPageState extends State<VideoPlayerPage> {
                     ),
                 ],
               ),
-        body: Stack(
-          fit: StackFit.expand,
-          children: [
-            Center(
-              child: _error != null
-                  ? Padding(
-                      padding: const EdgeInsets.all(24),
-                      child: Text(
-                        _error!,
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          color: tokens.danger,
-                          fontFamily: tokens.fontFamily,
-                        ),
-                      ),
-                    )
-                  : !_ready || _player == null || _videoController == null
-                      ? const CircularProgressIndicator(color: Colors.white)
-                      : _immersive
-                          ? Video(
-                              controller: _videoController!,
-                              controls: NoVideoControls,
-                              fit: BoxFit.contain,
-                            )
-                          : AspectRatio(
-                              aspectRatio: _stageAspectRatio(),
-                              child: Video(
-                                controller: _videoController!,
-                                controls: NoVideoControls,
-                                fit: BoxFit.contain,
-                              ),
-                            ),
-            ),
-            if (_ready && _player != null)
-              Positioned(
-                left: 0,
-                right: 0,
-                bottom: 0,
-                child: SafeArea(
-                  child: _ControlsBar(
-                    player: _player!,
-                    muted: _muted,
-                    volume: _volume,
-                    immersive: _immersive,
-                    fmt: _fmt,
-                    onToggle: _toggle,
-                    onToggleMute: _toggleMute,
-                    onVolumeChanged: _setVolume,
-                    onEnterFullscreen: _enterImmersive,
-                    onExitFullscreen: _exitImmersive,
+        body: ColoredBox(
+          color: const Color(0xFF0F1115),
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              Center(child: _buildStage(tokens)),
+              if (_ready && _player != null)
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  child: SafeArea(
+                    child: _ControlsBar(
+                      player: _player!,
+                      muted: _muted,
+                      volume: _volume,
+                      immersive: _immersive,
+                      fmt: _fmt,
+                      onToggle: _toggle,
+                      onToggleMute: _toggleMute,
+                      onVolumeChanged: _setVolume,
+                      onEnterFullscreen: _enterImmersive,
+                      onExitFullscreen: _exitImmersive,
+                    ),
                   ),
                 ),
-              ),
-            if (_immersive)
-              Positioned(
-                top: MediaQuery.paddingOf(context).top + 8,
-                right: 8,
-                child: IconButton(
-                  color: Colors.white,
-                  tooltip: '退出全屏',
-                  icon: const Icon(Icons.fullscreen_exit),
-                  style: IconButton.styleFrom(
-                    minimumSize: const Size(48, 48),
-                    tapTargetSize: MaterialTapTargetSize.padded,
+              if (_immersive)
+                Positioned(
+                  top: MediaQuery.paddingOf(context).top + 8,
+                  right: 8,
+                  child: IconButton(
+                    color: Colors.white,
+                    tooltip: '退出全屏',
+                    icon: const Icon(Icons.fullscreen_exit),
+                    style: IconButton.styleFrom(
+                      minimumSize: const Size(48, 48),
+                      tapTargetSize: MaterialTapTargetSize.padded,
+                    ),
+                    onPressed: () => _exitImmersive(),
                   ),
-                  onPressed: () => _exitImmersive(),
                 ),
-              ),
-          ],
+            ],
+          ),
         ),
       ),
     );

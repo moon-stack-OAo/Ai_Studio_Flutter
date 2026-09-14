@@ -518,7 +518,8 @@ class _DraftPolishToggleItem extends StatelessWidget {
       onPressed: onPressed,
       builder: (context, states) {
         return AnimatedContainer(
-          duration: const Duration(milliseconds: 100),
+          duration: FluentMotion.micro,
+          curve: FluentMotion.standard,
           padding: const EdgeInsets.fromLTRB(10, 4, 10, 6),
           decoration: BoxDecoration(
             border: Border(
@@ -657,7 +658,8 @@ class _Chip extends StatelessWidget {
           fg = tokens.inkSecondary;
         }
         return AnimatedContainer(
-          duration: const Duration(milliseconds: 100),
+          duration: FluentMotion.micro,
+          curve: FluentMotion.standard,
           padding: EdgeInsets.symmetric(horizontal: padH, vertical: padV),
           decoration: BoxDecoration(
             color: bg,

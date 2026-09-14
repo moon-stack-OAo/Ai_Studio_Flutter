@@ -214,7 +214,7 @@ ThemeData _buildTheme(
       backgroundColor: tokens.surface,
       indicatorColor: tokens.primary.withValues(alpha: 0.18),
       elevation: 0,
-      height: density.navigationBarHeight,
+      height: density.navigationBarHeightFor(factor),
       labelTextStyle: WidgetStateProperty.resolveWith((states) {
         final selected = states.contains(WidgetState.selected);
         return TextStyle(

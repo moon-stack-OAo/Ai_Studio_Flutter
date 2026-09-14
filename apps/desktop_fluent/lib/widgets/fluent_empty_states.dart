@@ -255,7 +255,7 @@ class FluentProvidersListEmpty extends StatelessWidget {
                 const SizedBox(height: 12),
                 Button(
                   onPressed: onAdd,
-                  child: const Text('添加'),
+                  child: const Text('添加提供商'),
                 ),
               ],
             ],

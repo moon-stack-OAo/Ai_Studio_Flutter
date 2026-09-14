@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'chat_attach.dart';
 import 'chat_models.dart';
 
 /// 单条消息 content 字符上限。
@@ -18,10 +19,15 @@ ChatMessage sanitizeChatMessage(
   int maxChars = maxChatMessageChars,
 }) {
   final limit = maxChars < 1 ? 1 : maxChars;
-  if (msg.content.length <= limit) return msg;
+  final cappedAtt = sanitizeChatAttachments(msg.attachments);
+  final contentOk = msg.content.length <= limit;
+  final attOk = cappedAtt.length == msg.attachments.length;
+  if (contentOk && attOk) return msg;
   return msg.copyWith(
-    content:
-        '${msg.content.substring(0, limit)}\n\n…（本地已截断，原长度 ${msg.content.length}）',
+    content: contentOk
+        ? null
+        : '${msg.content.substring(0, limit)}\n\n…（本地已截断，原长度 ${msg.content.length}）',
+    attachments: attOk ? null : cappedAtt,
   );
 }
 

@@ -1,7 +1,10 @@
+import 'package:core/core.dart';
 import 'package:design_material/design_material.dart';
 import 'package:flutter/material.dart';
 
-/// M-Composer：底栏输入；IME 由壳藏 Nav + Scaffold resize 抬起。
+import '../chat_controller.dart';
+
+/// M-Composer：底栏输入；IME 由壳藏 Nav + Scaffold resize 抬起；含 CHAT-ATTACH。
 class Composer extends StatefulWidget {
   const Composer({
     super.key,
@@ -9,12 +12,27 @@ class Composer extends StatefulWidget {
     required this.streaming,
     required this.onSend,
     required this.onStop,
+    this.visionSupported = false,
+    this.draftAttachments = const [],
+    this.onPickAttachments,
+    this.onRemoveDraftAttachment,
+    this.canSendWithDraft,
   });
 
   final bool enabled;
   final bool streaming;
   final ValueChanged<String> onSend;
   final VoidCallback onStop;
+
+  /// 当前对话模型是否支持视觉（启发式）。
+  final bool visionSupported;
+
+  final List<ChatDraftAttachment> draftAttachments;
+  final VoidCallback? onPickAttachments;
+  final ValueChanged<int>? onRemoveDraftAttachment;
+
+  /// 含正文/附图的发送门闩；缺省时退化为 [enabled] + 非空正文。
+  final bool Function(String textDraft)? canSendWithDraft;
 
   @override
   State<Composer> createState() => _ComposerState();
@@ -23,12 +41,34 @@ class Composer extends StatefulWidget {
 class _ComposerState extends State<Composer> {
   final TextEditingController _controller = TextEditingController();
   final FocusNode _focus = FocusNode();
+  bool _textNonEmpty = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller.addListener(_onTextChanged);
+  }
+
+  void _onTextChanged() {
+    final next = _controller.text.trim().isNotEmpty;
+    if (next != _textNonEmpty) setState(() => _textNonEmpty = next);
+  }
 
   @override
   void dispose() {
+    _controller.removeListener(_onTextChanged);
     _controller.dispose();
     _focus.dispose();
     super.dispose();
+  }
+
+  bool get _hasDraft => widget.draftAttachments.isNotEmpty;
+
+  bool get _canSubmitContent {
+    final gate = widget.canSendWithDraft;
+    if (gate != null) return gate(_controller.text);
+    if (!widget.enabled) return false;
+    return _controller.text.trim().isNotEmpty || _hasDraft;
   }
 
   void _submit() {
@@ -36,9 +76,8 @@ class _ComposerState extends State<Composer> {
       widget.onStop();
       return;
     }
-    if (!widget.enabled) return;
+    if (!_canSubmitContent) return;
     final text = _controller.text;
-    if (text.trim().isEmpty) return;
     widget.onSend(text);
     _controller.clear();
     _focus.requestFocus();
@@ -62,6 +101,20 @@ class _ComposerState extends State<Composer> {
             .toDouble();
     final padBottom =
         (density == UiDensity.comfortable ? 10.0 : 8.0) + safeExtra * safeFade;
+
+    final attachTooltip = !widget.visionSupported
+        ? '当前模型不支持图片'
+        : (widget.draftAttachments.length >= maxChatAttachments
+            ? '最多 $maxChatAttachments 张'
+            : '附加图片（最多 $maxChatAttachments 张）');
+    final canPick = widget.visionSupported &&
+        canType &&
+        widget.onPickAttachments != null &&
+        widget.draftAttachments.length < maxChatAttachments;
+
+    final hintText = widget.streaming
+        ? '生成中…'
+        : (_hasDraft ? '可空文发送附图…' : '输入消息…');
 
     return AnimatedContainer(
       duration: MaterialMotion.micro,
@@ -119,9 +172,34 @@ class _ComposerState extends State<Composer> {
               ),
             ),
           ],
+          if (_hasDraft) ...[
+            _DraftAttachmentStrip(
+              drafts: widget.draftAttachments,
+              tokens: tokens,
+              onRemove: canType ? widget.onRemoveDraftAttachment : null,
+            ),
+            const SizedBox(height: 8),
+          ],
           Row(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
+              Semantics(
+                button: true,
+                enabled: canPick,
+                label: '附加图片',
+                excludeSemantics: true,
+                child: IconButton(
+                  onPressed: canPick ? widget.onPickAttachments : null,
+                  tooltip: attachTooltip,
+                  icon: Icon(
+                    Icons.add_photo_alternate_outlined,
+                    size: 22,
+                    color: canPick
+                        ? tokens.inkSecondary
+                        : tokens.inkMuted.withValues(alpha: 0.55),
+                  ),
+                ),
+              ),
               Expanded(
                 child: Semantics(
                   textField: true,
@@ -134,7 +212,7 @@ class _ComposerState extends State<Composer> {
                     maxLines: density == UiDensity.comfortable ? 6 : 5,
                     textInputAction: TextInputAction.newline,
                     decoration: InputDecoration(
-                      hintText: widget.streaming ? '生成中…' : '输入消息…',
+                      hintText: hintText,
                       filled: true,
                       fillColor:
                           isDark ? tokens.surfaceElevated : tokens.canvas,
@@ -198,7 +276,7 @@ class _ComposerState extends State<Composer> {
                           label: '发送消息',
                           excludeSemantics: true,
                           child: FilledButton(
-                            onPressed: widget.enabled ? _submit : null,
+                            onPressed: _canSubmitContent ? _submit : null,
                             style: FilledButton.styleFrom(
                               padding: EdgeInsets.zero,
                               minimumSize: const Size(48, 48),
@@ -213,7 +291,111 @@ class _ComposerState extends State<Composer> {
               ),
             ],
           ),
+          if (!widget.streaming &&
+              (!widget.visionSupported || _hasDraft)) ...[
+            const SizedBox(height: 6),
+            Text(
+              !widget.visionSupported
+                  ? '当前模型不支持附图'
+                  : '已附加 ${widget.draftAttachments.length}/$maxChatAttachments 张',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 11,
+                color: tokens.inkMuted,
+                fontFamily: tokens.fontFamily,
+              ),
+            ),
+          ],
         ],
+      ),
+    );
+  }
+}
+
+class _DraftAttachmentStrip extends StatelessWidget {
+  const _DraftAttachmentStrip({
+    required this.drafts,
+    required this.tokens,
+    this.onRemove,
+  });
+
+  final List<ChatDraftAttachment> drafts;
+  final MaterialTokens tokens;
+  final ValueChanged<int>? onRemove;
+
+  static const double _size = 56;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: _size + 8,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: drafts.length,
+        separatorBuilder: (context, index) => const SizedBox(width: 8),
+        itemBuilder: (context, index) {
+          final draft = drafts[index];
+          return Stack(
+            clipBehavior: Clip.none,
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(10),
+                child: Container(
+                  width: _size,
+                  height: _size,
+                  decoration: BoxDecoration(
+                    color: tokens.surfaceMuted,
+                    border: Border.all(color: tokens.border),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Image.memory(
+                    draft.bytes,
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) => Center(
+                      child: Icon(
+                        Icons.broken_image_outlined,
+                        size: 20,
+                        color: tokens.inkMuted,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              if (onRemove != null)
+                Positioned(
+                  top: -6,
+                  right: -6,
+                  child: Semantics(
+                    button: true,
+                    label: '移除附图 ${index + 1}',
+                    child: Material(
+                      color: tokens.surfaceElevated,
+                      shape: const CircleBorder(),
+                      child: InkWell(
+                        customBorder: const CircleBorder(),
+                        onTap: () => onRemove!(index),
+                        child: Container(
+                          width: 22,
+                          height: 22,
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            border: Border.all(color: tokens.border),
+                          ),
+                          child: Icon(
+                            Icons.close,
+                            size: 12,
+                            color: tokens.inkSecondary,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          );
+        },
       ),
     );
   }

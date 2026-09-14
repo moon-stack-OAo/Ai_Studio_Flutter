@@ -371,7 +371,7 @@ class _SettingsProvidersPageState extends State<SettingsProvidersPage> {
                         ),
                         FilledButton(
                           onPressed: _addProvider,
-                          child: const Text('添加'),
+                          child: const Text('添加提供商'),
                         ),
                       ],
                     ),
@@ -405,14 +405,10 @@ class _SettingsProvidersPageState extends State<SettingsProvidersPage> {
           ),
           Expanded(
             child: selected == null
-                ? Center(
-                    child: Text(
-                      '选择或添加一个提供商',
-                      style: TextStyle(
-                        color: tokens.inkMuted,
-                        fontFamily: tokens.fontFamily,
-                      ),
-                    ),
+                ? FluentContentEmpty(
+                    hint: '选择或添加一个提供商',
+                    subtitle: '左侧列表点选后编辑；也可点「添加提供商」。',
+                    illustration: const FluentEmptyIllustration.noProviders(),
                   )
                 : _ProviderForm(
                     tokens: tokens,

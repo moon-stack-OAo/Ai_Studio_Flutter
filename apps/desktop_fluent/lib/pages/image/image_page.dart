@@ -82,6 +82,7 @@ class _ImagePageState extends State<ImagePage> {
       ref: ref,
       refs: item.images,
       initialIndex: index,
+      source: ImageLightboxSource.result,
       loadBytes: () => widget.sessionRepository.readImageBytes(ref),
       loadBytesFor: widget.sessionRepository.readImageBytes,
       onSaveRef: _controller.saveImageAs,
@@ -98,6 +99,7 @@ class _ImagePageState extends State<ImagePage> {
       ref: ref,
       refs: item.referenceImages,
       initialIndex: index,
+      source: ImageLightboxSource.reference,
       loadBytes: () => widget.sessionRepository.readImageBytes(ref),
       loadBytesFor: widget.sessionRepository.readImageBytes,
     );

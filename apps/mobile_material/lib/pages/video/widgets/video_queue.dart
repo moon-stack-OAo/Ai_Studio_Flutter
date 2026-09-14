@@ -20,6 +20,8 @@ class VideoQueue extends StatefulWidget {
     required this.onResume,
     required this.onAbandon,
     this.onPlay,
+    this.onRerun,
+    this.rerunEnabled = true,
     this.onReload,
     this.isReloading,
     this.onSaveAlbum,
@@ -38,6 +40,9 @@ class VideoQueue extends StatefulWidget {
   final void Function(VideoItem item) onResume;
   final void Function(VideoItem item) onAbandon;
   final void Function(VideoItem item)? onPlay;
+  /// `VID-RERUN`：用此提示重跑（回填 Composer）。
+  final void Function(VideoItem item)? onRerun;
+  final bool rerunEnabled;
   final void Function(VideoItem item)? onReload;
   final bool Function(VideoItem item)? isReloading;
   final void Function(VideoItem item)? onSaveAlbum;
@@ -145,6 +150,8 @@ class _VideoQueueState extends State<VideoQueue> {
                 onResume: widget.onResume,
                 onAbandon: widget.onAbandon,
                 onPlay: widget.onPlay,
+                onRerun: widget.onRerun,
+                rerunEnabled: widget.rerunEnabled,
                 onReload: widget.onReload,
                 isReloading: widget.isReloading,
                 onSaveAlbum: widget.onSaveAlbum,
@@ -169,6 +176,8 @@ class _TurnCard extends StatelessWidget {
     required this.onResume,
     required this.onAbandon,
     this.onPlay,
+    this.onRerun,
+    this.rerunEnabled = true,
     this.onReload,
     this.isReloading,
     this.onSaveAlbum,
@@ -186,6 +195,8 @@ class _TurnCard extends StatelessWidget {
   final void Function(VideoItem item) onResume;
   final void Function(VideoItem item) onAbandon;
   final void Function(VideoItem item)? onPlay;
+  final void Function(VideoItem item)? onRerun;
+  final bool rerunEnabled;
   final void Function(VideoItem item)? onReload;
   final bool Function(VideoItem item)? isReloading;
   final void Function(VideoItem item)? onSaveAlbum;
@@ -420,6 +431,17 @@ class _TurnCard extends StatelessWidget {
     );
   }
 
+  Widget? _rerunBtn() {
+    if (onRerun == null) return null;
+    if (item.prompt.trim().isEmpty && item.referenceImages.isEmpty) {
+      return null;
+    }
+    return TextButton(
+      onPressed: rerunEnabled ? () => onRerun!(item) : null,
+      child: const Text('用此提示重跑'),
+    );
+  }
+
   List<Widget> _actions(MaterialTokens tokens) {
     final reloadBtn = _canReload
         ? TextButton(
@@ -429,6 +451,7 @@ class _TurnCard extends StatelessWidget {
             ),
           )
         : null;
+    final rerunBtn = _rerunBtn();
 
     switch (item.status) {
       case VideoItemStatus.loading:
@@ -443,6 +466,7 @@ class _TurnCard extends StatelessWidget {
             onPressed: () => onAbandon(item),
             child: const Text('放弃'),
           ),
+          ?rerunBtn,
         ];
       case VideoItemStatus.success:
         return [
@@ -468,6 +492,7 @@ class _TurnCard extends StatelessWidget {
             onPressed: onShare == null ? null : () => onShare!(item),
             child: const Text('分享'),
           ),
+          ?rerunBtn,
         ];
       case VideoItemStatus.error:
         return [
@@ -481,9 +506,12 @@ class _TurnCard extends StatelessWidget {
             onPressed: () => onAbandon(item),
             child: const Text('放弃'),
           ),
+          ?rerunBtn,
         ];
       case VideoItemStatus.abandoned:
-        return const [];
+        return [
+          ?rerunBtn,
+        ];
     }
   }
 }

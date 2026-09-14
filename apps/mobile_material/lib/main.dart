@@ -28,7 +28,11 @@ Future<void> main() async {
   themeController.loadFrom(appearance.settings);
 
   final providers = ProviderRepository(storage: SecureProviderStorage());
-  final sessions = ChatSessionRepository(storage: PrefsChatSessionStorage());
+  final chatAttachmentStore = FileImageAssetStore(subdir: 'chat_image_cache');
+  final sessions = ChatSessionRepository(
+    storage: PrefsChatSessionStorage(),
+    attachmentStore: chatAttachmentStore,
+  );
   final imageAssetStore = FileImageAssetStore();
   final imageSessions = ImageSessionRepository(
     storage: PrefsImageSessionStorage(),
@@ -61,6 +65,8 @@ Future<void> main() async {
     imageSessions: imageSessions,
     videoSessions: videoSessions,
     logs: appLogs,
+    imageAssetStore: imageAssetStore,
+    chatAttachmentStore: chatAttachmentStore,
     videoPosterStore: videoPosterStore,
   );
 

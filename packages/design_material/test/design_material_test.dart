@@ -90,8 +90,42 @@ void main() {
       scaled.textTheme.bodyMedium!.fontSize,
       closeTo(base.textTheme.bodyMedium!.fontSize! * 1.15, 0.01),
     );
-    expect(scaled.navigationBarTheme.height, 68);
+    // E9：compact/comfortable + 更大字号抬高底栏，避免 label 裁切。
+    expect(scaled.navigationBarTheme.height, 78);
     expect(base.navigationBarTheme.height, 64);
+    expect(
+      UiDensity.compact.navigationBarHeightFor(AppFontScale.larger.factor),
+      74,
+    );
+    expect(
+      UiDensity.comfortable.navigationBarHeightFor(AppFontScale.smaller.factor),
+      68,
+    );
+  });
+
+  test('extreme density+fontScale spacing stays usable', () {
+    // E9 抽检：compact+更大 / comfortable+更小 主路径间距仍为正且可区分。
+    expect(UiDensity.compact.sessionItemVerticalPadding, lessThan(
+      UiDensity.comfortable.sessionItemVerticalPadding,
+    ));
+    expect(UiDensity.compact.composerPadding.top, greaterThan(0));
+    expect(UiDensity.comfortable.settingsFormGap, greaterThan(0));
+    final tight = buildMaterialLightTheme(
+      fontScale: AppFontScale.larger,
+      density: UiDensity.compact,
+    );
+    final loose = buildMaterialLightTheme(
+      fontScale: AppFontScale.smaller,
+      density: UiDensity.comfortable,
+    );
+    expect(tight.visualDensity, VisualDensity.compact);
+    expect(loose.visualDensity, VisualDensity.standard);
+    expect(
+      tight.textTheme.bodyMedium!.fontSize!,
+      greaterThan(loose.textTheme.bodyMedium!.fontSize!),
+    );
+    expect(tight.navigationBarTheme.height, 74);
+    expect(loose.navigationBarTheme.height, 68);
   });
 
   test('Material font stack and mono fallback', () {

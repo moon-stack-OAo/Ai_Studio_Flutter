@@ -324,4 +324,45 @@ void main() {
     final map = payload.toJson();
     expect(map.containsKey('chat'), isFalse);
   });
+
+  test('export omits chat attachment local file bytes', () async {
+    final chatStore = MemoryImageAssetStore();
+    chatSessions = ChatSessionRepository(
+      storage: MemoryChatSessionStorage(),
+      attachmentStore: chatStore,
+    );
+    await chatSessions.load();
+    service = DataBackupService(
+      providers: providers,
+      appearance: appearance,
+      chatDefaults: chatDefaults,
+      chatSessions: chatSessions,
+      imageSessions: imageSessions,
+      videoSessions: videoSessions,
+      logs: logs,
+      imageAssetStore: imageStore,
+      chatAttachmentStore: chatStore,
+      videoAssetStore: videoStore,
+    );
+
+    final chat = await chatSessions.createSession(title: '附图会话');
+    final path = await chatStore.savePng(
+      Uint8List.fromList([1, 2, 3, 4]),
+      'chat_seed',
+    );
+    await chatSessions.appendMessage(
+      chat.id,
+      role: ChatRole.user,
+      content: '看这图',
+      attachments: [ImageRef(type: ImageRefType.file, src: path)],
+    );
+
+    final json = await service.exportBackupJson();
+    expect(json.contains(path), isFalse);
+    expect(json.contains('local-file-omitted'), isTrue);
+
+    final media = await service.clearLocalData(ClearLocalDataFlags.mediaOnly);
+    expect(media.clearedMediaCache, isTrue);
+    expect(chatStore.entries, isEmpty);
+  });
 }

@@ -1,5 +1,6 @@
 library;
 
+export 'src/chat/chat_attach.dart';
 export 'src/chat/chat_context_trim.dart';
 export 'src/chat/chat_errors.dart';
 export 'src/chat/chat_message_meta.dart';
@@ -69,6 +70,8 @@ export 'src/video/video_asset_store.dart';
 export 'src/video/video_client.dart';
 export 'src/video/video_job_facade.dart';
 export 'src/video/video_models.dart';
+export 'src/video/video_playback_errors.dart';
+export 'src/video/video_playback_prefs.dart';
 export 'src/video/video_poster_service.dart';
 export 'src/video/video_poster_store.dart';
 export 'src/video/video_resume.dart';

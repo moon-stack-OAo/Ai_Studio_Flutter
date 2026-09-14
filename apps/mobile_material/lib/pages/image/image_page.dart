@@ -87,8 +87,8 @@ class _ImagePageState extends State<ImagePage> {
       if (!_scroll.hasClients) return;
       _scroll.animateTo(
         _scroll.position.maxScrollExtent,
-        duration: const Duration(milliseconds: 120),
-        curve: Curves.easeOut,
+        duration: MaterialMotion.micro,
+        curve: MaterialMotion.standard,
       );
     });
   }
@@ -155,6 +155,7 @@ class _ImagePageState extends State<ImagePage> {
     await ImageLightbox.show(
       context,
       ref: ref,
+      source: ImageLightboxSource.result,
       loadBytes: () => widget.sessionRepository.readImageBytes(ref),
       onSaveAlbum: () => _onSaveAlbum(item, index, ref),
       onShare: () => _onShare(item, index, ref),
@@ -170,6 +171,7 @@ class _ImagePageState extends State<ImagePage> {
     await ImageLightbox.show(
       context,
       ref: ref,
+      source: ImageLightboxSource.reference,
       loadBytes: () => widget.sessionRepository.readImageBytes(ref),
     );
   }

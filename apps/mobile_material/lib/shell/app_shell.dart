@@ -258,7 +258,9 @@ class _AppShellState extends State<AppShell> {
     // 全面屏手势条 / 三键导航：NavigationBar 自身 SafeArea 会叠在 theme height 之下，
     // 槽位必须含 viewPadding，否则收起键盘时底栏提前弹出并可能裁切手势区。
     final systemBottom = MediaQuery.viewPaddingOf(context).bottom;
-    final navHeight = density.navigationBarHeight;
+    // 与 theme 同步（含字号极端档抬高），避免槽位矮于真实底栏。
+    final navHeight = Theme.of(context).navigationBarTheme.height ??
+        density.navigationBarHeight;
     final navSlotHeight = navHeight + systemBottom;
     // 与键盘高度同相位收起，避免 bottomNavigationBar: null 瞬时跳变。
     final navVisibleFactor =

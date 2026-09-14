@@ -87,6 +87,31 @@ void main() {
     expect(base.extension<FluentTokens>()!.settingsCatWidth, 260);
   });
 
+  test('extreme density+fontScale spacing stays usable', () {
+    // E9 抽检：compact+更大 / comfortable+更小 主路径间距仍为正且可区分。
+    expect(UiDensity.compact.sessionItemVerticalPadding, lessThan(
+      UiDensity.comfortable.sessionItemVerticalPadding,
+    ));
+    expect(UiDensity.compact.composerPadding.top, greaterThan(0));
+    expect(UiDensity.comfortable.composerPadding.top, greaterThan(0));
+    expect(UiDensity.compact.settingsFormGap, greaterThan(0));
+    expect(AppFontScale.larger.factor, greaterThan(AppFontScale.smaller.factor));
+    final tight = buildFluentLightTheme(
+      fontScale: AppFontScale.larger,
+      density: UiDensity.compact,
+    );
+    final loose = buildFluentLightTheme(
+      fontScale: AppFontScale.smaller,
+      density: UiDensity.comfortable,
+    );
+    expect(tight.visualDensity, VisualDensity.compact);
+    expect(loose.visualDensity, VisualDensity.standard);
+    expect(
+      tight.typography.body!.fontSize!,
+      greaterThan(loose.typography.body!.fontSize!),
+    );
+  });
+
   test('Fluent font stack and typography fallback', () {
     expect(FluentTokens.fontStackFamily, 'Segoe UI Variable');
     expect(FluentTokens.monoStackFamily, 'Cascadia Code');

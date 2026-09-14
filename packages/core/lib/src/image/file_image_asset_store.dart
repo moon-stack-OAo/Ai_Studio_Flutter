@@ -5,11 +5,21 @@ import 'package:path_provider/path_provider.dart';
 
 import 'image_asset_store.dart';
 
-/// 桌面/移动：落到应用文档目录 `image_cache/{id}.png`。
+/// 桌面/移动：落到应用文档目录 `{subdir}/{id}.png`。
+///
+/// 默认 [subdir] 为 `image_cache`（生图）；对话附图用 `chat_image_cache`。
+/// [overrideDir] 非空时忽略 [subdir]，直接使用该目录。
 class FileImageAssetStore implements ImageAssetStore {
-  FileImageAssetStore({this.overrideDir});
+  FileImageAssetStore({
+    this.overrideDir,
+    this.subdir = 'image_cache',
+  });
 
   final Directory? overrideDir;
+
+  /// 相对应用文档目录的子目录名（如 `image_cache` / `chat_image_cache`）。
+  final String subdir;
+
   Directory? _cacheDir;
 
   Future<Directory> _ensureDir() async {
@@ -21,7 +31,8 @@ class FileImageAssetStore implements ImageAssetStore {
       dir = override;
     } else {
       final docs = await getApplicationDocumentsDirectory();
-      dir = Directory('${docs.path}${Platform.pathSeparator}image_cache');
+      final name = subdir.trim().isEmpty ? 'image_cache' : subdir.trim();
+      dir = Directory('${docs.path}${Platform.pathSeparator}$name');
     }
     if (!await dir.exists()) {
       await dir.create(recursive: true);

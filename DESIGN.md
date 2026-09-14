@@ -375,6 +375,21 @@ Flutter 落点：`packages/design_fluent` 与 `packages/design_material` 的 `Th
 | `CHAT-COMPOSER`     | 输入与发送/停止       | `F-Composer`：多行 TextBox；主按钮发送；流式中变停止；Enter 发送（可配）                 | `M-Composer`：TextField + 发送/停止；IME 不挡输入      | 空闲 / 可发送 / 流式中 / 禁用           |
 | `CHAT-EMPTY`        | 未配置 / 无会话空态    | `F-ChatEmpty`：短文案 + 主按钮（去设置 / 新建）                                 | `M-ChatEmpty`：同语义，竖向 CTA                     | 未配置 Key / 无会话                 |
 | `CHAT-ERROR`        | 发送失败可行动提示      | CommandBar 下 InfoBar 或气泡内错误                                       | Snackbar + 气泡内错误文案                           | 超时 / 取消 / 4xx / 5xx / 不安全 URL |
+| `CHAT-ATTACH`       | **对话附图**（用户消息附带图片） | Composer 附加 + 用户气泡缩略 + 灯箱；多模态 parts 发送                         | 同语义；相册/文件点选                                    | 无图 / 草稿有图 / 已发送可回看 / 入口禁用   |
+
+**`CHAT-ATTACH`（P5 · 已落地）**
+
+- **目标**：用户在对话 Composer 附加图片，随用户气泡展示缩略并可灯箱回看；多模态请求按活跃提供商能力发送（不支持则禁用入口并提示）。
+- **与 `IMG-TURN-REF` 区分**：生图/生视频回合参考图仍走 `*-TURN-REF`；对话附图是 **CHAT 消息资产**，不得 silently 复用生图时间线组件换皮。
+- **数量 / MIME / 大小**：每条用户消息最多 **4** 张；`png` / `jpeg` / `jpg` / `webp`；单张解码前原始字节 ≤ **4 MiB**（超限拒绝并提示）；发送前可按实现缩放/压 JPEG 以控上下文。
+- **可发送条件**：活跃 `chatModel` 判定支持视觉（启发式，见下）时启用附件入口；**有图时允许正文为空**；不支持时入口禁用 + 短说明（不本地暂存后盲发）。
+- **视觉模型启发式（最小）**：`chatModel` id 含（大小写不敏感）`vision` / `gpt-4o` / `gpt-4.1` / `gpt-5` / `o1` / `o3` / `o4` / `gemini` / `claude-3` / `claude-4` / `claude-sonnet` / `claude-opus` / `llava` 等 → 允许；其余默认不允许（后续可加提供商级开关，首版不做）。
+- **协议**：OpenAI 兼容 chat completions：`content` 为 parts 数组（`text` + `image_url`，本地图转 `data:` URL）；无附件时仍发纯 string，兼容旧路径。
+- **写入**：提交时落盘（目录与生图 `image_cache` **分轨**，如 `chat_image_cache/`；id 前缀 `chat_`）；`ChatMessage.attachments: List<ImageRef>`；旧 JSON 无字段 → 空列表。
+- **布局**：用户气泡内缩略 + 正文（无图则仅文本）；点击缩略进灯箱，角标 **「附图」**（可扩 `ImageLightboxSource.attachment`）。
+- **生命周期**：删会话 / 清空消息 / 撤回含附图的用户末条 / `SET-DATA` 一并删盘；备份导出 omit 本地 file 字节（对齐生图/视频）。
+- **包边界**：协议与落盘进 `packages/core`；Fluent / Material **分端** Composer 与气泡 Widget。
+- **本期不做**：助手气泡附图、图生对话工作流编排、跨会话图库、提供商级「强制允许附图」开关。
 
 ---
 
@@ -394,11 +409,11 @@ Flutter 落点：`packages/design_fluent` 与 `packages/design_material` 的 `Th
 
 **`IMG-TURN-REF` / 参考图持久化（已决）**
 
-- **范围**：仅生图（及生视频对齐项）；**对话气泡不附带图片**（CHAT 附件另立规格，本期不做）。
+- **范围**：仅生图（及生视频对齐项）；**对话气泡附图**见 `CHAT-ATTACH`（§5.4 / §9 P5），**不在本能力实现**。
 - **写入**：用户提交含参考图的生成时，将参考图写入本机会话资产（稳定 id / 本地路径），并与该回合条目关联；不得仅依赖短文本 `refPreview` 标记作为唯一来源。
 - **布局**：气泡内 **meta 通栏**；其下 **左缩略、右提示词**（顶对齐）；无参考图时仅提示词。
 - **数量**：与 Composer `IMG-REF` 上限一致；气泡内缩略按上限展示，多图时缩略区可并排，不另开「全部」页。
-- **点击**：打开 `IMG-LIGHTBOX`（仅参考图序列或与结果图分轨，实现可选，须可区分来源）。
+- **点击**：打开 `IMG-LIGHTBOX`（仅参考图序列或与结果图分轨，实现可选，须可区分来源；**角标已落地**：灯箱标题区「参考」/「结果」）。
 - **兼容**：旧回合无资产引用 → 只显示提示词，不报错、不挡滚动。
 - **生命周期**：随生图会话删除而清理；纳入备份/导出若 `SET-DATA` 已覆盖会话资产则一并带走（实现阶段与备份清单对齐）。
 - **包边界**：字节加载 / 路径解析可下沉 `packages/core`；缩略与灯箱 Widget **分端实现**，禁止 Fluent ↔ Material 互引。
@@ -413,16 +428,24 @@ Flutter 落点：`packages/design_fluent` 与 `packages/design_material` 的 `Th
 | `VID-PROMPT-REF` | Composer 提示词 + 参考图   | 复用 Prompt/Ref 的 Fluent 变体                                                         | 复用 Material 变体                                              | 同生图                                                                                                                                                 |
 | `VID-TURN-REF`   | **用户气泡**回看本回合参考图     | 对齐 `IMG-TURN-REF` 的 Fluent 变体                                                     | 对齐 Material 变体                                              | 同 `IMG-TURN-REF`                                                                                                                                    |
 | `VID-GENERATE`   | 创建任务 / 取消            | `F-VideoPrimary`                                                                  | `M-VideoPrimary`                                            | 空闲 / 提交中                                                                                                                                            |
-| `VID-QUEUE`      | 任务队列与进度（**按回合时间分隔**） | `F-VideoQueue`：筛选 Chip + 每回合提示词（± `VID-TURN-REF`）+ 任务卡（可含封面）+ ProgressBar + 放弃/重试 | `M-VideoQueue`：筛选 Chip + 卡片列表（可含封面）+ LinearProgress + 放弃/重试 | 筛选：全部 / 生成中 / 待恢复 / 已完成 / 失败 / 已放弃；条目态 loading / pending_resume / success / error / abandoned（规格文案 queued·running·succeeded·failed·abandoned 为对外表述） |
-| `VID-PLAYER`     | 播放完成片（含音量 / 系统全屏）    | `F-VideoPlayer`：内嵌 + 放大/全屏 + 下载                                                   | `M-VideoPlayer`：推页播放 + 系统沉浸全屏 + 下载/相册                       | 本地 / 远端 URL；缓冲；音量；全屏开/关                                                                                                                             |
+| `VID-QUEUE`      | 任务队列与进度（**按回合时间分隔**） | `F-VideoQueue`：筛选 Chip + 每回合提示词（± `VID-TURN-REF`）+ 任务卡（可含封面）+ ProgressBar + 放弃/重试 + **用此提示重跑** | `M-VideoQueue`：筛选 Chip + 卡片列表（可含封面）+ LinearProgress + 放弃/重试 + **用此提示重跑** | 筛选：全部 / 生成中 / 待恢复 / 已完成 / 失败 / 已放弃；条目态 loading / pending_resume / success / error / abandoned（规格文案 queued·running·succeeded·failed·abandoned 为对外表述） |
+| `VID-PLAYER`     | 播放完成片（含音量 / 系统全屏）    | `F-VideoPlayer`：内嵌 + 放大/全屏 + 下载 + **用此提示重跑**                                     | `M-VideoPlayer`：推页播放 + 系统沉浸全屏 + 下载/相册 + **用此提示重跑**             | 本地 / 远端 URL；缓冲；音量（跨启动持久化）；全屏开/关                                                                                                               |
 | `VID-RESUME`     | 启动时恢复未完成             | 静默续跑 + InfoBar 提示                                                                 | 静默续跑 + Snackbar                                             | 无可恢复 / 恢复中                                                                                                                                          |
+| `VID-RERUN`      | 用此提示重跑（回填 Composer） | 队列条目 / 播放器动作区按钮                                                                  | 同语义；触控友好                                                    | 回填提示词 + **一并恢复参考图**（若有）；**不**自动提交；忙态禁用                                                                                                         |
 
 **`VID-PLAYER`（已决增强）**
 
 - **播放后端**：实现可迁至跨端播放内核（如 `media_kit`）；能力与状态以本表为准，不因换栈缩水。
-- **音量**：控件条提供静音切换 + 0–100 音量；默认跟随系统/内核默认音量；是否跨启动持久化由实现决定（须在设置或首次说明中一致）。
+- **音量**：控件条提供静音切换 + 0–100 音量；**跨启动持久化（已落地）**：本机 prefs（`core.video_playback.v1`）记住音量与静音；首次无记录时默认跟随内核 100、未静音；双端共用同一偏好键语义。
 - **真全屏**：进入系统级全屏（桌面：隐藏标题栏/最大化客户区或等价；移动：`SystemChrome` 沉浸 + 可横屏）。退出：Esc（桌面）/ 系统返回或明显退出控件（移动）。全屏与「放大弹窗」可并存：弹窗为窗口内放大，全屏为系统级。
 - **首版不做**：列表内嵌自动播、多路同时播放、播放列表连播。
+- **播放失败 / 弱网（体验债 · 已落地）**：无地址 / 本地缺失 / 内存视频 / 初始化失败 / `stream.error` 等统一中文短文案；错误态提供「重试」（重新 open 当前项）；http(s) 弱网主句中文，可附极短原因，不甩整段底层英文；桌面内嵌切换失败保留上一帧并可重试。
+- **缓冲 / 加载态（体验债 · 已落地）**：首次打开（无上一帧）优先 `posterLocalPath` / `posterUrl` 占位再叠轻量 loading；无封面则 loading + 非纯黑舞台底；桌面内嵌队列切换保留上一帧 + 半透明 loading，新源可解码后再挂载；弹窗 / 全屏 / 移动推页同语义；播放中 `buffering` 叠半透明指示。
+
+**`VID-RERUN`（体验债 · 已落地）**
+
+- 从队列或播放器对某条任务「用此提示重跑」：将 `prompt` 写入 Composer 草稿，并将该回合 `referenceImages`（若有且文件仍可读）恢复为当前参考图；**一并回填**时长 / 比例 / size / resolution（item 上有则写入 facade，并 `syncParamsToActiveProvider`）。
+- **不**自动调用生成；生成中禁用该入口或明确提示。
 
 **`VID-QUEUE` 封面缩略（已决）**
 
@@ -564,7 +587,7 @@ Flutter 落点：`packages/design_fluent` 与 `packages/design_material` 的 `Th
 ### P3 — 双系统抛光 · **已落地**
 
 - ~~设置导入导出、存储清理~~（已提前落地：`SET-DATA` / `DataBackupService`）
-- ~~空态 / 短动效~~（部分落地：未配置 vs 无数据文案与 CTA 对齐；Tab 切换 / 空态出现 / 灯箱 / 会话列表短 fade·slide）
+- ~~空态 / 短动效~~（已落地：空态 E7；短动效 E8 主路径对齐 `design_*` motion）
 - ~~各系统主题、密度专项~~（部分落地：token 表面层级/`scrim`；InfoBar·Snackbar 吃 token；comfortable/compact 作用于会话行高、Composer 内边距、设置表单项间距；字号五档极端档 overflow 微调；空态 `illustration` 插槽）
 - ~~空态插画~~（已落地：双端 `CustomPainter` 简易线稿，跟随 token 亮暗；覆盖未配置提供商 / 无消息·无生图·无视频 / 会话列表空 / 设置提供商列表空；不引入 `flutter_svg`）
 - ~~无障碍与键盘可达~~（已落地：双端全路径 Semantics/tooltip/触控≥48/liveRegion/焦点；Windows debug 可关语义树；**WCAG 2.2 AA 自证，非第三方认证**）
@@ -590,7 +613,18 @@ Flutter 落点：`packages/design_fluent` 与 `packages/design_material` 的 `Th
 - 实现：`flutter_single_instance` + `shell/single_instance_guard.dart`（握手早于窗口/仓库初始化；失败降级允许启动）。
 - **验收**：已运行时再开快捷方式/安装目录 exe → 仅一进程，已有窗前置；托盘隐藏后再开 → 主窗显示；锁失败仍可启动。
 
-### 9.1 实现对照（2026-09-07 核对 §5；更新 UX 2026-09-09 再对齐；P4 规格 2026-09-11）
+### P5 — 对话附图（`CHAT-ATTACH`）· **已落地**（P5-1～P5-5）
+
+- 落地 §5.4 `CHAT-ATTACH`：Composer 附加图片 → 多模态发送（按提供商能力）→ 用户气泡缩略 / 灯箱回看 → 会话资产清理。
+- **P5-1（core）**：attachments / `chat_image_cache` / vision 启发式 / multimodal parts / 清理与备份 omit。
+- **P5-2（desktop_fluent）**：Composer 附加·拖放·草稿缩略；气泡缩略 + 灯箱「附图」。
+- **P5-3（mobile_material）**：Composer 相册附加·草稿缩略；气泡缩略 + 灯箱「附图」；与桌面能力对等、UI 分端。
+- **P5-4（收口）**：禁用提示文案核对；core 非 vision 守门 / 清理路径补测；备份 omit 与旧无附件兼容已覆盖。
+- **P5-5（文档对照 + 测试闸门）**：§5.4 / §9 / §9.1 标已落地；CHANGELOG / architecture 同步；analyze + 相关 test 闸门。
+- **前置**：体验债收口（`VID-RERUN`、音量持久化、播放失败态等）已完成。
+- **验收**：可附加并发送；气泡可回看；不支持多模态的提供商入口禁用且有说明；清会话/清数据无残留文件；双端能力对等、UI 分端；旧无附件会话不报错。
+
+### 9.1 实现对照（2026-09-07 核对 §5；更新 UX 2026-09-09 再对齐；P4 规格 2026-09-11；P5 / 体验债 2026-09-14；P5-5 收口 2026-09-14）
 
 | 范围                                              | 结论                                                                                  |
 |-------------------------------------------------|-------------------------------------------------------------------------------------|
@@ -598,6 +632,8 @@ Flutter 落点：`packages/design_fluent` 与 `packages/design_material` 的 `Th
 | §5.8 反馈与系统力                                     | ✅（含 Material `SYS-SHARE`）；`FB-UPDATE`：冷启动/托盘弹窗 + 设置 NEW 角标 + 关于页/自动检查开关；跳过版本与静默失败降噪 |
 | 易漏项                                             | 耗时自适应、用户末条撤回、回合时间分隔、IME 藏底栏、关闭嵌关于、三模型可搜索、托盘三态均已落地                                   |
 | P4 `VID-PLAYER` / `VID-QUEUE` 封面 / `*-TURN-REF` | **`VID-PLAYER` 音量+真全屏已落地**；**`VID-QUEUE` 封面已落地**；**`*-TURN-REF` 已落地**（资产持久化 + 双端气泡缩略）              |
+| P5 `CHAT-ATTACH`                                | **已落地 ✅**（P5-1～P5-5：core · desktop · mobile · 禁用/清理/备份 · 文档+测试闸门）                                                         |
+| 体验债 `VID-RERUN` / 播放失败态 / 缓冲加载态 / 音量跨启动持久化 / transport / 灯箱来源 / 空态覆盖 / 短动效 / 密度字号极端档 | **`VID-RERUN` 已落地**；**播放失败/弱网提示+重试已落地**（E2）；**缓冲/加载态对齐已落地**（E3）；**音量跨启动持久化已落地**（E4：`core.video_playback.v1`）；**桌面 transport 回归通过**（E5：与 OD 单行语义一致，无代码改）；**灯箱来源角标已落地**（E6：参考/结果）；**空态覆盖面审计+补缺已落地**（E7）；**短动效一致性已落地**（E8：主路径对齐 `design_*` motion）；**密度/字号极端档已抽检+微调**（E9：底栏随字号抬高；Composer/会话顶栏/设置分段去过死高度） |
 
 ---
 
@@ -699,3 +735,20 @@ packages/design_material/
 | 2026-09-11 | **P4 实现**：IMG-TURN-REF / VID-TURN-REF（`referenceImages` 落盘 + 双端用户气泡缩略/灯箱；旧无图回合兼容） |
 | 2026-09-11 | **`*-TURN-REF` 布局**：气泡改为 meta 通栏 + **左缩略 / 右提示词**（对齐 OD）；双端落地 |
 | 2026-09-11 | **`SHELL-SINGLE`**：桌面单实例（次进程唤起已有窗/托盘恢复）；§5.3 / §9 P4b；移动不做；`desktop_fluent` 已落地（`flutter_single_instance`）                              |
+| 2026-09-14 | **体验债规格**：`VID-RERUN`（用此提示重跑，回填提示词+参考图、不自动提交）；`VID-PLAYER` 音量**跨启动持久化**已决；§5.6 / §9.1 |
+| 2026-09-14 | **P5 `CHAT-ATTACH`**：对话气泡附图规格写入 §5.4 / §9；与 `*-TURN-REF` 分轨 |
+| 2026-09-14 | **P5 细则**：最多 4 张 · MIME png/jpeg/webp · ≤4MiB · 视觉模型启发式 · `chat_image_cache` 分轨 · 有图可空文 · 灯箱角标「附图」 |
+| 2026-09-14 | **P5-1 core**：`attachments` + `persistAttachments` + vision 启发式 + multimodal parts + 备份 omit |
+| 2026-09-14 | **P5-2 desktop_fluent**：Composer 附加/拖放/草稿缩略；有图可空文；气泡缩略 + 灯箱「附图」 |
+| 2026-09-14 | **P5-3 mobile_material**：Composer 相册附加/草稿缩略；有图可空文；气泡缩略 + 灯箱「附图」；双端能力对等 |
+| 2026-09-14 | **P5-4 收口**：禁用提示/清理/备份核对；补非 vision 守门与 replaceAll/clearAll 清盘测；移动禁用文案 widget 测 |
+| 2026-09-14 | **P5-5 文档对照 + 测试闸门**：§5.4 / §9 / §9.1 标已落地；CHANGELOG / architecture 同步；analyze + chat/attach 相关 test |
+| 2026-09-14 | **体验债落地**：`VID-RERUN` 双端队列/播放器「用此提示重跑」（回填提示词+参数+可读参考图；不自动提交；忙态禁用） |
+| 2026-09-14 | **体验债落地**：`VID-PLAYER` 播放失败/弱网提示统一（`VideoPlaybackErrors` + 四处播放壳「重试」；§5.6） |
+| 2026-09-14 | **体验债落地**：`VID-PLAYER` 缓冲/加载态对齐（E3：封面占位+loading / keepFrame / buffering；§5.6） |
+| 2026-09-14 | **体验债落地**：`VID-PLAYER` 音量跨启动持久化（E4：`core.video_playback.v1` volume+muted；双端开播前 load / 拖动 debounce；§5.6） |
+| 2026-09-14 | **体验债回归**：桌面 `VID-PLAYER` transport（E5）对照 OD 抽检通过——内嵌/弹窗单行含全屏；动作区不重复全屏；全屏壳 Esc/退出；无代码改 |
+| 2026-09-14 | **体验债落地**：灯箱来源可区分（E6：双端「参考」/「结果」角标；`*-TURN-REF` 与结果时间线） |
+| 2026-09-14 | **体验债落地**：空态覆盖面（E7：审计补缺；桌面提供商 CTA「添加提供商」+ 详情未选中插画空态；§3.1 / `CHAT-EMPTY`） |
+| 2026-09-14 | **体验债落地**：短动效一致性（E8：主路径对齐 `FluentMotion` / `MaterialMotion`；可打断、无超长挡操作） |
+| 2026-09-14 | **体验债落地**：密度/字号极端档（E9：compact+更大 / comfortable+更小抽检；Material 底栏随字号抬高；Composer/会话顶栏/设置分段去过死高度） |

@@ -5,6 +5,26 @@ import 'package:design_fluent/design_fluent.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter/services.dart';
 
+/// 灯箱图片来源（`IMG-TURN-REF` / `CHAT-ATTACH` / 结果时间线可区分）。
+enum ImageLightboxSource {
+  /// 用户回合参考图（`*-TURN-REF`）。
+  reference,
+
+  /// 生成结果图。
+  result,
+
+  /// 对话用户消息附图（`CHAT-ATTACH`）。
+  attachment,
+}
+
+extension ImageLightboxSourceLabel on ImageLightboxSource {
+  String get label => switch (this) {
+        ImageLightboxSource.reference => '参考',
+        ImageLightboxSource.result => '结果',
+        ImageLightboxSource.attachment => '附图',
+      };
+}
+
 /// F-Lightbox：遮罩大图 + fade；Esc 关闭；多图左右键切换。
 class ImageLightbox extends StatefulWidget {
   const ImageLightbox({
@@ -13,6 +33,7 @@ class ImageLightbox extends StatefulWidget {
     required this.initialIndex,
     required this.bytesByIndex,
     required this.onClose,
+    this.source = ImageLightboxSource.result,
     this.loadBytesFor,
     this.onSave,
   });
@@ -21,6 +42,7 @@ class ImageLightbox extends StatefulWidget {
   final int initialIndex;
   final Map<int, Uint8List?> bytesByIndex;
   final VoidCallback onClose;
+  final ImageLightboxSource source;
   final Future<Uint8List?> Function(ImageRef ref)? loadBytesFor;
   final Future<void> Function(ImageRef ref)? onSave;
 
@@ -31,6 +53,7 @@ class ImageLightbox extends StatefulWidget {
     Future<void> Function()? onSave,
     List<ImageRef>? refs,
     int initialIndex = 0,
+    ImageLightboxSource source = ImageLightboxSource.result,
     Future<Uint8List?> Function(ImageRef ref)? loadBytesFor,
     Future<void> Function(ImageRef ref)? onSaveRef,
   }) async {
@@ -66,6 +89,7 @@ class ImageLightbox extends StatefulWidget {
           refs: list,
           initialIndex: start,
           bytesByIndex: bytesByIndex,
+          source: source,
           loadBytesFor: loader,
           onClose: () => Navigator.of(ctx).pop(),
           onSave: saveFn,
@@ -171,6 +195,8 @@ class _ImageLightboxState extends State<ImageLightbox> {
 
   @override
   Widget build(BuildContext context) {
+    final tokens = fluentTokensOf(context);
+    final sourceLabel = widget.source.label;
     final title = _multi ? '预览（${_index + 1}/${_refs.length}）' : '预览';
     return Focus(
       focusNode: _focus,
@@ -180,6 +206,22 @@ class _ImageLightboxState extends State<ImageLightbox> {
         constraints: const BoxConstraints(maxWidth: 900, maxHeight: 720),
         title: Row(
           children: [
+            Container(
+              margin: const EdgeInsets.only(right: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+              decoration: BoxDecoration(
+                color: tokens.primary.withValues(alpha: 0.14),
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: Text(
+                sourceLabel,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: tokens.primary,
+                ),
+              ),
+            ),
             Expanded(child: Text(title)),
             if (_multi) ...[
               Tooltip(

@@ -1,15 +1,24 @@
 import 'package:flutter/foundation.dart';
 
+import '../image/image_asset_store.dart';
+import '../image/image_models.dart';
 import '../util/id.dart';
+import 'chat_attach.dart';
 import 'chat_models.dart';
 import 'chat_session_storage.dart';
 
-/// 对话会话仓库：CRUD、activeId、流式更新、撤回、持久化。
+/// 对话会话仓库：CRUD、activeId、流式更新、撤回、持久化、CHAT-ATTACH 资产。
 class ChatSessionRepository extends ChangeNotifier {
-  ChatSessionRepository({required ChatSessionStorage storage})
-      : _storage = storage;
+  ChatSessionRepository({
+    required ChatSessionStorage storage,
+    ImageAssetStore? attachmentStore,
+  })  : _storage = storage,
+        _attachmentStore = attachmentStore ?? MemoryImageAssetStore();
 
   final ChatSessionStorage _storage;
+  final ImageAssetStore _attachmentStore;
+
+  ImageAssetStore get attachmentStore => _attachmentStore;
 
   List<ChatSession> _sessions = const [];
   String _activeId = '';
@@ -146,6 +155,10 @@ class ChatSessionRepository extends ChangeNotifier {
   }
 
   Future<void> removeSession(String id) async {
+    final doomed = _find(id);
+    if (doomed != null) {
+      await _deleteMessageAssets(doomed.messages);
+    }
     _sessions = _sessions.where((s) => s.id != id).toList();
     if (_sessions.isEmpty) {
       final session = _newSession();
@@ -161,6 +174,7 @@ class ChatSessionRepository extends ChangeNotifier {
   Future<void> clearMessages(String id) async {
     final index = _indexOf(id);
     if (index < 0) return;
+    await _deleteMessageAssets(_sessions[index].messages);
     _replace(
       index,
       _sessions[index].copyWith(messages: const [], updatedAt: _now()),
@@ -170,7 +184,12 @@ class ChatSessionRepository extends ChangeNotifier {
   }
 
   /// 用快照整体替换（导入备份用）；空列表时自动建一条空会话。
+  ///
+  /// 导入前清理当前会话附件文件，避免残留。
   Future<void> replaceAll(ChatStoreSnapshot snapshot) async {
+    await _deleteMessageAssets(
+      _sessions.expand((s) => s.messages).toList(),
+    );
     var sessions = List<ChatSession>.from(snapshot.sessions);
     var activeId = snapshot.activeId;
     if (sessions.isEmpty) {
@@ -188,7 +207,15 @@ class ChatSessionRepository extends ChangeNotifier {
   }
 
   /// 清除全部对话会话（保留一条空会话）。幂等。
-  Future<void> clearAllSessions() async {
+  Future<void> clearAllSessions({bool clearAttachmentCache = true}) async {
+    await _deleteMessageAssets(
+      _sessions.expand((s) => s.messages).toList(),
+    );
+    if (clearAttachmentCache) {
+      try {
+        await _attachmentStore.clearAll();
+      } catch (_) {}
+    }
     final session = _newSession();
     _sessions = [session];
     _activeId = session.id;
@@ -196,7 +223,7 @@ class ChatSessionRepository extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// 追加消息；首条 user 截 24 字作 title。
+  /// 追加消息；首条 user 截 24 字作 title（有附件无文时用「附图」）。
   Future<ChatMessage?> appendMessage(
     String sessionId, {
     required ChatRole role,
@@ -209,10 +236,12 @@ class ChatSessionRepository extends ChangeNotifier {
     int? latencyMs,
     String? id,
     int? createdAt,
+    List<ImageRef> attachments = const [],
   }) async {
     final index = _indexOf(sessionId);
     if (index < 0) return null;
     final session = _sessions[index];
+    final capped = sanitizeChatAttachments(attachments);
     final item = ChatMessage(
       id: id ?? createId('msg'),
       createdAt: createdAt ?? _now(),
@@ -224,13 +253,16 @@ class ChatSessionRepository extends ChangeNotifier {
       errorMessage: errorMessage,
       model: model,
       latencyMs: latencyMs,
+      attachments: capped,
     );
     var title = session.title;
-    if (title == '新对话' &&
-        role == ChatRole.user &&
-        content.trim().isNotEmpty) {
+    if (title == '新对话' && role == ChatRole.user) {
       final slice = content.trim();
-      title = slice.length <= 24 ? slice : slice.substring(0, 24);
+      if (slice.isNotEmpty) {
+        title = slice.length <= 24 ? slice : slice.substring(0, 24);
+      } else if (capped.isNotEmpty) {
+        title = '附图';
+      }
     }
     _replace(
       index,
@@ -259,6 +291,7 @@ class ChatSessionRepository extends ChangeNotifier {
     bool clearModel = false,
     int? latencyMs,
     bool clearLatencyMs = false,
+    List<ImageRef>? attachments,
     bool persist = true,
   }) async {
     final index = _indexOf(sessionId);
@@ -278,6 +311,8 @@ class ChatSessionRepository extends ChangeNotifier {
       clearModel: clearModel,
       latencyMs: latencyMs,
       clearLatencyMs: clearLatencyMs,
+      attachments:
+          attachments == null ? null : sanitizeChatAttachments(attachments),
     );
     _replace(
       index,
@@ -325,7 +360,7 @@ class ChatSessionRepository extends ChangeNotifier {
   }
 
   /// 撤回：删最后一对 user+assistant，或指定 user 消息及其后 assistant。
-  /// 返回被删 id；无操作返回 null。
+  /// 返回被删 id；无操作返回 null。含附图时一并删盘。
   Future<List<String>?> recallUserMessage(
     String sessionId, {
     String? userMessageId,
@@ -357,7 +392,10 @@ class ChatSessionRepository extends ChangeNotifier {
       removedIds.add(msgs[idx + 1].id);
       deleteCount = 2;
     }
-    final nextMsgs = List<ChatMessage>.from(msgs)..removeRange(idx, idx + deleteCount);
+    final toDelete = msgs.sublist(idx, idx + deleteCount);
+    await _deleteMessageAssets(toDelete);
+    final nextMsgs = List<ChatMessage>.from(msgs)
+      ..removeRange(idx, idx + deleteCount);
     _replace(
       index,
       session.copyWith(messages: nextMsgs, updatedAt: _now()),
@@ -365,5 +403,55 @@ class ChatSessionRepository extends ChangeNotifier {
     await _persist();
     notifyListeners();
     return removedIds;
+  }
+
+  /// 将附图字节落盘为会话资产，返回 file 型 [ImageRef] 列表（最多
+  /// [maxChatAttachments]）。超限 / MIME 不符的条目跳过。
+  Future<List<ImageRef>> persistAttachments(
+    String messageId,
+    List<Uint8List> byteList, {
+    List<String?>? mimes,
+  }) async {
+    final out = <ImageRef>[];
+    final limit = byteList.length > maxChatAttachments
+        ? maxChatAttachments
+        : byteList.length;
+    for (var i = 0; i < limit; i++) {
+      final bytes = byteList[i];
+      final mime = mimes != null && i < mimes.length ? mimes[i] : null;
+      if (validateChatAttachmentBytes(bytes, mime: mime) != null) {
+        continue;
+      }
+      final path = await _attachmentStore.savePng(
+        bytes,
+        '$chatAttachmentIdPrefix${messageId}_$i',
+      );
+      out.add(ImageRef(type: ImageRefType.file, src: path));
+    }
+    return out;
+  }
+
+  /// 读取附图字节（file / b64）；url 返回 null。
+  Future<Uint8List?> readAttachmentBytes(ImageRef ref) async {
+    switch (ref.type) {
+      case ImageRefType.file:
+        return _attachmentStore.read(ref.src);
+      case ImageRefType.b64:
+        return decodeImageB64(ref.src);
+      case ImageRefType.url:
+        return null;
+    }
+  }
+
+  Future<void> _deleteMessageAssets(List<ChatMessage> messages) async {
+    for (final m in messages) {
+      for (final img in m.attachments) {
+        if (img.type == ImageRefType.file && img.src.isNotEmpty) {
+          try {
+            await _attachmentStore.delete(img.src);
+          } catch (_) {}
+        }
+      }
+    }
   }
 }

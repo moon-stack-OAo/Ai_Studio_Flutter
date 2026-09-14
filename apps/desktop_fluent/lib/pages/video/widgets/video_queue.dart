@@ -21,6 +21,8 @@ class VideoQueue extends StatefulWidget {
     required this.onAbandon,
     this.onPlay,
     this.onSelect,
+    this.onRerun,
+    this.rerunEnabled = true,
     this.selectedId,
     this.onReload,
     this.isReloading,
@@ -40,6 +42,9 @@ class VideoQueue extends StatefulWidget {
   final void Function(VideoItem item) onAbandon;
   final void Function(VideoItem item)? onPlay;
   final void Function(VideoItem item)? onSelect;
+  /// `VID-RERUN`：用此提示重跑（回填 Composer）。
+  final void Function(VideoItem item)? onRerun;
+  final bool rerunEnabled;
   final String? selectedId;
   final void Function(VideoItem item)? onReload;
   final bool Function(VideoItem item)? isReloading;
@@ -131,6 +136,8 @@ class _VideoQueueState extends State<VideoQueue> {
             onAbandon: widget.onAbandon,
             onPlay: widget.onPlay,
             onSelect: widget.onSelect,
+            onRerun: widget.onRerun,
+            rerunEnabled: widget.rerunEnabled,
             onReload: widget.onReload,
             isReloading: widget.isReloading,
             posterService: widget.posterService,
@@ -212,7 +219,8 @@ class _StatusFilterChip extends StatelessWidget {
         builder: (context, states) {
           final focused = states.isFocused;
           return AnimatedContainer(
-            duration: const Duration(milliseconds: 100),
+            duration: FluentMotion.micro,
+            curve: FluentMotion.standard,
             height: 26,
             padding: const EdgeInsets.symmetric(horizontal: 10),
             alignment: Alignment.center,
@@ -338,6 +346,8 @@ class _TurnBlock extends StatelessWidget {
     required this.onAbandon,
     this.onPlay,
     this.onSelect,
+    this.onRerun,
+    this.rerunEnabled = true,
     this.onReload,
     this.isReloading,
     this.posterService,
@@ -356,6 +366,8 @@ class _TurnBlock extends StatelessWidget {
   final void Function(VideoItem item) onAbandon;
   final void Function(VideoItem item)? onPlay;
   final void Function(VideoItem item)? onSelect;
+  final void Function(VideoItem item)? onRerun;
+  final bool rerunEnabled;
   final void Function(VideoItem item)? onReload;
   final bool Function(VideoItem item)? isReloading;
   final Future<Uint8List?> Function(ImageRef ref)? loadReferenceBytes;
@@ -628,6 +640,17 @@ class _TurnBlock extends StatelessWidget {
     }
   }
 
+  Widget? _rerunBtn() {
+    if (onRerun == null) return null;
+    if (item.prompt.trim().isEmpty && item.referenceImages.isEmpty) {
+      return null;
+    }
+    return Button(
+      onPressed: rerunEnabled ? () => onRerun!(item) : null,
+      child: const Text('用此提示重跑'),
+    );
+  }
+
   List<Widget> _actions() {
     final reloadBtn = _canReload
         ? Button(
@@ -637,6 +660,7 @@ class _TurnBlock extends StatelessWidget {
             ),
           )
         : null;
+    final rerunBtn = _rerunBtn();
 
     switch (item.status) {
       case VideoItemStatus.loading:
@@ -651,6 +675,7 @@ class _TurnBlock extends StatelessWidget {
             onPressed: () => onAbandon(item),
             child: const Text('放弃'),
           ),
+          ?rerunBtn,
         ];
       case VideoItemStatus.success:
         return [
@@ -668,6 +693,7 @@ class _TurnBlock extends StatelessWidget {
             onPressed: () => onSave(item),
             child: const Text('另存为'),
           ),
+          ?rerunBtn,
         ];
       case VideoItemStatus.error:
         return [
@@ -681,9 +707,12 @@ class _TurnBlock extends StatelessWidget {
             onPressed: () => onAbandon(item),
             child: const Text('放弃'),
           ),
+          ?rerunBtn,
         ];
       case VideoItemStatus.abandoned:
-        return const [];
+        return [
+          ?rerunBtn,
+        ];
     }
   }
 }
@@ -980,7 +1009,8 @@ class _UserPromptBubbleState extends State<_UserPromptBubble> {
                 ),
                 AnimatedOpacity(
                   opacity: _hovered ? 1 : 0,
-                  duration: const Duration(milliseconds: 120),
+                  duration: FluentMotion.micro,
+                  curve: FluentMotion.standard,
                   child: IgnorePointer(
                     ignoring: !_hovered,
                     child: Padding(

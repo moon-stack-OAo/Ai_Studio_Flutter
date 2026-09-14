@@ -10,11 +10,16 @@ bool isGenerationBlocked({
   return false;
 }
 
-/// 对话发送门闩（CHAT-COMPOSER）。
+/// 对话发送门闩（CHAT-COMPOSER / CHAT-ATTACH）。
+///
+/// [textDraft] 为 null 时不校验正文（兼容仅查提供商/忙态的旧调用）。
+/// 传入非 null 时：有 [hasAttachments] 可空文，否则需 trim 非空。
 bool canSendChatMessage({
   required GenerationRuntime generation,
   required String? activeSessionId,
   required bool hasConfiguredChatProvider,
+  String? textDraft,
+  bool hasAttachments = false,
 }) {
   if (isGenerationBlocked(
     generation: generation,
@@ -22,7 +27,10 @@ bool canSendChatMessage({
   )) {
     return false;
   }
-  return hasConfiguredChatProvider;
+  if (!hasConfiguredChatProvider) return false;
+  if (textDraft == null) return true;
+  if (hasAttachments) return true;
+  return textDraft.trim().isNotEmpty;
 }
 
 /// 生图发送门闩（需非空 prompt）。

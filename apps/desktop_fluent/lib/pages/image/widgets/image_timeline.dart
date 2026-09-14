@@ -428,7 +428,8 @@ class _HoverCardState extends State<_HoverCard> {
                     bottom: 8,
                     child: AnimatedOpacity(
                       opacity: _showTools ? 1 : 0,
-                      duration: const Duration(milliseconds: 120),
+                      duration: FluentMotion.micro,
+                      curve: FluentMotion.standard,
                       child: IgnorePointer(
                         ignoring: !_showTools,
                         child: Row(
@@ -729,7 +730,8 @@ class _UserPromptBubbleState extends State<_UserPromptBubble> {
                 ),
                 AnimatedOpacity(
                   opacity: _hovered ? 1 : 0,
-                  duration: const Duration(milliseconds: 120),
+                  duration: FluentMotion.micro,
+                  curve: FluentMotion.standard,
                   child: IgnorePointer(
                     ignoring: !_hovered,
                     child: Padding(

@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mobile_material/app/theme_controller.dart';
 import 'package:mobile_material/main.dart';
 import 'package:mobile_material/pages/chat/session_list_page.dart';
+import 'package:mobile_material/pages/chat/widgets/composer.dart';
 import 'package:mobile_material/pages/image/widgets/image_composer.dart';
 import 'package:mobile_material/pages/settings/settings_providers_tab.dart';
 import 'package:mobile_material/shell/brand_intro_gate.dart';
@@ -477,6 +478,26 @@ void main() {
     expect(find.byIcon(Icons.send_rounded), findsOneWidget);
     expect(find.byTooltip('发送'), findsOneWidget);
     expect(find.bySemanticsLabel('消息输入'), findsWidgets);
+  });
+
+  testWidgets('composer attach disabled when vision unsupported', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Composer(
+            enabled: true,
+            streaming: false,
+            onSend: (_) {},
+            onStop: () {},
+            visionSupported: false,
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.byTooltip('当前模型不支持图片'), findsOneWidget);
+    expect(find.textContaining('当前模型不支持附图'), findsOneWidget);
   });
 
   testWidgets('image composer primary button exposes semantics', (tester) async {

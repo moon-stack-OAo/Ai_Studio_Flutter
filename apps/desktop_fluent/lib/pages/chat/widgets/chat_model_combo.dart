@@ -100,8 +100,11 @@ class _ChatModelComboState extends State<ChatModelCombo> {
             builder: (context, states) {
               final hovered = states.isHovered || states.isPressed;
               return Container(
-                height: 30,
-                padding: const EdgeInsets.symmetric(horizontal: 10),
+                constraints: const BoxConstraints(minHeight: 30),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 4,
+                ),
                 decoration: BoxDecoration(
                   color: tokens.surface,
                   borderRadius: BorderRadius.circular(6),

@@ -40,7 +40,7 @@ class OpenAiCompatibleChatClient {
   /// 使用 [ActiveChatCredentials] 发起流式对话。
   Future<String> streamChatWithCredentials(
     ActiveChatCredentials credentials, {
-    required List<Map<String, String>> messages,
+    required List<Map<String, dynamic>> messages,
     void Function(String delta, String fullText)? onDelta,
     double temperature = defaultChatTemperature,
     int? maxTokens,
@@ -69,7 +69,7 @@ class OpenAiCompatibleChatClient {
     required String baseUrl,
     required String apiKey,
     required String model,
-    required List<Map<String, String>> messages,
+    required List<Map<String, dynamic>> messages,
     void Function(String delta, String fullText)? onDelta,
     double temperature = defaultChatTemperature,
     int? maxTokens,

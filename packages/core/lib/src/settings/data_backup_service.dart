@@ -33,6 +33,7 @@ class DataBackupService {
     required VideoSessionRepository videoSessions,
     AppLogRepository? logs,
     ImageAssetStore? imageAssetStore,
+    ImageAssetStore? chatAttachmentStore,
     VideoAssetStore? videoAssetStore,
     this._videoPosterStore,
   })  : _providers = providers,
@@ -43,6 +44,8 @@ class DataBackupService {
         _videoSessions = videoSessions,
         _logs = logs,
         _imageAssetStore = imageAssetStore ?? imageSessions.assetStore,
+        _chatAttachmentStore =
+            chatAttachmentStore ?? chatSessions.attachmentStore,
         _videoAssetStore = videoAssetStore ?? videoSessions.assetStore;
 
   final ProviderRepository _providers;
@@ -53,6 +56,7 @@ class DataBackupService {
   final VideoSessionRepository _videoSessions;
   final AppLogRepository? _logs;
   final ImageAssetStore _imageAssetStore;
+  final ImageAssetStore _chatAttachmentStore;
   final VideoAssetStore _videoAssetStore;
   final VideoPosterStore? _videoPosterStore;
 
@@ -227,7 +231,9 @@ class DataBackupService {
     var clearedSecrets = false;
 
     if (flags.sessions) {
-      await _chatSessions.clearAllSessions();
+      await _chatSessions.clearAllSessions(
+        clearAttachmentCache: flags.mediaCache,
+      );
       await _imageSessions.clearAllSessions(
         clearMediaCache: flags.mediaCache,
       );
@@ -244,6 +250,9 @@ class DataBackupService {
     } else if (flags.mediaCache) {
       try {
         await _imageAssetStore.clearAll();
+      } catch (_) {}
+      try {
+        await _chatAttachmentStore.clearAll();
       } catch (_) {}
       try {
         await _videoAssetStore.clearAll();
@@ -348,6 +357,8 @@ class DataBackupService {
     } catch (_) {}
 
     final imageBytes = await _safeEstimate(_imageAssetStore.estimateBytes);
+    final chatAttBytes =
+        await _safeEstimate(_chatAttachmentStore.estimateBytes);
     final videoBytes = await _safeEstimate(_videoAssetStore.estimateBytes);
     final posterStore = _videoPosterStore;
     final posterBytes = posterStore == null
@@ -361,7 +372,7 @@ class DataBackupService {
       chatMessageCount: chatMessages,
       providerCount: _providers.providers.length,
       logEntryCount: _logs?.totalCount ?? 0,
-      imageCacheBytes: imageBytes,
+      imageCacheBytes: imageBytes + chatAttBytes,
       videoCacheBytes: videoBytes + posterBytes,
       approxJsonBytes: approxJson,
     );

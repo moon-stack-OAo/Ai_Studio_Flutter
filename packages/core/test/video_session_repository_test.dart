@@ -428,4 +428,56 @@ void main() {
     expect(done.needsMaterialize, isTrue);
     expect(done.needsResume, isFalse);
   });
+
+  test('applyVideoJobCompletion：可播直链 → success', () async {
+    final sid = repo.activeId;
+    final item = await repo.appendLoadingItem(
+      sid,
+      mode: VideoGenMode.text,
+      prompt: 'apply-ok',
+    );
+    await applyVideoJobCompletion(
+      repository: repo,
+      sessionId: sid,
+      item: item!,
+      job: const VideoJob(
+        jobId: 'j_ok',
+        status: VideoJobWireStatus.completed,
+        videoUrl: 'https://cdn.example/ok.mp4',
+        remoteVideoUrl: 'https://cdn.example/ok.mp4',
+      ),
+    );
+    final done = repo.activeSession!.items.last;
+    expect(done.status, VideoItemStatus.success);
+    expect(done.videoUrl, 'https://cdn.example/ok.mp4');
+    expect(done.needsMaterialize, isFalse);
+  });
+
+  test('applyVideoJobCompletion：completed 无可播路径 → markNeedsMaterialize，不标 success',
+      () async {
+    final sid = repo.activeId;
+    final item = await repo.appendLoadingItem(
+      sid,
+      mode: VideoGenMode.text,
+      prompt: 'apply-empty',
+    );
+    await applyVideoJobCompletion(
+      repository: repo,
+      sessionId: sid,
+      item: item!,
+      job: const VideoJob(
+        jobId: 'j_empty',
+        status: VideoJobWireStatus.completed,
+        needsMaterialize: true,
+        errorMessage: '视频已生成但未返回可播放地址',
+        remoteVideoUrl: 'https://api.example/v1/videos/j_empty/content',
+      ),
+    );
+    final done = repo.activeSession!.items.last;
+    expect(done.status, VideoItemStatus.error);
+    expect(done.needsMaterialize, isTrue);
+    expect(done.videoUrl, isNull);
+    expect(done.remoteVideoUrl, contains('/content'));
+    expect(done.errorMessage, contains('未返回可播放地址'));
+  });
 }

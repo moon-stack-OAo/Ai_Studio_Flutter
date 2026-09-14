@@ -758,6 +758,60 @@ void main() {
     expect(store.entries[out.localPath!], isNotNull);
   });
 
+  test('materialize：相对 /content 须鉴权下载，不可当本地路径', () async {
+    final store = MemoryVideoAssetStore();
+    final fakeMp4 = Uint8List.fromList([0, 0, 0, 0, 0x66, 0x74, 0x79, 0x70]);
+    final paths = <String>[];
+    final client = MockClient((request) async {
+      paths.add(request.url.toString());
+      expect(request.headers['Authorization'], 'Bearer sk');
+      return http.Response.bytes(fakeMp4, 200);
+    });
+    final api = OpenAiCompatibleVideoClient(client: client);
+    final out = await api.materialize(
+      const VideoJob(
+        jobId: 'job_rel',
+        status: VideoJobWireStatus.completed,
+        videoUrl: '/v1/videos/job_rel/content',
+      ),
+      baseUrl: 'https://livancen.top/v1',
+      apiKey: 'sk',
+      assetStore: store,
+      materializeId: 'item_rel',
+    );
+    expect(paths, [
+      'https://livancen.top/v1/videos/job_rel/content',
+    ]);
+    expect(out.needsMaterialize, isFalse);
+    expect(out.localPath, startsWith('memory://'));
+    expect(resolvePlayableVideoPath(out), isNotEmpty);
+    expect(store.entries[out.localPath!], isNotNull);
+  });
+
+  test('resolveVideoContentUrl：避免 /v1 与相对 /v1/... 双拼', () {
+    expect(
+      resolveVideoContentUrl(
+        '/v1/videos/j1/content',
+        'https://livancen.top/v1',
+      ),
+      'https://livancen.top/v1/videos/j1/content',
+    );
+    expect(
+      resolveVideoContentUrl(
+        '/videos/j1/content',
+        'https://livancen.top/v1',
+      ),
+      'https://livancen.top/v1/videos/j1/content',
+    );
+    expect(
+      resolveVideoContentUrl(
+        'https://cdn.example/a.mp4',
+        'https://livancen.top/v1',
+      ),
+      'https://cdn.example/a.mp4',
+    );
+  });
+
   test('materialize：/content 401 保留具体错误', () async {
     final client = MockClient((request) async {
       return http.Response(
@@ -939,6 +993,157 @@ void main() {
     expect(job.status, VideoJobWireStatus.completed);
     expect(job.videoUrl, 'https://vidgen.x.ai/ok.mp4');
     expect(job.needsMaterialize, isFalse);
+  });
+
+  test('xAI createJob：误标 success/completed 且无 url → 强制 queued', () async {
+    final client = MockClient((request) async {
+      expect(request.method, 'POST');
+      return http.Response(
+        jsonEncode({
+          'request_id': 'req_force_q',
+          'status': 'completed',
+          'progress': 100,
+        }),
+        200,
+      );
+    });
+    final api = OpenAiCompatibleVideoClient(client: client);
+    final job = await api.createJob(
+      baseUrl: 'https://api.x.ai/v1',
+      apiKey: 'xai-k',
+      model: 'grok-imagine-video',
+      prompt: 'force queue',
+      providerType: ProviderType.xai,
+    );
+    expect(job.jobId, 'req_force_q');
+    expect(job.status, VideoJobWireStatus.queued);
+    expect(job.videoUrl, isNull);
+  });
+
+  test('OpenAI generate：创建误标 completed 且无 url 时进入 waitJob，不以可播成功结束',
+      () async {
+    var polls = 0;
+    final client = MockClient((request) async {
+      if (request.method == 'POST') {
+        return http.Response(
+          jsonEncode({
+            'id': 'job_fake_done',
+            'status': 'completed',
+            'progress': 100,
+          }),
+          200,
+          headers: {'content-type': 'application/json'},
+        );
+      }
+      // getJob 完成态无 url 会试 /content；失败 → needsMaterialize，waitJob 结束
+      if (request.url.path.endsWith('/content')) {
+        return http.Response('not ready', 404);
+      }
+      polls++;
+      return http.Response(
+        jsonEncode({
+          'id': 'job_fake_done',
+          'status': 'completed',
+          'progress': 100,
+        }),
+        200,
+      );
+    });
+    final api = OpenAiCompatibleVideoClient(
+      client: client,
+      pollInterval: const Duration(milliseconds: 5),
+    );
+    final job = await api.generate(
+      baseUrl: 'https://api.example.com/v1',
+      apiKey: 'sk',
+      model: 'sora-2',
+      prompt: 'fake done',
+      providerType: ProviderType.openai,
+      interval: const Duration(milliseconds: 5),
+    );
+    // generate 不得把「假 completed」当可播成功返回；须走 waitJob（至少 1 次 GET）
+    expect(polls, greaterThanOrEqualTo(1));
+    expect(job.status, VideoJobWireStatus.completed);
+    expect(job.needsMaterialize, isTrue);
+    expect(resolvePlayableVideoPath(job), isEmpty);
+  });
+
+  test('waitJob：completed 无 url 且 needsMaterialize 时结束，不无限轮询',
+      () async {
+    var polls = 0;
+    final client = MockClient((request) async {
+      if (request.url.path.endsWith('/content')) {
+        return http.Response('gone', 404);
+      }
+      polls++;
+      return http.Response(
+        jsonEncode({
+          'id': 'job_stuck',
+          'status': 'completed',
+          'progress': 100,
+        }),
+        200,
+      );
+    });
+    final api = OpenAiCompatibleVideoClient(
+      client: client,
+      pollInterval: const Duration(milliseconds: 5),
+    );
+    final job = await api.waitJob(
+      baseUrl: 'https://api.example.com/v1',
+      apiKey: 'sk',
+      jobId: 'job_stuck',
+      providerType: ProviderType.openai,
+      assetStore: MemoryVideoAssetStore(),
+      materializeId: 'item_stuck',
+      interval: const Duration(milliseconds: 5),
+      timeout: const Duration(seconds: 2),
+    );
+    expect(job.status, VideoJobWireStatus.completed);
+    expect(job.needsMaterialize, isTrue);
+    expect(resolvePlayableVideoPath(job), isEmpty);
+    expect(polls, 1);
+  });
+
+  test('pickRemoteVideoUrl：优先直链 https，其次 /content', () {
+    expect(
+      pickRemoteVideoUrl(
+        const VideoJob(
+          jobId: 'j',
+          status: VideoJobWireStatus.completed,
+          videoUrl: 'https://api.example/v1/videos/j/content',
+          remoteVideoUrl: 'https://cdn.example/direct.mp4',
+        ),
+      ),
+      'https://cdn.example/direct.mp4',
+    );
+    expect(
+      pickRemoteVideoUrl(
+        const VideoJob(
+          jobId: 'j',
+          status: VideoJobWireStatus.completed,
+          videoUrl: 'https://api.example/v1/videos/j/content',
+        ),
+      ),
+      'https://api.example/v1/videos/j/content',
+    );
+    expect(
+      pickRemoteVideoUrl(
+        const VideoJob(
+          jobId: 'j',
+          status: VideoJobWireStatus.completed,
+        ),
+        VideoItem(
+          id: 'i',
+          createdAt: 1,
+          mode: VideoGenMode.text,
+          prompt: 'x',
+          status: VideoItemStatus.error,
+          remoteVideoUrl: 'https://cdn.example/from-item.mp4',
+        ),
+      ),
+      'https://cdn.example/from-item.mp4',
+    );
   });
 
   test('img2video 允许空提示词', () async {

@@ -43,6 +43,8 @@ Future<void> showVideoDesktopFullscreen(
       PageRouteBuilder<void>(
         opaque: true,
         barrierDismissible: false,
+        transitionDuration: FluentMotion.lightbox,
+        reverseTransitionDuration: FluentMotion.lightbox,
         pageBuilder: (ctx, animation, secondaryAnimation) {
           return _DesktopFullscreenPage(
             item: item,
@@ -51,7 +53,13 @@ Future<void> showVideoDesktopFullscreen(
           );
         },
         transitionsBuilder: (ctx, animation, secondaryAnimation, child) {
-          return FadeTransition(opacity: animation, child: child);
+          return FadeTransition(
+            opacity: CurvedAnimation(
+              parent: animation,
+              curve: FluentMotion.standard,
+            ),
+            child: child,
+          );
         },
       ),
     );
@@ -85,6 +93,7 @@ class _DesktopFullscreenPageState extends State<_DesktopFullscreenPage> {
   final List<StreamSubscription<dynamic>> _subs = [];
   String? _error;
   bool _ready = false;
+  bool _loading = true;
   double _volume = 100;
   double _volumeBeforeMute = 100;
   bool _muted = false;
@@ -126,7 +135,14 @@ class _DesktopFullscreenPageState extends State<_DesktopFullscreenPage> {
       }),
       player.stream.error.listen((msg) {
         if (!mounted || msg.trim().isEmpty) return;
-        setState(() => _error = '播放出错：$msg');
+        final path = resolveVideoItemPlayablePath(widget.item);
+        setState(() {
+          _ready = false;
+          _error = VideoPlaybackErrors.streamFailed(
+            msg,
+            isRemote: path != null && _isHttp(path),
+          );
+        });
       }),
     ]);
   }
@@ -134,32 +150,96 @@ class _DesktopFullscreenPageState extends State<_DesktopFullscreenPage> {
   @override
   void initState() {
     super.initState();
+    // 入场时用调用方传入的音量作即时 UI；open 前再 load 共享 prefs 对齐跨壳。
     _volume = widget.initialVolume.clamp(0.0, 100.0);
     _volumeBeforeMute = _volume <= 0 ? 100 : _volume;
     _muted = _volume <= 0;
     _init();
   }
 
+  Future<void> _loadVolumePrefs() async {
+    final prefs = await VideoPlaybackPrefsWriter.instance.load();
+    if (!mounted) return;
+    setState(() {
+      _volume = prefs.volume;
+      _volumeBeforeMute =
+          prefs.volume <= 0 ? VideoPlaybackPrefs.defaultVolume : prefs.volume;
+      _muted = prefs.muted;
+    });
+  }
+
+  void _persistVolume() {
+    VideoPlaybackPrefsWriter.instance.scheduleSave(
+      VideoPlaybackPrefs.fromUi(
+        volume: _volume,
+        volumeBeforeMute: _volumeBeforeMute,
+        muted: _muted,
+      ),
+    );
+  }
+
+  Future<void> _retryPlayback() async {
+    await _disposeCurrentPlayer();
+    if (!mounted) return;
+    setState(() {
+      _error = null;
+      _ready = false;
+      _loading = true;
+    });
+    await _init();
+  }
+
+  Future<void> _disposeCurrentPlayer() async {
+    _clearSubs();
+    final p = _player;
+    _player = null;
+    _videoController = null;
+    if (p == null) return;
+    try {
+      await p.dispose();
+    } catch (_) {}
+  }
+
   Future<void> _init() async {
+    if (mounted) {
+      setState(() {
+        _error = null;
+        _loading = true;
+        _ready = false;
+      });
+    }
     final path = resolveVideoItemPlayablePath(widget.item);
     if (path == null || path.isEmpty) {
-      setState(() => _error = '没有可播放的视频地址');
+      setState(() {
+        _loading = false;
+        _error = VideoPlaybackErrors.noAddress;
+      });
       return;
     }
     if (path.startsWith('memory://')) {
-      setState(() => _error = '内存视频请先另存或系统打开');
+      setState(() {
+        _loading = false;
+        _error = VideoPlaybackErrors.memoryOnly;
+      });
       return;
     }
+    final remote = _isHttp(path);
     try {
-      if (!_isHttp(path)) {
+      if (!remote) {
         final filePath =
             path.startsWith('file:') ? Uri.parse(path).toFilePath() : path;
         final f = File(filePath);
         if (!await f.exists()) {
-          setState(() => _error = '本地文件不存在');
+          setState(() {
+            _loading = false;
+            _error = VideoPlaybackErrors.localMissing;
+          });
           return;
         }
       }
+
+      await _loadVolumePrefs();
+      if (!mounted) return;
 
       final player = Player();
       await player.setPlaylistMode(PlaylistMode.none);
@@ -181,26 +261,152 @@ class _DesktopFullscreenPageState extends State<_DesktopFullscreenPage> {
         await player.dispose();
         return;
       }
-      setState(() => _ready = true);
+      setState(() {
+        _ready = true;
+        _loading = false;
+        _error = null;
+      });
     } catch (e) {
+      await _disposeCurrentPlayer();
       if (!mounted) return;
-      setState(() => _error = '播放器初始化失败：$e');
+      setState(() {
+        _ready = false;
+        _loading = false;
+        _error = VideoPlaybackErrors.initFailed(e, isRemote: remote);
+      });
     }
+  }
+
+  Widget? _buildPoster() {
+    final local = (widget.item.posterLocalPath ?? '').trim();
+    if (local.isNotEmpty && !local.startsWith('memory-poster://')) {
+      final file = File(local);
+      if (file.existsSync()) {
+        return Image.file(
+          file,
+          fit: BoxFit.cover,
+          errorBuilder: (_, _, _) => const SizedBox.shrink(),
+        );
+      }
+    }
+    final url = (widget.item.posterUrl ?? '').trim();
+    if (VideoPosterService.isRemotePosterUrl(url)) {
+      return Image.network(
+        url,
+        fit: BoxFit.cover,
+        errorBuilder: (_, _, _) => const SizedBox.shrink(),
+      );
+    }
+    return null;
+  }
+
+  double _stageAspectRatio() {
+    final p = _player;
+    if (_ready && p != null) {
+      final w = p.state.width;
+      final h = p.state.height;
+      if (w != null && h != null && w > 0 && h > 0) {
+        return w / h;
+      }
+    }
+    return _parseAspect(widget.item.aspectRatio) ?? (16 / 9);
+  }
+
+  static double? _parseAspect(String? raw) {
+    final s = (raw ?? '').trim();
+    if (s.isEmpty) return null;
+    final parts = s.split(':');
+    if (parts.length != 2) return null;
+    final w = double.tryParse(parts[0].trim());
+    final h = double.tryParse(parts[1].trim());
+    if (w == null || h == null || w <= 0 || h <= 0) return null;
+    return w / h;
+  }
+
+  Widget _buildStage(FluentTokens tokens) {
+    if (_error != null && !_ready) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                _error!,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: tokens.danger,
+                  fontFamily: tokens.fontFamily,
+                ),
+              ),
+              const SizedBox(height: 16),
+              FilledButton(
+                onPressed: _loading ? null : () => _retryPlayback(),
+                child: const Text('重试'),
+              ),
+              const SizedBox(height: 12),
+              Button(
+                onPressed: widget.onExit,
+                child: const Text('退出全屏'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    final children = <Widget>[];
+    if (_ready && _videoController != null) {
+      children.add(
+        Center(
+          child: AspectRatio(
+            aspectRatio: _stageAspectRatio(),
+            child: Video(
+              controller: _videoController!,
+              controls: NoVideoControls,
+              fit: BoxFit.contain,
+            ),
+          ),
+        ),
+      );
+    } else {
+      final poster = _buildPoster();
+      if (poster != null) {
+        children.add(
+          Center(
+            child: AspectRatio(
+              aspectRatio: _stageAspectRatio(),
+              child: poster,
+            ),
+          ),
+        );
+      }
+    }
+
+    final buffering =
+        _ready && _player != null && _player!.state.buffering && !_loading;
+    if (_loading || buffering) {
+      children.add(
+        const ColoredBox(
+          color: Color(0x66000000),
+          child: Center(child: ProgressRing()),
+        ),
+      );
+    }
+
+    if (children.isEmpty) {
+      return const Center(child: ProgressRing());
+    }
+    if (children.length == 1) {
+      return children.first;
+    }
+    return Stack(fit: StackFit.expand, children: children);
   }
 
   @override
   void dispose() {
-    _clearSubs();
-    final p = _player;
-    _player = null;
-    _videoController = null;
-    if (p != null) {
-      unawaited(() async {
-        try {
-          await p.dispose();
-        } catch (_) {}
-      }());
-    }
+    unawaited(VideoPlaybackPrefsWriter.instance.flush());
+    unawaited(_disposeCurrentPlayer());
     super.dispose();
   }
 
@@ -228,6 +434,7 @@ class _DesktopFullscreenPageState extends State<_DesktopFullscreenPage> {
       _muted = v <= 0;
       if (v > 0) _volumeBeforeMute = v;
     });
+    _persistVolume();
     final player = _player;
     if (player != null) {
       try {
@@ -266,132 +473,129 @@ class _DesktopFullscreenPageState extends State<_DesktopFullscreenPage> {
         return KeyEventResult.ignored;
       },
       child: ColoredBox(
-        color: Colors.black,
-        child: _error != null
-            ? Center(
-                child: Text(
-                  _error!,
-                  style: TextStyle(
-                    color: tokens.danger,
-                    fontFamily: tokens.fontFamily,
+        color: const Color(0xFF0F1115),
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            _buildStage(tokens),
+            if (_ready && _player != null && _videoController != null) ...[
+              Positioned(
+                top: 12,
+                right: 12,
+                child: Tooltip(
+                  message: '退出全屏 (Esc)',
+                  child: Semantics(
+                    button: true,
+                    label: '退出全屏',
+                    excludeSemantics: true,
+                    child: IconButton(
+                      icon: const Icon(
+                        FluentIcons.back_to_window,
+                        size: 18,
+                        color: Colors.white,
+                      ),
+                      onPressed: widget.onExit,
+                    ),
                   ),
                 ),
-              )
-            : !_ready || _player == null || _videoController == null
-                ? const Center(child: ProgressRing())
-                : _buildPlayer(tokens),
+              ),
+              Positioned(
+                left: 16,
+                right: 16,
+                bottom: 16,
+                child: _buildTransport(tokens),
+              ),
+            ] else if (_error == null)
+              Positioned(
+                top: 12,
+                right: 12,
+                child: Tooltip(
+                  message: '退出全屏 (Esc)',
+                  child: Semantics(
+                    button: true,
+                    label: '退出全屏',
+                    excludeSemantics: true,
+                    child: IconButton(
+                      icon: const Icon(
+                        FluentIcons.back_to_window,
+                        size: 18,
+                        color: Colors.white,
+                      ),
+                      onPressed: widget.onExit,
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }
 
-  Widget _buildPlayer(FluentTokens tokens) {
+  Widget _buildTransport(FluentTokens tokens) {
     final player = _player!;
     final playing = player.state.playing && !player.state.completed;
     final position = player.state.position;
     final duration = player.state.duration;
-    final w = player.state.width;
-    final h = player.state.height;
-    final ar = (w != null && h != null && w > 0 && h > 0) ? (w / h) : (16 / 9);
-
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        Center(
-          child: AspectRatio(
-            aspectRatio: ar,
-            child: Video(
-              controller: _videoController!,
-              controls: NoVideoControls,
-              fit: BoxFit.contain,
-            ),
-          ),
-        ),
-        Positioned(
-          top: 12,
-          right: 12,
-          child: Tooltip(
-            message: '退出全屏 (Esc)',
-            child: Semantics(
-              button: true,
-              label: '退出全屏',
-              excludeSemantics: true,
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.55),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+        child: Row(
+          children: [
+            Tooltip(
+              message: playing ? '暂停' : '播放',
               child: IconButton(
-                icon: const Icon(
-                  FluentIcons.back_to_window,
-                  size: 18,
+                icon: Icon(
+                  playing ? FluentIcons.pause : FluentIcons.play,
+                  size: 14,
                   color: Colors.white,
                 ),
-                onPressed: widget.onExit,
+                onPressed: () => _toggle(),
               ),
             ),
-          ),
-        ),
-        Positioned(
-          left: 16,
-          right: 16,
-          bottom: 16,
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              color: Colors.black.withValues(alpha: 0.55),
-              borderRadius: BorderRadius.circular(10),
+            Expanded(
+              child: _FsScrubber(player: player),
             ),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-              child: Row(
-                children: [
-                  Tooltip(
-                    message: playing ? '暂停' : '播放',
-                    child: IconButton(
-                      icon: Icon(
-                        playing ? FluentIcons.pause : FluentIcons.play,
-                        size: 14,
-                        color: Colors.white,
-                      ),
-                      onPressed: () => _toggle(),
-                    ),
-                  ),
-                  Expanded(
-                    child: _FsScrubber(player: player),
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    '${_fmt(position)} / ${_fmt(duration)}',
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: Colors.white.withValues(alpha: 0.8),
-                      fontFamily: tokens.fontFamily,
-                      fontFeatures: const [FontFeature.tabularFigures()],
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Tooltip(
-                    message: _muted ? '取消静音' : '静音',
-                    child: IconButton(
-                      icon: Icon(
-                        _muted
-                            ? FluentIcons.volume_disabled
-                            : FluentIcons.volume2,
-                        size: 14,
-                        color: Colors.white,
-                      ),
-                      onPressed: () => _toggleMute(),
-                    ),
-                  ),
-                  SizedBox(
-                    width: 110,
-                    child: Slider(
-                      value: _muted ? 0 : _volume,
-                      min: 0,
-                      max: 100,
-                      onChanged: (v) => _setVolume(v),
-                    ),
-                  ),
-                ],
+            const SizedBox(width: 8),
+            Text(
+              '${_fmt(position)} / ${_fmt(duration)}',
+              style: TextStyle(
+                fontSize: 11,
+                color: Colors.white.withValues(alpha: 0.8),
+                fontFamily: tokens.fontFamily,
+                fontFeatures: const [FontFeature.tabularFigures()],
               ),
             ),
-          ),
+            const SizedBox(width: 8),
+            Tooltip(
+              message: _muted ? '取消静音' : '静音',
+              child: IconButton(
+                icon: Icon(
+                  _muted
+                      ? FluentIcons.volume_disabled
+                      : FluentIcons.volume2,
+                  size: 14,
+                  color: Colors.white,
+                ),
+                onPressed: () => _toggleMute(),
+              ),
+            ),
+            SizedBox(
+              width: 110,
+              child: Slider(
+                value: _muted ? 0 : _volume,
+                min: 0,
+                max: 100,
+                onChanged: (v) => _setVolume(v),
+              ),
+            ),
+          ],
         ),
-      ],
+      ),
     );
   }
 }

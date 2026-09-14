@@ -241,7 +241,9 @@ class DataBackupPayload {
     if (chatSessions != null) {
       map['chat'] = {
         'activeId': chatActiveId ?? '',
-        'sessions': chatSessions!.map((s) => s.toJson()).toList(),
+        'sessions': [
+          for (final s in chatSessions!) _chatSessionMetaJson(s),
+        ],
       };
     }
     if (imageSessions != null) {
@@ -440,6 +442,26 @@ List<VideoSession> _parseVideoSessions(Object? raw) {
     }
   }
   return out;
+}
+
+/// 对话会话导出：省略附件本地 file / b64 字节。
+Map<String, dynamic> _chatSessionMetaJson(ChatSession session) {
+  final messages = <Map<String, dynamic>>[];
+  for (final m in session.messages) {
+    final map = Map<String, dynamic>.from(m.toJson());
+    if (m.attachments.isNotEmpty) {
+      map['attachments'] = _omitLocalImageRefs(m.attachments);
+    }
+    messages.add(map);
+  }
+  return {
+    'id': session.id,
+    'title': session.title,
+    'createdAt': session.createdAt,
+    'updatedAt': session.updatedAt,
+    'messages': messages,
+    'overrides': session.overrides.toJson(),
+  };
 }
 
 /// 生图会话导出：去掉本地 file / 过大 b64，仅保留引用元数据。

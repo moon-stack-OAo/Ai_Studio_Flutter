@@ -1,3 +1,6 @@
+import '../image/image_models.dart';
+import 'chat_attach.dart';
+
 /// 对话消息与会话模型。
 
 enum ChatRole {
@@ -94,6 +97,7 @@ class ChatMessage {
     this.errorMessage,
     this.model,
     this.latencyMs,
+    this.attachments = const [],
   });
 
   final String id;
@@ -113,6 +117,9 @@ class ChatMessage {
   /// 从发起请求到流式结束/停止/错误的耗时（毫秒）；旧消息可缺省。
   final int? latencyMs;
 
+  /// 用户消息附图（CHAT-ATTACH）；旧 JSON 无字段 → 空列表。
+  final List<ImageRef> attachments;
+
   ChatMessage copyWith({
     String? id,
     int? createdAt,
@@ -127,6 +134,7 @@ class ChatMessage {
     bool clearModel = false,
     int? latencyMs,
     bool clearLatencyMs = false,
+    List<ImageRef>? attachments,
   }) {
     return ChatMessage(
       id: id ?? this.id,
@@ -140,6 +148,7 @@ class ChatMessage {
           clearErrorMessage ? null : (errorMessage ?? this.errorMessage),
       model: clearModel ? null : (model ?? this.model),
       latencyMs: clearLatencyMs ? null : (latencyMs ?? this.latencyMs),
+      attachments: attachments ?? this.attachments,
     );
   }
 
@@ -154,6 +163,8 @@ class ChatMessage {
         if (errorMessage != null) 'errorMessage': errorMessage,
         if (model != null && model!.isNotEmpty) 'model': model,
         if (latencyMs != null) 'latencyMs': latencyMs,
+        if (attachments.isNotEmpty)
+          'attachments': attachments.map((a) => a.toJson()).toList(),
       };
 
   factory ChatMessage.fromJson(Map<String, dynamic> json) {
@@ -166,6 +177,15 @@ class ChatMessage {
       latency = int.tryParse(rawLatency.toString());
     }
     final modelRaw = json['model']?.toString();
+    final refs = <ImageRef>[];
+    final rawAtt = json['attachments'];
+    if (rawAtt is List) {
+      for (final e in rawAtt) {
+        if (e is Map) {
+          refs.add(ImageRef.fromJson(Map<String, dynamic>.from(e)));
+        }
+      }
+    }
     return ChatMessage(
       id: json['id']?.toString() ?? '',
       createdAt: (json['createdAt'] is num)
@@ -179,6 +199,7 @@ class ChatMessage {
       errorMessage: json['errorMessage']?.toString(),
       model: (modelRaw == null || modelRaw.isEmpty) ? null : modelRaw,
       latencyMs: latency,
+      attachments: sanitizeChatAttachments(refs),
     );
   }
 }

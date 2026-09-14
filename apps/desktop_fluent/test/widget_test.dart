@@ -515,6 +515,7 @@ void main() {
             streaming: false,
             onSend: (_) {},
             onStop: () {},
+            visionSupported: true,
           ),
         ),
       ),
@@ -523,6 +524,7 @@ void main() {
 
     expect(find.text('发送'), findsOneWidget);
     expect(find.byTooltip('发送（Enter）'), findsOneWidget);
+    expect(find.byTooltip('附加图片（最多 4 张）'), findsOneWidget);
 
     await tester.pumpWidget(
       FluentApp(
@@ -532,6 +534,7 @@ void main() {
             streaming: true,
             onSend: (_) {},
             onStop: () {},
+            visionSupported: false,
           ),
         ),
       ),
@@ -542,6 +545,26 @@ void main() {
     expect(find.text('停止'), findsOneWidget);
     expect(find.byTooltip('停止生成'), findsOneWidget);
     expect(find.bySemanticsLabel('消息输入'), findsWidgets);
+  });
+
+  testWidgets('composer attach disabled when vision unsupported', (tester) async {
+    await tester.pumpWidget(
+      FluentApp(
+        home: ScaffoldPage(
+          content: Composer(
+            enabled: true,
+            streaming: false,
+            onSend: (_) {},
+            onStop: () {},
+            visionSupported: false,
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.byTooltip('当前模型不支持图片'), findsOneWidget);
+    expect(find.textContaining('当前模型不支持附图'), findsOneWidget);
   });
 
   testWidgets('settings category tiles expose semantics labels', (tester) async {

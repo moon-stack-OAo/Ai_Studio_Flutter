@@ -7,12 +7,33 @@ import 'package:flutter/material.dart';
 
 import '../../../shell/back_host.dart';
 
+/// 灯箱图片来源（`IMG-TURN-REF` / `CHAT-ATTACH` / 结果时间线可区分）。
+enum ImageLightboxSource {
+  /// 用户回合参考图（`*-TURN-REF`）。
+  reference,
+
+  /// 生成结果图。
+  result,
+
+  /// 对话用户消息附图（`CHAT-ATTACH`）。
+  attachment,
+}
+
+extension ImageLightboxSourceLabel on ImageLightboxSource {
+  String get label => switch (this) {
+        ImageLightboxSource.reference => '参考',
+        ImageLightboxSource.result => '结果',
+        ImageLightboxSource.attachment => '附图',
+      };
+}
+
 /// M-Lightbox：全屏预览；系统返回先关灯箱。
 class ImageLightbox extends StatelessWidget {
   const ImageLightbox({
     super.key,
     required this.ref,
     required this.bytes,
+    this.source = ImageLightboxSource.result,
     this.onSaveAlbum,
     this.onShare,
     this.onUseAsReference,
@@ -20,6 +41,7 @@ class ImageLightbox extends StatelessWidget {
 
   final ImageRef ref;
   final Uint8List? bytes;
+  final ImageLightboxSource source;
   final VoidCallback? onSaveAlbum;
   final VoidCallback? onShare;
   final VoidCallback? onUseAsReference;
@@ -28,6 +50,7 @@ class ImageLightbox extends StatelessWidget {
     BuildContext context, {
     required ImageRef ref,
     required Future<Uint8List?> Function() loadBytes,
+    ImageLightboxSource source = ImageLightboxSource.result,
     VoidCallback? onSaveAlbum,
     VoidCallback? onShare,
     VoidCallback? onUseAsReference,
@@ -51,6 +74,7 @@ class ImageLightbox extends StatelessWidget {
             child: ImageLightbox(
               ref: ref,
               bytes: bytes,
+              source: source,
               onSaveAlbum: onSaveAlbum,
               onShare: onShare,
               onUseAsReference: onUseAsReference,
@@ -66,13 +90,35 @@ class ImageLightbox extends StatelessWidget {
     final tokens = materialTokensOf(context);
     final stage = Color.lerp(tokens.canvas, const Color(0xFF000000), 0.92)!;
     final chrome = tokens.onPrimary;
+    final sourceLabel = source.label;
     return BackHost(
       child: Scaffold(
         backgroundColor: stage,
         appBar: AppBar(
           backgroundColor: stage,
           foregroundColor: chrome,
-          title: const Text('预览'),
+          title: Row(
+            children: [
+              Container(
+                margin: const EdgeInsets.only(right: 8),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: tokens.primary.withValues(alpha: 0.18),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(
+                  sourceLabel,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: tokens.primary,
+                  ),
+                ),
+              ),
+              const Expanded(child: Text('预览')),
+            ],
+          ),
           leading: BackHost.closeButton(context),
           actions: [
             if (onUseAsReference != null)

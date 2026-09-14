@@ -99,6 +99,76 @@ class VideoController extends ChangeNotifier {
     _facade.setPromptDraft(value, onNotify: _notify);
   }
 
+  /// `VID-RERUN`：回填提示词 / 参数 / 参考图到 Composer，不自动提交。
+  Future<void> rerunFromItem(VideoItem item) async {
+    if (_disposed) return;
+    if (generation.busy) {
+      _setBanner('当前有任务进行中，请稍后再试');
+      return;
+    }
+
+    final prompt = item.prompt.trim();
+    _facade.setPromptDraft(prompt);
+
+    final duration = item.duration;
+    if (duration != null && duration > 0) {
+      _facade.setDuration(duration);
+    }
+    final size = item.size?.trim();
+    if (size != null && size.isNotEmpty) {
+      _facade.setSize(size);
+    }
+    final aspect = item.aspectRatio?.trim();
+    if (aspect != null && aspect.isNotEmpty) {
+      _facade.setAspectRatio(aspect);
+    }
+    final resolution = item.resolution?.trim();
+    if (resolution != null && resolution.isNotEmpty) {
+      _facade.setResolution(resolution);
+    }
+    _facade.syncParamsToActiveProvider();
+
+    final refs = item.referenceImages;
+    var restored = false;
+    if (refs.isNotEmpty) {
+      for (final ref in refs) {
+        if (ref.type != ImageRefType.file) continue;
+        final path = ref.src.trim();
+        if (path.isEmpty) continue;
+        final file = File(path);
+        if (!await file.exists()) continue;
+        try {
+          final bytes = await file.readAsBytes();
+          if (bytes.isEmpty) continue;
+          final name = path.replaceAll('\\', '/').split('/').last.trim();
+          _refBytes = bytes;
+          _refFileName = name.isEmpty ? 'image.png' : name;
+          _facade.setHasReferenceImage(true);
+          restored = true;
+          break;
+        } catch (_) {
+          continue;
+        }
+      }
+    }
+
+    if (!restored) {
+      if (_refBytes != null) {
+        _refBytes = null;
+        _refFileName = 'image.png';
+        _facade.setHasReferenceImage(false);
+      }
+      if (refs.isNotEmpty) {
+        _setInfo('原参考图不可用，已仅回填提示词与参数');
+      } else {
+        clearBannerError();
+      }
+    } else {
+      clearBannerError();
+    }
+    _notify();
+  }
+
   Future<void> pickRefImage() async {
     try {
       final file = await _picker.pickImage(

@@ -48,6 +48,50 @@ void main() {
     );
   }
 
+  test('generate：创建误标 completed 无 url → 不标 success（needsMaterialize）',
+      () async {
+    var polls = 0;
+    final mock = MockClient((request) async {
+      if (request.method == 'POST' && request.url.path.endsWith('/videos')) {
+        return http.Response(
+          jsonEncode({
+            'id': 'job_fake',
+            'status': 'completed',
+            'progress': 100,
+          }),
+          200,
+          headers: {'content-type': 'application/json'},
+        );
+      }
+      if (request.url.path.endsWith('/content')) {
+        return http.Response('missing', 404);
+      }
+      polls++;
+      return http.Response(
+        jsonEncode({
+          'id': 'job_fake',
+          'status': 'completed',
+          'progress': 100,
+        }),
+        200,
+      );
+    });
+
+    final facade = facadeWith(mock);
+    await facade.generate(
+      prompt: '假 completed',
+      onNotify: () {},
+    );
+
+    expect(generation.busy, isFalse);
+    expect(polls, greaterThanOrEqualTo(1));
+    final item = sessions.activeSession!.items.last;
+    expect(item.status, isNot(VideoItemStatus.success));
+    expect(item.needsMaterialize, isTrue);
+    expect(item.status, VideoItemStatus.error);
+    facade.dispose();
+  });
+
   test('generate 成功路径：append → complete → generation 释放', () async {
     var n = 0;
     final mock = MockClient((request) async {

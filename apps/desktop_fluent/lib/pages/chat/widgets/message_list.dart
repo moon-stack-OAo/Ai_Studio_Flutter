@@ -1,4 +1,5 @@
 import 'package:core/core.dart';
+import 'package:design_fluent/design_fluent.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 
 import '../../../widgets/empty_illustrations.dart';
@@ -46,8 +47,8 @@ class _MessageListState extends State<MessageList> {
     if (!_scroll.hasClients) return;
     _scroll.animateTo(
       _scroll.position.maxScrollExtent,
-      duration: const Duration(milliseconds: 120),
-      curve: Curves.easeOut,
+      duration: FluentMotion.micro,
+      curve: FluentMotion.standard,
     );
   }
 

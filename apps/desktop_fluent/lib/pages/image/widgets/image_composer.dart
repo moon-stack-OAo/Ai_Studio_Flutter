@@ -375,7 +375,8 @@ class _SegItem extends StatelessWidget {
         builder: (context, states) {
           final focused = states.isFocused;
           return AnimatedContainer(
-            duration: const Duration(milliseconds: 100),
+            duration: FluentMotion.micro,
+            curve: FluentMotion.standard,
             height: 28,
             alignment: Alignment.center,
             decoration: BoxDecoration(
@@ -446,7 +447,8 @@ class _ChipWrap extends StatelessWidget {
             builder: (context, states) {
               final focused = states.isFocused;
               return AnimatedContainer(
-                duration: const Duration(milliseconds: 100),
+                duration: FluentMotion.micro,
+                curve: FluentMotion.standard,
                 height: 28,
                 padding: const EdgeInsets.symmetric(horizontal: 10),
                 alignment: Alignment.center,

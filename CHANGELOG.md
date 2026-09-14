@@ -13,15 +13,26 @@
 
 ### Added
 
-（暂无）
+- **`CHAT-ATTACH`（P5 · 对话附图）**：Composer 附加图片 → 多模态发送 → 用户气泡缩略 / 灯箱「附图」回看；非 vision 模型入口禁用并提示；有图可空文；与生图 `*-TURN-REF` 分轨（`chat_image_cache`）；清会话/备份 omit 本地附件。分阶段：P5-1 core（`attachments` / vision 启发式 / multimodal parts / 清理与备份）；P5-2 desktop（附加·拖放·草稿缩略·气泡）；P5-3 mobile（相册附加·草稿缩略·气泡，能力对等 UI 分端）；P5-4 禁用提示/清理/备份收口与补测；P5-5 文档对照 + 测试闸门
+- **`VID-RERUN`**：双端队列 / 播放器「用此提示重跑」— 回填提示词、时长/比例等参数，并恢复可读参考图；不自动提交；生成中禁用
+- **`VID-PLAYER` 音量跨启动持久化（E4）**：`core.video_playback.v1`（volume 0–100 + muted）；双端 Player 开播前 load、拖动/静音 debounce 写入；首次默认 100 / 未静音
 
 ### Changed
 
-（暂无）
+- **`docs/architecture.md`（E10）**：重写为与 1.0.5+ 现状一致——包边界、关闭三态/托盘/`SHELL-SINGLE`、`media_kit` / `*-TURN-REF` / `VID-RERUN` / 播放 prefs·errors、更新清单 minisign vs sha256；去掉「直接 close」与过时「待补」；仍以 `DESIGN.md` / `SECURITY.md` 为准
+- **`VID-PLAYER` 音量**：跨启动持久化已落地（`DESIGN.md` §5.6；OD 脚注同步）
 
 ### Fixed
 
-（暂无）
+- **生视频首次 materialize**：中转返回相对路径 `/v1/videos/{id}/content` 时不再误判为本地文件；改为拼绝对 URL 后鉴权下载（解释「重新加载又好了」）
+- **提供商/轮询回归用例（E11）**：`packages/core` 补强「假 completed / 无 url」— createJob 强制 queued、generate 不提前当可播成功、waitJob 遇 needsMaterialize 结束、`applyVideoJobCompletion` / `pickRemoteVideoUrl` 防回潮
+- **`VID-PLAYER` 播放失败 / 弱网提示（E2）**：双端内嵌/弹窗/全屏/推页统一中文可读错误与「重试」；远端/stream 失败主句中文可附短原因；桌面内嵌切换失败仍保留上一帧并可重试
+- **`VID-PLAYER` 缓冲 / 加载态对齐（E3）**：首次打开优先封面占位再叠轻量 loading（无封面则 loading + 非纯黑底）；桌面内嵌队列切换仍 keepFrame + 半透明 loading；弹窗 / 全屏 / 移动推页对齐同语义；播放中 `buffering` 叠半透明指示，避免假死感
+- **桌面 `VID-PLAYER` transport 回归（E5）**：对照 OD — 内嵌/放大弹窗单行「播放 · scrub · 时间 · 音量 · 全屏」；动作区无重复「全屏」（另存/系统打开/重跑可有）；全屏壳仅顶栏/Esc「退出全屏」。抽检已对齐，无代码改动
+- **灯箱来源可区分（E6）**：双端 `ImageLightbox` 标题区「参考 / 结果」角标；`*-TURN-REF` / 生视频参考预览标「参考」，生图结果时间线标「结果」
+- **空态覆盖面（E7）**：审计对话/生图/生视频/会话列表/提供商；主路径插画+CTA 已齐；桌面提供商空态 CTA 与移动对齐为「添加提供商」，详情未选中改用带插画的 `FluentContentEmpty`
+- **短动效一致性（E8）**：主路径 hover/焦点/滚动/chip/Tab 微动效与全屏淡入对齐 `FluentMotion` / `MaterialMotion`（可打断、≤~220ms）；品牌开场、流式光标、下拉 80ms 等非主路径硬编码保留
+- **密度/字号极端档（E9）**：compact+更大 / comfortable+更小抽检；Material 底栏随字号抬高；桌面 Composer 发送钮、外观主题分段、会话顶栏/模型 chip 去掉过死固定高度，避免主路径明显溢出
 
 ---
 

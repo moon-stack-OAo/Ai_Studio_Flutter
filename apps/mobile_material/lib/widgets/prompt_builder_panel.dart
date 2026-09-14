@@ -517,7 +517,8 @@ class _DraftPolishUnderlineItem extends StatelessWidget {
       onTap: onTap,
       borderRadius: BorderRadius.circular(4),
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 100),
+        duration: MaterialMotion.micro,
+        curve: MaterialMotion.standard,
         padding: const EdgeInsets.fromLTRB(10, 6, 10, 8),
         decoration: BoxDecoration(
           border: Border(

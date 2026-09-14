@@ -94,8 +94,8 @@ class _VideoPageState extends State<VideoPage> {
       if (!_scroll.hasClients) return;
       _scroll.animateTo(
         _scroll.position.maxScrollExtent,
-        duration: const Duration(milliseconds: 120),
-        curve: Curves.easeOut,
+        duration: MaterialMotion.micro,
+        curve: MaterialMotion.standard,
       );
     });
   }
@@ -193,6 +193,7 @@ class _VideoPageState extends State<VideoPage> {
     await ImageLightbox.show(
       context,
       ref: ref,
+      source: ImageLightboxSource.reference,
       loadBytes: () =>
           widget.sessionRepository.readReferenceImageBytes(ref),
     );
@@ -488,6 +489,12 @@ class _VideoPageState extends State<VideoPage> {
                                   onSaveAlbum: _onSaveAlbum,
                                   onShare: _onShare,
                                   onOpenSystem: _controller.openVideo,
+                                  onRerun: (rerunItem) {
+                                    unawaited(
+                                      _controller.rerunFromItem(rerunItem),
+                                    );
+                                  },
+                                  rerunEnabled: !widget.generation.busy,
                                 ),
                               ),
                             );
@@ -526,6 +533,10 @@ class _VideoPageState extends State<VideoPage> {
                               item.id,
                             );
                           },
+                          onRerun: (item) {
+                            unawaited(_controller.rerunFromItem(item));
+                          },
+                          rerunEnabled: !widget.generation.busy,
                           onSaveAlbum: _onSaveAlbum,
                           onShare: _onShare,
                         ),

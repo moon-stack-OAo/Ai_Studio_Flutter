@@ -31,7 +31,11 @@ Future<void> main() async {
   final providers = ProviderRepository(storage: SecureProviderStorage());
   await providers.load();
 
-  final sessions = ChatSessionRepository(storage: PrefsChatSessionStorage());
+  final chatAttachmentStore = FileImageAssetStore(subdir: 'chat_image_cache');
+  final sessions = ChatSessionRepository(
+    storage: PrefsChatSessionStorage(),
+    attachmentStore: chatAttachmentStore,
+  );
   await sessions.load();
 
   final imageAssetStore = FileImageAssetStore();
@@ -109,6 +113,8 @@ Future<void> main() async {
     imageSessions: imageSessions,
     videoSessions: videoSessions,
     logs: appLogs,
+    imageAssetStore: imageAssetStore,
+    chatAttachmentStore: chatAttachmentStore,
     videoPosterStore: videoPosterStore,
   );
 

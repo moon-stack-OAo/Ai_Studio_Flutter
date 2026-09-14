@@ -29,10 +29,23 @@ enum UiDensity {
       };
 
   /// 底栏 NavigationBar 高度；紧凑 64、舒适略松，均 ≥ 触控主操作约 48dp。
+  ///
+  /// 字号放大时请用 [navigationBarHeightFor]：label 随 `AppFontScale` 变高，
+  /// 固定高度会在 compact + 更大 档裁切。
   double get navigationBarHeight => switch (this) {
         UiDensity.comfortable => 68,
         UiDensity.compact => 64,
       };
+
+  /// 按字号系数抬高底栏，避免极端档 label 溢出（E9）。
+  double navigationBarHeightFor(double fontSizeFactor) {
+    final bump = fontSizeFactor >= 1.15
+        ? 10.0
+        : fontSizeFactor >= 1.08
+            ? 6.0
+            : 0.0;
+    return navigationBarHeight + bump;
+  }
 
   /// Composer 水平内边距与顶距；底距由安全区/IME 另算。
   EdgeInsets get composerPadding => switch (this) {

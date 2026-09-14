@@ -190,6 +190,18 @@ class _ChatPageState extends State<ChatPage> {
                         streaming: streamingHere,
                         onSend: _controller.send,
                         onStop: _controller.stop,
+                        visionSupported: _controller.activeChatSupportsVision,
+                        draftAttachments: _controller.draftAttachments,
+                        onPickAttachments: streamingHere
+                            ? null
+                            : () => _controller.pickAttachments(),
+                        onDropAttachment: streamingHere
+                            ? null
+                            : _controller.dropAttachment,
+                        onRemoveDraftAttachment:
+                            _controller.removeDraftAttachmentAt,
+                        canSendWithDraft: (text) =>
+                            _controller.canSendWith(textDraft: text),
                       ),
                     ],
                   ),
@@ -221,8 +233,9 @@ class _ChatHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 48,
-      padding: const EdgeInsets.symmetric(horizontal: 14),
+      // 不锁死 48：字号/系统缩放极端档下模型 chip 与「会话参数」需可撑高。
+      constraints: const BoxConstraints(minHeight: 48),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
       decoration: BoxDecoration(
         color: Color.lerp(tokens.surface, tokens.canvas, 0.15),
         border: Border(bottom: BorderSide(color: tokens.border)),
@@ -261,8 +274,11 @@ class _ChatHeader extends StatelessWidget {
                     final hovered = states.isHovered || states.isPressed;
                     final focused = states.isFocused;
                     return Container(
-                      height: 30,
-                      padding: const EdgeInsets.symmetric(horizontal: 10),
+                      constraints: const BoxConstraints(minHeight: 30),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 4,
+                      ),
                       decoration: BoxDecoration(
                         color: hovered || focused
                             ? tokens.surfaceMuted

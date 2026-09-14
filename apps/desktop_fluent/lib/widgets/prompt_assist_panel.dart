@@ -620,7 +620,8 @@ class _SegmentTab extends StatelessWidget {
       onPressed: onPressed,
       builder: (context, states) {
         return AnimatedContainer(
-          duration: const Duration(milliseconds: 120),
+          duration: FluentMotion.micro,
+          curve: FluentMotion.standard,
           alignment: Alignment.center,
           padding: const EdgeInsets.symmetric(vertical: 7),
           decoration: BoxDecoration(
@@ -709,7 +710,8 @@ class _DraftPolishToggleItem extends StatelessWidget {
       onPressed: onPressed,
       builder: (context, states) {
         return AnimatedContainer(
-          duration: const Duration(milliseconds: 100),
+          duration: FluentMotion.micro,
+          curve: FluentMotion.standard,
           padding: const EdgeInsets.fromLTRB(10, 4, 10, 6),
           decoration: BoxDecoration(
             border: Border(

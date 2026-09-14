@@ -1,4 +1,5 @@
 import 'package:core/core.dart';
+import 'package:design_material/design_material.dart';
 import 'package:flutter/material.dart';
 
 import '../../../widgets/empty_illustrations.dart';
@@ -46,8 +47,8 @@ class _MessageListState extends State<MessageList> {
     if (!_scroll.hasClients) return;
     _scroll.animateTo(
       _scroll.position.maxScrollExtent,
-      duration: const Duration(milliseconds: 120),
-      curve: Curves.easeOut,
+      duration: MaterialMotion.micro,
+      curve: MaterialMotion.standard,
     );
   }
 

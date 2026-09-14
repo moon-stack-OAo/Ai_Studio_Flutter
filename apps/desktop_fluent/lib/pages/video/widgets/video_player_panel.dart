@@ -18,12 +18,17 @@ class VideoPlayerPanel extends StatefulWidget {
     required this.onOpenSystem,
     required this.onSaveAs,
     this.onExpand,
+    this.onRerun,
+    this.rerunEnabled = true,
   });
 
   final VideoItem? item;
   final Future<bool> Function(VideoItem item) onOpenSystem;
   final Future<bool> Function(VideoItem item) onSaveAs;
   final VoidCallback? onExpand;
+  /// `VID-RERUN`：用此提示重跑。
+  final void Function(VideoItem item)? onRerun;
+  final bool rerunEnabled;
 
   @override
   State<VideoPlayerPanel> createState() => _VideoPlayerPanelState();
@@ -95,6 +100,8 @@ class _VideoPlayerPanelState extends State<VideoPlayerPanel> {
                     tokens: tokens,
                     onOpenSystem: widget.onOpenSystem,
                     onSaveAs: widget.onSaveAs,
+                    onRerun: widget.onRerun,
+                    rerunEnabled: widget.rerunEnabled,
                   ),
           ),
         ],
@@ -202,12 +209,16 @@ class _InlinePlayer extends StatefulWidget {
     required this.tokens,
     required this.onOpenSystem,
     required this.onSaveAs,
+    this.onRerun,
+    this.rerunEnabled = true,
   });
 
   final VideoItem item;
   final FluentTokens tokens;
   final Future<bool> Function(VideoItem item) onOpenSystem;
   final Future<bool> Function(VideoItem item) onSaveAs;
+  final void Function(VideoItem item)? onRerun;
+  final bool rerunEnabled;
 
   @override
   State<_InlinePlayer> createState() => _InlinePlayerState();
@@ -290,9 +301,39 @@ class _InlinePlayerState extends State<_InlinePlayer> {
       }),
       player.stream.error.listen((msg) {
         if (!mounted || msg.trim().isEmpty) return;
-        setState(() => _error = '播放出错：$msg');
+        setState(() {
+          _error = VideoPlaybackErrors.streamFailed(
+            msg,
+            isRemote: _isHttp(_boundPath),
+          );
+        });
       }),
     ]);
+  }
+
+  Future<void> _retryPlayback() async {
+    await _bind(widget.item, force: true);
+  }
+
+  Future<void> _loadVolumePrefs() async {
+    final prefs = await VideoPlaybackPrefsWriter.instance.load();
+    if (!mounted) return;
+    setState(() {
+      _volume = prefs.volume;
+      _volumeBeforeMute =
+          prefs.volume <= 0 ? VideoPlaybackPrefs.defaultVolume : prefs.volume;
+      _muted = prefs.muted;
+    });
+  }
+
+  void _persistVolume() {
+    VideoPlaybackPrefsWriter.instance.scheduleSave(
+      VideoPlaybackPrefs.fromUi(
+        volume: _volume,
+        volumeBeforeMute: _volumeBeforeMute,
+        muted: _muted,
+      ),
+    );
   }
 
   Future<void> _setVolume(double value) async {
@@ -302,6 +343,7 @@ class _InlinePlayerState extends State<_InlinePlayer> {
       _muted = v <= 0;
       if (v > 0) _volumeBeforeMute = v;
     });
+    _persistVolume();
     final player = _player;
     if (player == null) return;
     try {
@@ -453,7 +495,7 @@ class _InlinePlayerState extends State<_InlinePlayer> {
         oldPlayer: oldPlayer,
         restoreBoundId: prevBoundId,
         restoreBoundPath: prevBoundPath,
-        message: '没有可播放的视频地址',
+        message: VideoPlaybackErrors.noAddress,
       );
       return;
     }
@@ -463,14 +505,15 @@ class _InlinePlayerState extends State<_InlinePlayer> {
         oldPlayer: oldPlayer,
         restoreBoundId: prevBoundId,
         restoreBoundPath: prevBoundPath,
-        message: '内存视频请先另存或系统打开',
+        message: VideoPlaybackErrors.memoryOnly,
       );
       return;
     }
 
+    final remote = _isHttp(path);
     Player? created;
     try {
-      if (!_isHttp(path)) {
+      if (!remote) {
         final filePath =
             path.startsWith('file:') ? Uri.parse(path).toFilePath() : path;
         final f = File(filePath);
@@ -480,10 +523,15 @@ class _InlinePlayerState extends State<_InlinePlayer> {
             oldPlayer: oldPlayer,
             restoreBoundId: prevBoundId,
             restoreBoundPath: prevBoundPath,
-            message: '本地文件不存在',
+            message: VideoPlaybackErrors.localMissing,
           );
           return;
         }
+      }
+
+      await _loadVolumePrefs();
+      if (!mounted || token != _bindToken) {
+        return;
       }
 
       created = Player();
@@ -527,7 +575,7 @@ class _InlinePlayerState extends State<_InlinePlayer> {
         failedPlayer: created,
         restoreBoundId: prevBoundId,
         restoreBoundPath: prevBoundPath,
-        message: '播放器初始化失败：$e',
+        message: VideoPlaybackErrors.initFailed(e, isRemote: remote),
       );
     }
   }
@@ -536,6 +584,7 @@ class _InlinePlayerState extends State<_InlinePlayer> {
   void dispose() {
     _bindToken++;
     _clearSubs();
+    unawaited(VideoPlaybackPrefsWriter.instance.flush());
     final p = _player;
     _player = null;
     _videoController = null;
@@ -599,6 +648,11 @@ class _InlinePlayerState extends State<_InlinePlayer> {
             spacing: 6,
             runSpacing: 6,
             children: [
+              if (_error != null && _ready)
+                FilledButton(
+                  onPressed: _loading ? null : () => _retryPlayback(),
+                  child: const Text('重试'),
+                ),
               Button(
                 onPressed: () => widget.onSaveAs(widget.item),
                 child: const Text('另存为…'),
@@ -607,6 +661,15 @@ class _InlinePlayerState extends State<_InlinePlayer> {
                 onPressed: () => widget.onOpenSystem(widget.item),
                 child: const Text('系统打开'),
               ),
+              if (widget.onRerun != null &&
+                  (widget.item.prompt.trim().isNotEmpty ||
+                      widget.item.referenceImages.isNotEmpty))
+                Button(
+                  onPressed: widget.rerunEnabled
+                      ? () => widget.onRerun!(widget.item)
+                      : null,
+                  child: const Text('用此提示重跑'),
+                ),
             ],
           ),
         ],
@@ -642,14 +705,24 @@ class _InlinePlayerState extends State<_InlinePlayer> {
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(16),
-          child: Text(
-            _error!,
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              color: tokens.danger,
-              fontFamily: tokens.fontFamily,
-              fontSize: 12,
-            ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                _error!,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: tokens.danger,
+                  fontFamily: tokens.fontFamily,
+                  fontSize: 12,
+                ),
+              ),
+              const SizedBox(height: 12),
+              FilledButton(
+                onPressed: _loading ? null : () => _retryPlayback(),
+                child: const Text('重试'),
+              ),
+            ],
           ),
         ),
       );
@@ -671,11 +744,39 @@ class _InlinePlayerState extends State<_InlinePlayer> {
       }
     }
 
-    if (_loading) {
+    final buffering =
+        _ready && _player != null && _player!.state.buffering && !_loading;
+    if (_loading || buffering) {
       children.add(
         const ColoredBox(
           color: Color(0x66000000),
           child: Center(child: ProgressRing()),
+        ),
+      );
+    }
+
+    // 切换失败保留上一帧时，仍提示错误（重试在下方动作区）
+    if (_error != null && _ready) {
+      children.add(
+        Align(
+          alignment: Alignment.bottomCenter,
+          child: ColoredBox(
+            color: const Color(0xCC1A1A1A),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              child: Text(
+                _error!,
+                textAlign: TextAlign.center,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: tokens.danger,
+                  fontFamily: tokens.fontFamily,
+                  fontSize: 11,
+                ),
+              ),
+            ),
+          ),
         ),
       );
     }

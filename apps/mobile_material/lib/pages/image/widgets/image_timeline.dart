@@ -78,8 +78,8 @@ class _ImageTimelineState extends State<ImageTimeline> {
     if (!_scroll.hasClients) return;
     _scroll.animateTo(
       _scroll.position.maxScrollExtent,
-      duration: const Duration(milliseconds: 120),
-      curve: Curves.easeOut,
+      duration: MaterialMotion.micro,
+      curve: MaterialMotion.standard,
     );
   }
 

@@ -723,13 +723,15 @@ class OpenAiCompatibleVideoClient {
         errorMessage: job.errorMessage ?? '未返回视频地址，请重新生成',
       );
     }
-    if (src.startsWith('memory://') ||
+    // 相对 /content 须先拼成绝对 URL 再鉴权下载；不可当作本地路径提前返回
+    // （中转常返回 `/v1/videos/{id}/content`，首次会误判为已落盘）。
+    if (isVideoContentPath(src)) {
+      src = resolveVideoContentUrl(src, baseUrl);
+    } else if (src.startsWith('memory://') ||
         src.startsWith('file:') ||
         (!src.startsWith('http') && src.contains(RegExp(r'[/\\]')))) {
       return job.copyWith(localPath: src, needsMaterialize: false);
-    }
-
-    if (isVideoContentPath(src) || src.startsWith('/')) {
+    } else if (src.startsWith('/')) {
       src = resolveVideoContentUrl(src, baseUrl);
     }
 
@@ -1131,7 +1133,19 @@ String resolveVideoContentUrl(String url, String? baseUrl) {
   if (RegExp(r'^https?://', caseSensitive: false).hasMatch(src)) return src;
   final base = normalizeBaseUrl(baseUrl ?? '');
   if (base.isEmpty) return src;
-  if (src.startsWith('/')) return '$base$src';
+  if (src.startsWith('/')) {
+    final baseUri = Uri.parse(base);
+    final basePath = baseUri.path;
+    // base 已含 /v1、src 又是 /v1/videos/... 时，直接拼会变成 /v1/v1/...；
+    // 若 src 已带上 base.path 前缀，按同源绝对路径替换。
+    if (basePath.isNotEmpty &&
+        basePath != '/' &&
+        (src == basePath || src.startsWith('$basePath/'))) {
+      final origin = '${baseUri.scheme}://${baseUri.authority}';
+      return '$origin$src';
+    }
+    return '$base$src';
+  }
   return '$base/$src';
 }
 

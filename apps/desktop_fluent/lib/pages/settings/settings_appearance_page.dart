@@ -218,8 +218,8 @@ class _ThemeSegButton extends StatelessWidget {
           ),
         ),
       ),
-      child: SizedBox(
-        height: 34,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
         child: Center(
           child: Text(
             label,

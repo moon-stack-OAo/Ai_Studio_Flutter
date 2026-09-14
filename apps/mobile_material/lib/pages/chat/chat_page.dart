@@ -260,6 +260,15 @@ class _ChatPageState extends State<ChatPage> {
                 streaming: streamingHere,
                 onSend: _controller.send,
                 onStop: _controller.stop,
+                visionSupported: _controller.activeChatSupportsVision,
+                draftAttachments: _controller.draftAttachments,
+                onPickAttachments: streamingHere
+                    ? null
+                    : () => _controller.pickAttachments(),
+                onRemoveDraftAttachment:
+                    _controller.removeDraftAttachmentAt,
+                canSendWithDraft: (text) =>
+                    _controller.canSendWith(textDraft: text),
               ),
             ],
           ),
