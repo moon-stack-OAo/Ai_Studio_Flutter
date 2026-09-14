@@ -19,17 +19,20 @@
 
 - **`CHAT-ATTACH`（P5 · 对话附图）**：Composer 附加图片 → 多模态发送 → 用户气泡缩略 / 灯箱「附图」回看；非 vision 入口禁用；有图可空文；与 `*-TURN-REF` 分轨（`chat_image_cache`）；清会话/备份 omit 本地附件。OD 四端 chat 稿已同步附加入口与「附图」角标
 - **`VID-RERUN`**：双端队列 / 播放器「用此提示重跑」— 回填提示词、时长/比例等参数与可读参考图；不自动提交；生成中禁用
+- **`IMG-RERUN`**：双端生图时间线**失败**回合「用此提示重跑」— 回填提示词、数量/比例/质量与可读参考图；不自动提交；生成中禁用
 - **`VID-PLAYER` 音量跨启动持久化（E4）**：`core.video_playback.v1`（volume + muted）；双端开播前 load、拖动/静音 debounce 写入；默认 100 / 未静音
 
 ### Changed
 
 - **对话 Composer / `CHAT-ATTACH` 视觉对齐 OD**：气泡「附图」角标；草稿条（缩略+计数）；Material 输入 16×12 / 圆角 24、附加/发送正圆 48；Fluent 附加 36×36、底对齐、卡片 gap、单行默认高、左内边距与 placeholder 微调
 - **桌面 `VID-PLAYER`**：对照 OD — 头栏摘要+元信息、空舞台引导、transport 缓冲分层与音量%；动作/transport 描边 chrome（`video_tool_chrome`）；窗内放大在动作区。仅 Fluent 内嵌；移动不跟桌面密度
-- **`docs/architecture.md`（E10）**：与 1.0.5+ 现状对齐（包边界、托盘/`SHELL-SINGLE`、`media_kit` / `*-TURN-REF` / `VID-RERUN`、更新验签）；仍以 `DESIGN.md` / `SECURITY.md` 为准
+- **桌面生图时间线气泡铺满**（去掉与对话同宽的 720 限宽）；桌面生图/生视频提示词输入加高（`minLines` 8 / `maxLines` 12）
+- **`docs/architecture.md`（E10）**：与 1.0.5+ 现状对齐（包边界、托盘/`SHELL-SINGLE`、`media_kit` / `*-TURN-REF` / `VID-RERUN` / `IMG-RERUN`、更新验签）；仍以 `DESIGN.md` / `SECURITY.md` 为准
 
 ### Fixed
 
 - **`CHAT-ATTACH`**：`supportsChatVision` 增加 `grok`（如 `grok-4.5`）
+- **xAI / 中转图生图 400**：`openai-compatible` 且模型含 `imagine-image` 时改走 xAI JSON `/images/edits`（含 MIME 嗅探），不再误发 OpenAI multipart
 - **桌面参数 chip**：生图/生视频尺寸·比例·清晰度在 Wrap 内同行排布（`HoverButton` 不再撑满整行）
 - **生视频 materialize**：相对路径 `/v1/videos/{id}/content` 拼绝对 URL 后再鉴权下载
 - **提供商/轮询回归（E11）**：补强「假 completed / 无 url」用例，防回潮

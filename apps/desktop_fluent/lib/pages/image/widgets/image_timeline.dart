@@ -19,6 +19,8 @@ class ImageTimeline extends StatefulWidget {
     required this.onSave,
     this.onUseAsReference,
     this.onPreviewReference,
+    this.onRerun,
+    this.rerunEnabled = true,
     this.emptyHint = '还没有生成结果',
     this.emptySubtitle = '在右侧参数区填写提示词后生成。',
   });
@@ -32,6 +34,9 @@ class ImageTimeline extends StatefulWidget {
   /// 预览本回合参考图（`IMG-TURN-REF`）；与结果图分轨。
   final void Function(ImageItem item, int index, ImageRef ref)?
       onPreviewReference;
+  /// `IMG-RERUN`：用此提示重跑（回填 Composer）。
+  final void Function(ImageItem item)? onRerun;
+  final bool rerunEnabled;
   final String emptyHint;
   final String? emptySubtitle;
 
@@ -72,6 +77,8 @@ class _ImageTimelineState extends State<ImageTimeline> {
           onSave: widget.onSave,
           onUseAsReference: widget.onUseAsReference,
           onPreviewReference: widget.onPreviewReference,
+          onRerun: widget.onRerun,
+          rerunEnabled: widget.rerunEnabled,
         ),
       );
     }
@@ -175,6 +182,8 @@ class _TurnCard extends StatelessWidget {
     required this.onSave,
     this.onUseAsReference,
     this.onPreviewReference,
+    this.onRerun,
+    this.rerunEnabled = true,
   });
 
   final ImageItem item;
@@ -187,6 +196,8 @@ class _TurnCard extends StatelessWidget {
       onUseAsReference;
   final void Function(ImageItem item, int index, ImageRef ref)?
       onPreviewReference;
+  final void Function(ImageItem item)? onRerun;
+  final bool rerunEnabled;
 
   String _clock(int ms) {
     if (ms <= 0) return '';
@@ -195,40 +206,51 @@ class _TurnCard extends StatelessWidget {
         '${dt.minute.toString().padLeft(2, '0')}';
   }
 
+  Widget? _rerunBtn() {
+    if (onRerun == null) return null;
+    if (item.prompt.trim().isEmpty && item.referenceImages.isEmpty) {
+      return null;
+    }
+    return Button(
+      onPressed: rerunEnabled ? () => onRerun!(item) : null,
+      child: const Text('用此提示重跑'),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final rerunBtn =
+        item.status == ImageItemStatus.error ? _rerunBtn() : null;
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Align(
-            alignment: Alignment.centerLeft,
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 720),
-              child: _UserPromptBubble(
-                prompt: item.prompt,
-                tokens: tokens,
-                header:
-                    '你 · 回合 $turnIndex · ${_clock(item.createdAt)}'
-                    '${item.mode == ImageGenMode.edit ? ' · 图生图' : ''}'
-                    '${item.n > 1 ? ' · ${item.n}张' : ''}',
-                referenceImages: item.referenceImages,
-                loadBytes: loadBytes,
-                onPreviewReference: onPreviewReference == null
-                    ? null
-                    : (index, ref) =>
-                        onPreviewReference!(item, index, ref),
-              ),
-            ),
+          _UserPromptBubble(
+            prompt: item.prompt,
+            tokens: tokens,
+            header:
+                '你 · 回合 $turnIndex · ${_clock(item.createdAt)}'
+                '${item.mode == ImageGenMode.edit ? ' · 图生图' : ''}'
+                '${item.n > 1 ? ' · ${item.n}张' : ''}',
+            referenceImages: item.referenceImages,
+            loadBytes: loadBytes,
+            onPreviewReference: onPreviewReference == null
+                ? null
+                : (index, ref) =>
+                    onPreviewReference!(item, index, ref),
           ),
           const SizedBox(height: 12),
-          if (item.status == ImageItemStatus.error)
+          if (item.status == ImageItemStatus.error) ...[
             InfoBar(
               title: Text(item.errorMessage ?? '生成失败'),
               severity: InfoBarSeverity.error,
-            )
-          else if (item.status == ImageItemStatus.loading)
+            ),
+            if (rerunBtn != null) ...[
+              const SizedBox(height: 8),
+              Align(alignment: Alignment.centerLeft, child: rerunBtn),
+            ],
+          ] else if (item.status == ImageItemStatus.loading)
             _AdaptiveGrid(
               tokens: tokens,
               count: item.n.clamp(1, 4),

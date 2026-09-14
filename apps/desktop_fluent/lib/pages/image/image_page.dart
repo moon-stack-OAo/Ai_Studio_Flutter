@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:core/core.dart';
 import 'package:design_fluent/design_fluent.dart';
 import 'package:fluent_ui/fluent_ui.dart';
@@ -58,21 +60,38 @@ class _ImagePageState extends State<ImagePage> {
   }
 
   void _flashBannerIfNeeded() {
-    final pending = _controller.bannerError;
-    if (pending == null || pending.isEmpty) return;
+    final pendingError = _controller.bannerError;
+    final pendingInfo = _controller.bannerInfo;
+    if ((pendingError == null || pendingError.isEmpty) &&
+        (pendingInfo == null || pendingInfo.isEmpty)) {
+      return;
+    }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
+      final info = _controller.bannerInfo;
       final banner = _controller.bannerError;
-      if (banner == null || banner.isEmpty) return;
-      _controller.clearBannerError();
-      displayInfoBar(
-        context,
-        builder: (ctx, close) => InfoBar(
-          title: Text(banner),
-          severity: InfoBarSeverity.error,
-          onClose: close,
-        ),
-      );
+      if (info != null && info.isNotEmpty) {
+        _controller.clearBannerInfo();
+        displayInfoBar(
+          context,
+          builder: (ctx, close) => InfoBar(
+            title: Text(info),
+            severity: InfoBarSeverity.info,
+            onClose: close,
+          ),
+        );
+      }
+      if (banner != null && banner.isNotEmpty) {
+        _controller.clearBannerError();
+        displayInfoBar(
+          context,
+          builder: (ctx, close) => InfoBar(
+            title: Text(banner),
+            severity: InfoBarSeverity.error,
+            onClose: close,
+          ),
+        );
+      }
     });
   }
 
@@ -196,6 +215,10 @@ class _ImagePageState extends State<ImagePage> {
                             );
                           }
                         },
+                        onRerun: (item) {
+                          unawaited(_controller.rerunFromItem(item));
+                        },
+                        rerunEnabled: !widget.generation.busy,
                       ),
                     ),
                   ],

@@ -215,8 +215,8 @@ class _VideoComposerState extends State<VideoComposer> {
                     controller: _promptCtrl,
                     onChanged:
                         widget.generating ? null : widget.onPromptChanged,
-                    maxLines: 6,
-                    minLines: 4,
+                    maxLines: 12,
+                    minLines: 8,
                     enabled: !widget.generating,
                     placeholder: '描述你想生成的视频画面与运镜…',
                     style: TextStyle(

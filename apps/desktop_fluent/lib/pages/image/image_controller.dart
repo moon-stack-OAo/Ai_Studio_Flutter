@@ -30,8 +30,10 @@ class ImageController extends ChangeNotifier {
   late final ImageSessionFacade _facade;
 
   String? _bannerError;
+  String? _bannerInfo;
   ImageRef? _referenceImage;
   String _refFileName = 'image.png';
+  bool _disposed = false;
 
   static const sizeOptions = ImageSessionFacade.sizeOptions;
   static const aspectOptions = ImageSessionFacade.aspectOptions;
@@ -43,6 +45,7 @@ class ImageController extends ChangeNotifier {
   );
 
   String? get bannerError => _bannerError;
+  String? get bannerInfo => _bannerInfo;
   int get n => _facade.n;
   String get size => _facade.size;
   String get aspectRatio => _facade.aspectRatio;
@@ -98,6 +101,71 @@ class ImageController extends ChangeNotifier {
 
   void applyPromptPreset(String prompt) {
     _facade.applyPromptPreset(prompt, onNotify: notifyListeners);
+  }
+
+  /// `IMG-RERUN`：回填提示词 / 参数 / 参考图到 Composer，不自动提交。
+  Future<void> rerunFromItem(ImageItem item) async {
+    if (_disposed) return;
+    if (generation.busy) {
+      _setBanner('当前有任务进行中，请稍后再试');
+      return;
+    }
+
+    _facade.setPromptDraft(item.prompt.trim());
+    _facade.setN(item.n);
+    final size = item.size?.trim();
+    if (size != null && size.isNotEmpty) {
+      _facade.setSize(size);
+    }
+    final aspect = item.aspectRatio?.trim();
+    if (aspect != null && aspect.isNotEmpty) {
+      _facade.setAspectRatio(aspect);
+    }
+    final quality = item.quality?.trim();
+    if (quality != null && quality.isNotEmpty) {
+      _facade.setQuality(quality);
+    }
+    _facade.syncParamsToActiveProvider();
+
+    final refs = item.referenceImages;
+    var restored = false;
+    if (refs.isNotEmpty) {
+      for (final ref in refs) {
+        if (ref.type != ImageRefType.file) continue;
+        final path = ref.src.trim();
+        if (path.isEmpty) continue;
+        final file = File(path);
+        if (!await file.exists()) continue;
+        try {
+          final bytes = await file.readAsBytes();
+          if (bytes.isEmpty) continue;
+          if (!_isAcceptedImagePath(path)) continue;
+          _refFileName = _fileNameFromPath(path);
+          _referenceImage = ImageRef(type: ImageRefType.file, src: path);
+          restored = true;
+          break;
+        } catch (_) {
+          continue;
+        }
+      }
+    }
+
+    if (!restored) {
+      if (_referenceImage != null) {
+        _referenceImage = null;
+        _refFileName = 'image.png';
+      }
+      if (refs.isNotEmpty) {
+        _setInfo('原参考图不可用，已仅回填提示词与参数');
+      } else {
+        clearBannerError();
+        clearBannerInfo();
+      }
+    } else {
+      clearBannerError();
+      clearBannerInfo();
+    }
+    notifyListeners();
   }
 
   /// 将已生成结果设为参数区参考图。
@@ -195,12 +263,23 @@ class ImageController extends ChangeNotifier {
     notifyListeners();
   }
 
+  void clearBannerInfo() {
+    if (_bannerInfo == null) return;
+    _bannerInfo = null;
+    notifyListeners();
+  }
+
   void _setBanner(String? message) {
     if (message == null) {
       clearBannerError();
       return;
     }
     _bannerError = message;
+    notifyListeners();
+  }
+
+  void _setInfo(String? message) {
+    _bannerInfo = message;
     notifyListeners();
   }
 
@@ -274,6 +353,7 @@ class ImageController extends ChangeNotifier {
 
   @override
   void dispose() {
+    _disposed = true;
     _facade.dispose();
     super.dispose();
   }

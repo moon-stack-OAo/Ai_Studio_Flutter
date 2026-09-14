@@ -75,6 +75,96 @@ void main() {
     expect(captured!.containsKey('size'), isFalse);
   });
 
+  test('文生图中转 imagine-image 也写 aspect_ratio', () async {
+    Map? captured;
+    final client = MockClient((request) async {
+      captured = jsonDecode(request.body) as Map;
+      return http.Response(
+        jsonEncode({
+          'data': [
+            {'b64_json': 'eA=='},
+          ],
+        }),
+        200,
+      );
+    });
+    final api = OpenAiCompatibleImageClient(client: client);
+    await api.generateTextToImage(
+      baseUrl: 'https://livancen.top/v1',
+      apiKey: 'relay-k',
+      model: 'grok-imagine-image',
+      prompt: 'moon',
+      aspectRatio: '16:9',
+      size: '1024x1024',
+      providerType: ProviderType.openaiCompatible,
+    );
+    expect(captured!['aspect_ratio'], '16:9');
+    expect(captured!.containsKey('size'), isFalse);
+  });
+
+  test('图生图 xAI / 中转走 JSON edits + image.url dataUrl', () async {
+    Map? captured;
+    Uri? uri;
+    String? contentType;
+    final jpeg = Uint8List.fromList([0xFF, 0xD8, 0xFF, 0x01, 0x02, 0x03]);
+    final client = MockClient((request) async {
+      uri = request.url;
+      contentType = request.headers['content-type'];
+      captured = jsonDecode(request.body) as Map;
+      return http.Response(
+        jsonEncode({
+          'data': [
+            {'url': 'https://cdn.example/out.png'},
+          ],
+        }),
+        200,
+      );
+    });
+    final api = OpenAiCompatibleImageClient(client: client);
+    final refs = await api.editImage(
+      baseUrl: 'https://livancen.top/v1',
+      apiKey: 'relay-k',
+      model: 'grok-imagine-image',
+      prompt: 'make blue',
+      imageBytes: jpeg,
+      aspectRatio: '1:1',
+      providerType: ProviderType.openaiCompatible,
+    );
+    expect(uri!.path, endsWith('/images/edits'));
+    expect(contentType, contains('application/json'));
+    expect(captured!['aspect_ratio'], '1:1');
+    final image = captured!['image'] as Map;
+    expect(image['type'], 'image_url');
+    expect(image['url'], startsWith('data:image/jpeg;base64,'));
+    expect(refs.single.type, ImageRefType.url);
+  });
+
+  test('图生图非 xAI 仍走 multipart', () async {
+    var multipart = false;
+    final client = MockClient((request) async {
+      multipart = request is http.MultipartRequest ||
+          (request.headers['content-type'] ?? '').contains('multipart');
+      return http.Response(
+        jsonEncode({
+          'data': [
+            {'b64_json': 'YQ=='},
+          ],
+        }),
+        200,
+      );
+    });
+    final api = OpenAiCompatibleImageClient(client: client);
+    await api.editImage(
+      baseUrl: 'https://api.openai.com/v1',
+      apiKey: 'sk',
+      model: 'gpt-image-1',
+      prompt: 'edit',
+      imageBytes: Uint8List.fromList([1, 2, 3, 4]),
+      providerType: ProviderType.openai,
+    );
+    expect(multipart, isTrue);
+  });
+
   test('文生图 Agnes 写 size 档位 + ratio + extra_body', () async {
     Map? captured;
     Uri? uri;

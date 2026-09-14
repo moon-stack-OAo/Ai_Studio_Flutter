@@ -14,7 +14,7 @@ import '../provider/agnes_profile.dart';
 import '../provider/provider_connection.dart';
 import '../provider/provider_models_cache.dart';
 import '../provider/provider_repository.dart';
-import '../provider/provider_type.dart';
+import '../provider/xai_profile.dart';
 import '../security/safe_http_client.dart';
 import '../util/id.dart';
 import 'image_client.dart';
@@ -108,10 +108,20 @@ class ImageSessionFacade {
     return isAgnesImageProvider(baseUrl: c.baseUrl, imageModel: c.imageModel);
   }
 
-  /// Agnes：同时展示 size 档位与 ratio；xAI：仅比例；其余：仅像素 size。
+  bool get isXaiImageActive {
+    final c = _imageCreds;
+    if (c == null) return false;
+    return isXaiImageProvider(
+      providerType: c.type,
+      baseUrl: c.baseUrl,
+      imageModel: c.imageModel,
+    );
+  }
+
+  /// Agnes：同时展示 size 档位与 ratio；xAI（含中转 imagine-image）：仅比例；其余：仅像素 size。
   bool get useAspectRatio {
     if (isAgnesImageActive) return true;
-    return _imageCreds?.type == ProviderType.xai;
+    return isXaiImageActive;
   }
 
   bool get showSize {

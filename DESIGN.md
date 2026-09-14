@@ -402,10 +402,17 @@ Flutter 落点：`packages/design_fluent` 与 `packages/design_material` 的 `Th
 | `IMG-REF`      | Composer 参考图增删     | `F-RefImage`：拖放 + 缩略图 + 清除                          | `M-RefImage`：点选相册/文件 + 预览 + 清除             | 无 / 有参考图                  |
 | `IMG-TURN-REF` | **用户气泡**回看本回合参考图   | `F-TurnRefThumbs`：meta 通栏；其下左缩略 + 右提示词；点击进 `IMG-LIGHTBOX` | `M-TurnRefThumbs`：同布局；触控间距友好               | 无图（旧数据） / 加载中 / 有图 / 损坏占位 |
 | `IMG-GENERATE` | 生成 / 停止            | `F-GenPrimary`：窗格底主按钮；忙时停止                          | `M-GenPrimary`：底栏上方主按钮；忙时停止                | 空闲 / 忙 / 停止中              |
-| `IMG-TIMELINE` | 结果时间线（**按回合时间分隔**） | `F-ImageTimeline`：每回合 = 用户提示（± `IMG-TURN-REF`）+ 结果块 | `M-ImageTimeline`：竖向卡片流；回合分隔可读             | 空 / 生成中占位 / 有图            |
+| `IMG-TIMELINE` | 结果时间线（**按回合时间分隔**） | `F-ImageTimeline`：每回合 = 用户提示（± `IMG-TURN-REF`）+ 结果块 + **用此提示重跑** | `M-ImageTimeline`：竖向卡片流；回合分隔可读 + **用此提示重跑** | 空 / 生成中占位 / 有图 / 失败            |
 | `IMG-LIGHTBOX` | 大图浏览               | `F-Lightbox`：遮罩 + 左右键切换                             | `M-Lightbox`：全屏 + 滑动切换                     | 开 / 关                     |
 | `IMG-ACTIONS`  | 下载、另存、作参考          | 悬停工具条 + 右键                                          | 长按 / 顶栏 / 预览内动作；**存相册**                    | 权限拒绝时提示                   |
+| `IMG-RERUN`    | 用此提示重跑（回填 Composer） | 时间线**失败**回合动作区按钮                                      | 同语义；触控友好                                   | 回填提示词 + 参数 + **可读参考图**；**不**自动提交；忙态禁用 |
 | `IMG-SESSION`  | 生图会话列表（若保留多会话）     | 对齐 `CHAT-SESSION-LIST` 的 Fluent 窗格模式                | 对齐 Material 列表层模式                          | 同对话会话态                    |
+
+**`IMG-RERUN`（对齐 `VID-RERUN`）**
+
+- 仅**失败**回合展示入口。将 `prompt` 写入 Composer 草稿，并将该回合 `referenceImages`（若有且文件仍可读）恢复为当前参考图；**一并回填**数量 / 尺寸或比例 / 质量（item 上有则写入 facade，并 `syncParamsToActiveProvider`）。
+- **不**自动提交；用户确认后再点生成。生成中（全局 busy）按钮禁用；点按可提示「当前有任务进行中」。
+- 原参考图不可读时：仅回填提示词与参数，并短提示说明。
 
 **`IMG-TURN-REF` / 参考图持久化（已决）**
 
@@ -755,4 +762,5 @@ packages/design_material/
 | 2026-09-14 | **`CHAT-ATTACH`**：vision 启发式补 `grok`（`grok-4.5` 等可附图） |
 | 2026-09-14 | **体验债落地**：密度/字号极端档（E9：compact+更大 / comfortable+更小抽检；Material 底栏随字号抬高；Composer/会话顶栏/设置分段去过死高度） |
 | 2026-09-14 | **`VID-PLAYER` 信息密度**：Fluent OD 头栏摘要+元信息、空舞台示意/三步引导、transport 缓冲分层与音量%；桌面内嵌跟版；Material 不跟桌面密度；§5.6 |
+| 2026-09-14 | **`IMG-RERUN`**：双端生图时间线「用此提示重跑」（回填提示词+参数+可读参考图；不自动提交；忙态禁用）；§5.5 对齐 `VID-RERUN` |
 | 2026-09-14 | **`CHAT-ATTACH` UI 对齐 OD**：四端 chat 稿补附图；Flutter P0–P2（气泡角标、草稿壳、Material 圆角/padding、附加钮定尺） |

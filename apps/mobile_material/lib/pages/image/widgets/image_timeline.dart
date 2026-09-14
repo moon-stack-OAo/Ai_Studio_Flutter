@@ -20,6 +20,8 @@ class ImageTimeline extends StatefulWidget {
     this.onShare,
     this.onUseAsReference,
     this.onPreviewReference,
+    this.onRerun,
+    this.rerunEnabled = true,
     this.emptyHint = '还没有生成结果',
     this.emptySubtitle = '在上方填写提示词后生成。',
   });
@@ -34,6 +36,9 @@ class ImageTimeline extends StatefulWidget {
   /// 预览本回合参考图（`IMG-TURN-REF`）；与结果图分轨。
   final void Function(ImageItem item, int index, ImageRef ref)?
       onPreviewReference;
+  /// `IMG-RERUN`：用此提示重跑（回填 Composer）。
+  final void Function(ImageItem item)? onRerun;
+  final bool rerunEnabled;
   final String emptyHint;
   final String? emptySubtitle;
 
@@ -118,6 +123,8 @@ class _ImageTimelineState extends State<ImageTimeline> {
             onShare: widget.onShare,
             onUseAsReference: widget.onUseAsReference,
             onPreviewReference: widget.onPreviewReference,
+            onRerun: widget.onRerun,
+            rerunEnabled: widget.rerunEnabled,
           ),
         );
       },
@@ -137,6 +144,8 @@ class ImageTimelineTurn extends StatelessWidget {
     this.onShare,
     this.onUseAsReference,
     this.onPreviewReference,
+    this.onRerun,
+    this.rerunEnabled = true,
   });
 
   final ImageItem item;
@@ -149,6 +158,8 @@ class ImageTimelineTurn extends StatelessWidget {
       onUseAsReference;
   final void Function(ImageItem item, int index, ImageRef ref)?
       onPreviewReference;
+  final void Function(ImageItem item)? onRerun;
+  final bool rerunEnabled;
 
   String _timeLabel(int ms) {
     if (ms <= 0) return '';
@@ -158,9 +169,22 @@ class ImageTimelineTurn extends StatelessWidget {
     return '$hh:$mm';
   }
 
+  Widget? _rerunBtn() {
+    if (onRerun == null) return null;
+    if (item.prompt.trim().isEmpty && item.referenceImages.isEmpty) {
+      return null;
+    }
+    return OutlinedButton(
+      onPressed: rerunEnabled ? () => onRerun!(item) : null,
+      child: const Text('用此提示重跑'),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final tokens = materialTokensOf(context);
+    final rerunBtn =
+        item.status == ImageItemStatus.error ? _rerunBtn() : null;
     return Card(
       margin: EdgeInsets.zero,
       color: tokens.surface,
@@ -187,7 +211,7 @@ class ImageTimelineTurn extends StatelessWidget {
                       onPreviewReference!(item, index, ref),
             ),
             const SizedBox(height: 10),
-            if (item.status == ImageItemStatus.error)
+            if (item.status == ImageItemStatus.error) ...[
               Container(
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
@@ -205,8 +229,12 @@ class ImageTimelineTurn extends StatelessWidget {
                     fontFamily: tokens.fontFamily,
                   ),
                 ),
-              )
-            else if (item.status == ImageItemStatus.loading)
+              ),
+              if (rerunBtn != null) ...[
+                const SizedBox(height: 8),
+                Align(alignment: Alignment.centerLeft, child: rerunBtn),
+              ],
+            ] else if (item.status == ImageItemStatus.loading)
               _LoadingGrid(count: item.n.clamp(1, 4), tokens: tokens)
             else
               _ResultGrid(

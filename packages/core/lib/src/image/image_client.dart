@@ -9,9 +9,39 @@ import '../openai/openai_urls.dart';
 import '../provider/agnes_profile.dart';
 import '../provider/provider_repository.dart';
 import '../provider/provider_type.dart';
+import '../provider/xai_profile.dart';
 import '../security/safe_http_client.dart';
 import '../security/url_safety.dart';
 import 'image_models.dart';
+
+/// 参考图 data URL 的 MIME（JPEG / PNG / WebP；未知回退 PNG）。
+String sniffImageDataUrlMime(Uint8List bytes) {
+  if (bytes.length >= 3 &&
+      bytes[0] == 0xFF &&
+      bytes[1] == 0xD8 &&
+      bytes[2] == 0xFF) {
+    return 'image/jpeg';
+  }
+  if (bytes.length >= 8 &&
+      bytes[0] == 0x89 &&
+      bytes[1] == 0x50 &&
+      bytes[2] == 0x4E &&
+      bytes[3] == 0x47) {
+    return 'image/png';
+  }
+  if (bytes.length >= 12 &&
+      bytes[0] == 0x52 &&
+      bytes[1] == 0x49 &&
+      bytes[2] == 0x46 &&
+      bytes[3] == 0x46 &&
+      bytes[8] == 0x57 &&
+      bytes[9] == 0x45 &&
+      bytes[10] == 0x42 &&
+      bytes[11] == 0x50) {
+    return 'image/webp';
+  }
+  return 'image/png';
+}
 
 /// 默认生图超时（约 180s）。
 const Duration defaultImageTimeout = Duration(seconds: 180);
@@ -122,8 +152,13 @@ class OpenAiCompatibleImageClient {
       );
     }
 
-    final useAspect = providerType == ProviderType.xai ||
-        (aspectRatio != null && aspectRatio.trim().isNotEmpty);
+    final xai = isXaiImageProvider(
+      providerType: providerType,
+      baseUrl: baseUrl,
+      imageModel: modelId,
+    );
+    final useAspect =
+        xai || (aspectRatio != null && aspectRatio.trim().isNotEmpty);
 
     final body = <String, dynamic>{
       'model': modelId,
@@ -218,9 +253,14 @@ class OpenAiCompatibleImageClient {
 
     final uri = imageEditsUri(baseUrl);
 
-    if (providerType == ProviderType.xai) {
-      final dataUrl =
-          'data:image/png;base64,${base64Encode(imageBytes)}';
+    final xai = isXaiImageProvider(
+      providerType: providerType,
+      baseUrl: baseUrl,
+      imageModel: modelId,
+    );
+    if (xai) {
+      final mime = sniffImageDataUrlMime(imageBytes);
+      final dataUrl = 'data:$mime;base64,${base64Encode(imageBytes)}';
       final body = <String, dynamic>{
         'model': modelId,
         'prompt': text,

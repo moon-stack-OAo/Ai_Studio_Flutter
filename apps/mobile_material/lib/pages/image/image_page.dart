@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -93,12 +94,14 @@ class _ImagePageState extends State<ImagePage> {
     });
   }
 
+  String? _lastInfo;
+
   void _onControllerChanged() {
+    if (!mounted) return;
     final banner = _controller.bannerError;
     if (banner != null &&
         banner.isNotEmpty &&
-        banner != _lastBanner &&
-        mounted) {
+        banner != _lastBanner) {
       _lastBanner = banner;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -111,6 +114,21 @@ class _ImagePageState extends State<ImagePage> {
       );
     }
     if (banner == null) _lastBanner = null;
+
+    final info = _controller.bannerInfo;
+    if (info != null && info.isNotEmpty && info != _lastInfo) {
+      _lastInfo = info;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(info),
+          action: SnackBarAction(
+            label: '关闭',
+            onPressed: _controller.clearBannerInfo,
+          ),
+        ),
+      );
+    }
+    if (info == null) _lastInfo = null;
     _maybeScrollToBottom();
   }
 
@@ -470,6 +488,10 @@ class _ImagePageState extends State<ImagePage> {
                         onSaveAlbum: _onSaveAlbum,
                         onShare: _onShare,
                         onUseAsReference: _onUseAsReference,
+                        onRerun: (item) {
+                          unawaited(_controller.rerunFromItem(item));
+                        },
+                        rerunEnabled: !widget.generation.busy,
                       ),
                     ),
                   ],
@@ -492,6 +514,8 @@ class _TimelineSliver extends StatelessWidget {
     this.onShare,
     this.onUseAsReference,
     this.onPreviewReference,
+    this.onRerun,
+    this.rerunEnabled = true,
   });
 
   final List<ImageItem> items;
@@ -503,6 +527,8 @@ class _TimelineSliver extends StatelessWidget {
       onUseAsReference;
   final void Function(ImageItem item, int index, ImageRef ref)?
       onPreviewReference;
+  final void Function(ImageItem item)? onRerun;
+  final bool rerunEnabled;
 
   @override
   Widget build(BuildContext context) {
@@ -533,6 +559,8 @@ class _TimelineSliver extends StatelessWidget {
               onShare: onShare,
               onUseAsReference: onUseAsReference,
               onPreviewReference: onPreviewReference,
+              onRerun: onRerun,
+              rerunEnabled: rerunEnabled,
             ),
           );
         },

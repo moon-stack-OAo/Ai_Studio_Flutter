@@ -119,6 +119,7 @@ core     → （无 Flutter UI；可依赖 foundation / 平台无关库）
 | 音量 prefs | `VideoPlaybackPrefs`（键 `core.video_playback.v1`：volume 0–100 + muted） | 开播前 load；拖动/静音 debounce 写入 |
 | 播放错误文案 | `VideoPlaybackErrors`（中文可读 + 弱网短原因） | 内嵌/弹窗/全屏/推页统一「重试」 |
 | `VID-RERUN` | 读 item 的 prompt / 参数 / `referenceImages` | `video_controller.rerunFromItem`：回填 Composer，**不**自动提交；忙态禁用 |
+| `IMG-RERUN` | 读 item 的 prompt / n / size·aspect / quality / `referenceImages` | `image_controller.rerunFromItem`：回填 Composer，**不**自动提交；忙态禁用 |
 | 第三方许可 | `third_party_licenses.dart`（media_kit / libmpv / FFmpeg） | 关于页「开源许可」 |
 
 播放生命周期：桌面弹窗独立 `Player`（关即 dispose，打开时内嵌暂停）；移动推页 pop 即 dispose。

@@ -339,6 +339,38 @@ void main() {
     );
   });
 
+  test('xai_profile：模型名/中转仍识别为 xAI 生图协议', () {
+    expect(
+      isXaiImageProvider(
+        providerType: ProviderType.openaiCompatible,
+        imageModel: 'grok-imagine-image',
+      ),
+      isTrue,
+    );
+    expect(
+      isXaiImageProvider(
+        providerType: ProviderType.openaiCompatible,
+        imageModel: 'grok-imagine-image-2.0',
+      ),
+      isTrue,
+    );
+    expect(
+      isXaiImageProvider(
+        providerType: ProviderType.openaiCompatible,
+        baseUrl: 'https://api.x.ai/v1',
+        imageModel: 'gpt-image-1',
+      ),
+      isTrue,
+    );
+    expect(
+      isXaiImageProvider(
+        providerType: ProviderType.openaiCompatible,
+        imageModel: 'gpt-image-1',
+      ),
+      isFalse,
+    );
+  });
+
   test('xai_profile：模型名/中转仍识别为 xAI 视频协议', () {
     expect(
       isXaiVideoProvider(
