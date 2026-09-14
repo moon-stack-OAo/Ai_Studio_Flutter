@@ -267,6 +267,22 @@
     }
     .tool:hover { border-color: var(--primary); color: #93c5fd; }
     .tool:focus-visible { outline: 2px solid var(--primary); outline-offset: 1px; }
+    .panel-h.player-h { align-items: flex-start; }
+    .panel-h.player-h .player-h-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+    .panel-h.player-h .player-meta {
+      display: flex; flex-direction: column; align-items: flex-end; gap: 6px;
+      min-width: 0; max-width: min(360px, 62%);
+    }
+    .panel-h.player-h .prompt-snip {
+      font-size: 12px; color: var(--ink-secondary); line-height: 1.4;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+      max-width: 100%; text-align: right;
+    }
+    .panel-h.player-h .meta-chips { display: flex; flex-wrap: wrap; gap: 4px; justify-content: flex-end; }
+    .panel-h.player-h .meta-chips .pill { font-size: 10px; padding: 2px 7px; }
+    .panel-h.player-h .cap-hint {
+      font-size: 11px; color: var(--ink-muted); text-align: right; line-height: 1.45; max-width: 220px;
+    }
     .player-wrap { padding: 12px; display: flex; flex-direction: column; gap: 10px; flex: 1; overflow: auto; }
     .stage {
       position: relative; aspect-ratio: 16 / 9; border-radius: 10px; overflow: hidden;
@@ -278,13 +294,43 @@
         radial-gradient(circle at 30% 35%, color-mix(in oklch, var(--primary) 30%, transparent), transparent 42%),
         linear-gradient(145deg, #161b24, #0b0d10);
     }
-    .stage.empty .poster { opacity: .35; }
+    .stage.empty .poster { opacity: .28; }
     .stage-empty {
       position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center;
-      justify-content: center; gap: 8px; color: #a1a1aa; text-align: center; padding: 16px; pointer-events: none;
+      justify-content: center; gap: 6px; color: #a1a1aa; text-align: center; padding: 14px 16px; pointer-events: none;
     }
     .stage-empty strong { font-size: 13px; font-weight: 600; color: #e4e4e7; }
-    .stage-empty p { font-size: 11px; line-height: 1.5; max-width: 220px; opacity: .85; }
+    .stage-empty p { font-size: 11px; line-height: 1.5; max-width: 240px; opacity: .85; }
+    .stage-silhouette {
+      width: 128px; height: 72px; position: relative; margin-bottom: 6px;
+      border: 1.5px dashed color-mix(in oklch, #e4e4e7 32%, transparent);
+      border-radius: 9px;
+      background: color-mix(in oklch, #fff 5%, transparent);
+    }
+    .stage-silhouette .sil-play {
+      position: absolute; left: 50%; top: 42%; transform: translate(-50%, -50%);
+      width: 0; height: 0;
+      border-style: solid; border-width: 8px 0 8px 13px;
+      border-color: transparent transparent transparent color-mix(in oklch, #e4e4e7 55%, transparent);
+    }
+    .stage-silhouette .sil-bar {
+      position: absolute; left: 12px; right: 12px; bottom: 10px; height: 3px; border-radius: 99px;
+      background: color-mix(in oklch, #a1a1aa 42%, transparent);
+    }
+    .stage-silhouette .sil-bar::after {
+      content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 34%; border-radius: 99px;
+      background: color-mix(in oklch, #e4e4e7 38%, transparent);
+    }
+    .stage-steps {
+      display: flex; flex-wrap: wrap; gap: 5px; justify-content: center;
+      margin-top: 4px; max-width: 300px;
+    }
+    .stage-steps span {
+      font-size: 10px; color: #a1a1aa; line-height: 1.3;
+      padding: 3px 8px; border-radius: 999px;
+      border: 1px solid color-mix(in oklch, #a1a1aa 32%, transparent);
+      font-variant-numeric: tabular-nums;
+    }
     .play {
       position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
       width: 56px; height: 56px; border-radius: 50%; border: 0; cursor: pointer;
@@ -294,13 +340,52 @@
     .play:hover { filter: brightness(1.08); }
     .play:focus-visible { outline: 2px solid #fff; outline-offset: 3px; }
     .play svg { width: 22px; height: 22px; margin-left: 2px; }
-    .transport { display: flex; align-items: center; gap: 8px; min-height: 32px; }
-    .scrub { flex: 1; height: 6px; border-radius: 99px; background: var(--surface-elevated); position: relative; overflow: hidden; }
-    .scrub > i { position: absolute; left: 0; top: 0; bottom: 0; width: 38%; background: var(--primary); border-radius: 99px; }
-    .time { font-size: 11px; color: var(--ink-muted); font-variant-numeric: tabular-nums; min-width: 78px; }
+    .transport {
+      display: flex; align-items: center; gap: 10px;
+      min-height: 40px; padding: 2px 0;
+    }
+    .transport > .tool { height: 32px; min-width: 32px; padding: 0 10px; }
+    .scrub {
+      flex: 1; height: 8px; border-radius: 99px; background: var(--canvas);
+      position: relative; overflow: visible; cursor: pointer;
+      box-shadow: inset 0 0 0 1px var(--border);
+    }
+    .scrub .buf {
+      position: absolute; left: 0; top: 0; bottom: 0; width: 72%; border-radius: 99px;
+      background: color-mix(in oklch, var(--ink-muted) 26%, var(--surface-elevated));
+    }
+    .scrub .played {
+      position: absolute; left: 0; top: 0; bottom: 0; width: 38%; border-radius: 99px;
+      background: var(--primary);
+    }
+    .scrub .thumb {
+      position: absolute; left: 38%; top: 50%; transform: translate(-50%, -50%);
+      width: 12px; height: 12px; border-radius: 50%;
+      background: var(--primary); border: 2px solid #fff;
+      box-shadow: 0 1px 4px rgba(0,0,0,.45);
+    }
+    .time {
+      font-size: 12px; color: var(--ink-secondary);
+      font-variant-numeric: tabular-nums; font-family: var(--mono);
+      min-width: 92px; letter-spacing: 0.02em;
+    }
     .vol { display: inline-flex; align-items: center; gap: 6px; }
-    .vol-track { width: 64px; height: 4px; border-radius: 99px; background: var(--surface-elevated); position: relative; overflow: hidden; }
-    .vol-track > i { position: absolute; left: 0; top: 0; bottom: 0; width: 70%; background: var(--primary); border-radius: 99px; }
+    .vol > .tool { height: 32px; min-width: 32px; padding: 0 8px; }
+    .vol-track {
+      width: 72px; height: 5px; border-radius: 99px; background: var(--canvas);
+      position: relative; overflow: hidden; box-shadow: inset 0 0 0 1px var(--border);
+    }
+    .vol-track > i {
+      position: absolute; left: 0; top: 0; bottom: 0; width: 72%;
+      background: var(--primary); border-radius: 99px;
+    }
+    .vol-pct {
+      font-size: 11px; font-family: var(--mono); font-variant-numeric: tabular-nums;
+      color: var(--ink-secondary); min-width: 30px;
+    }
+    .player-wrap > .job-actions { gap: 8px; margin-top: 2px; }
+    .player-wrap > .job-actions .tool { height: 30px; padding: 0 10px; }
+    .hint.player-foot { max-width: 54ch; line-height: 1.45; }
     .time-split {
       display: flex; align-items: center; gap: 12px; margin: 4px 2px 2px;
       color: var(--ink-muted); font-size: 11px;
@@ -577,9 +662,18 @@
           </div>
 
           <div class="panel" data-od-id="f-video-player">
-            <div class="panel-h">
-              <h2>播放器 <span class="badge-id">F-VideoPlayer · VID-PLAYER</span></h2>
-              <span class="hint">16:9 · 音量 / 真全屏</span>
+            <div class="panel-h player-h">
+              <div class="player-h-main">
+                <h2>播放器 <span class="badge-id">F-VideoPlayer · VID-PLAYER</span></h2>
+              </div>
+              <div class="player-meta" data-od-id="f-vid-player-meta">
+                <div class="prompt-snip" title="海边日落延时，镜头缓慢推进，海浪轻拍礁石，暖色天空映在水面">海边日落延时，镜头缓慢推进，海浪轻拍礁石…</div>
+                <div class="meta-chips">
+                  <span class="pill">10s</span>
+                  <span class="pill">16:9</span>
+                  <span class="pill">grok-imagine</span>
+                </div>
+              </div>
             </div>
             <div class="player-wrap">
               <div class="demo-cap">Selected · 已载入成功项</div>
@@ -589,11 +683,16 @@
               </div>
               <div class="transport">
                 <button class="tool" type="button" aria-label="暂停">❚❚</button>
-                <div class="scrub"><i></i></div>
+                <div class="scrub" role="slider" aria-label="进度" aria-valuemin="0" aria-valuemax="10" aria-valuenow="3" title="进度">
+                  <span class="buf" aria-hidden="true"></span>
+                  <span class="played" aria-hidden="true"></span>
+                  <span class="thumb" aria-hidden="true"></span>
+                </div>
                 <span class="time">00:03 / 00:10</span>
                 <div class="vol" title="音量 · 跨启动持久化">
                   <button class="tool" type="button" aria-label="静音">♪</button>
                   <div class="vol-track"><i></i></div>
+                  <span class="vol-pct">72%</span>
                 </div>
                 <button class="tool" type="button" aria-label="全屏">⛶</button>
               </div>
@@ -605,15 +704,25 @@
               </div>
 
               <div class="demo-cap">Unselected · 未选任务</div>
+              <p class="hint" style="margin:-4px 0 2px">头栏空闲示意：音量跨启动持久化 · 真全屏</p>
               <div class="stage empty" data-od-id="f-vid-stage-empty">
                 <div class="poster"></div>
                 <div class="stage-empty">
+                  <div class="stage-silhouette" aria-hidden="true">
+                    <span class="sil-play"></span>
+                    <span class="sil-bar"></span>
+                  </div>
                   <strong>选择左侧已完成任务</strong>
                   <p>成功项封面或「在右侧播放」会载入此舞台。</p>
+                  <div class="stage-steps">
+                    <span>① 选完成项</span>
+                    <span>② 点封面或「在右侧播放」</span>
+                    <span>③ 载入此舞台</span>
+                  </div>
                 </div>
               </div>
 
-              <p class="hint">杀进程后可经 VID-RESUME 恢复未完成任务；进度态与生图「缩略图时间线」信息架构不同。音量跨启动持久化（prefs）；首次无记录默认跟随内核 100。用此提示重跑回填提示词与参考图，不自动提交。</p>
+              <p class="hint player-foot">VID-RESUME 可恢复未完成任务。音量写入 prefs；重跑仅回填提示词与参考图，不自动提交。</p>
             </div>
           </div>
         </div>

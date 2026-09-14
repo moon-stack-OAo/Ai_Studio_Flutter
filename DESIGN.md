@@ -383,7 +383,7 @@ Flutter 落点：`packages/design_fluent` 与 `packages/design_material` 的 `Th
 - **与 `IMG-TURN-REF` 区分**：生图/生视频回合参考图仍走 `*-TURN-REF`；对话附图是 **CHAT 消息资产**，不得 silently 复用生图时间线组件换皮。
 - **数量 / MIME / 大小**：每条用户消息最多 **4** 张；`png` / `jpeg` / `jpg` / `webp`；单张解码前原始字节 ≤ **4 MiB**（超限拒绝并提示）；发送前可按实现缩放/压 JPEG 以控上下文。
 - **可发送条件**：活跃 `chatModel` 判定支持视觉（启发式，见下）时启用附件入口；**有图时允许正文为空**；不支持时入口禁用 + 短说明（不本地暂存后盲发）。
-- **视觉模型启发式（最小）**：`chatModel` id 含（大小写不敏感）`vision` / `gpt-4o` / `gpt-4.1` / `gpt-5` / `o1` / `o3` / `o4` / `gemini` / `claude-3` / `claude-4` / `claude-sonnet` / `claude-opus` / `llava` 等 → 允许；其余默认不允许（后续可加提供商级开关，首版不做）。
+- **视觉模型启发式（最小）**：`chatModel` id 含（大小写不敏感）`vision` / `gpt-4o` / `gpt-4.1` / `gpt-5` / `o1` / `o3` / `o4` / `gemini` / `claude-3` / `claude-4` / `claude-sonnet` / `claude-opus` / `llava` / `grok` 等 → 允许；其余默认不允许（后续可加提供商级开关，首版不做）。
 - **协议**：OpenAI 兼容 chat completions：`content` 为 parts 数组（`text` + `image_url`，本地图转 `data:` URL）；无附件时仍发纯 string，兼容旧路径。
 - **写入**：提交时落盘（目录与生图 `image_cache` **分轨**，如 `chat_image_cache/`；id 前缀 `chat_`）；`ChatMessage.attachments: List<ImageRef>`；旧 JSON 无字段 → 空列表。
 - **布局**：用户气泡内缩略 + 正文（无图则仅文本）；点击缩略进灯箱，角标 **「附图」**（可扩 `ImageLightboxSource.attachment`）。
@@ -429,7 +429,7 @@ Flutter 落点：`packages/design_fluent` 与 `packages/design_material` 的 `Th
 | `VID-TURN-REF`   | **用户气泡**回看本回合参考图     | 对齐 `IMG-TURN-REF` 的 Fluent 变体                                                     | 对齐 Material 变体                                              | 同 `IMG-TURN-REF`                                                                                                                                    |
 | `VID-GENERATE`   | 创建任务 / 取消            | `F-VideoPrimary`                                                                  | `M-VideoPrimary`                                            | 空闲 / 提交中                                                                                                                                            |
 | `VID-QUEUE`      | 任务队列与进度（**按回合时间分隔**） | `F-VideoQueue`：筛选 Chip + 每回合提示词（± `VID-TURN-REF`）+ 任务卡（可含封面）+ ProgressBar + 放弃/重试 + **用此提示重跑** | `M-VideoQueue`：筛选 Chip + 卡片列表（可含封面）+ LinearProgress + 放弃/重试 + **用此提示重跑** | 筛选：全部 / 生成中 / 待恢复 / 已完成 / 失败 / 已放弃；条目态 loading / pending_resume / success / error / abandoned（规格文案 queued·running·succeeded·failed·abandoned 为对外表述） |
-| `VID-PLAYER`     | 播放完成片（含音量 / 系统全屏）    | `F-VideoPlayer`：内嵌 + 放大/全屏 + 下载 + **用此提示重跑**                                     | `M-VideoPlayer`：推页播放 + 系统沉浸全屏 + 下载/相册 + **用此提示重跑**             | 本地 / 远端 URL；缓冲；音量（跨启动持久化）；全屏开/关                                                                                                               |
+| `VID-PLAYER`     | 播放完成片（含音量 / 系统全屏）    | `F-VideoPlayer`：内嵌 + 放大/全屏 + 下载 + **用此提示重跑**；头栏可显示提示词摘要 + 时长/比例/模型；空舞台示意+三步引导；transport 缓冲分层 + 音量百分比 | `M-VideoPlayer`：推页播放 + 系统沉浸全屏 + 下载/相册 + **用此提示重跑**             | 本地 / 远端 URL；缓冲；音量（跨启动持久化）；全屏开/关                                                                                                               |
 | `VID-RESUME`     | 启动时恢复未完成             | 静默续跑 + InfoBar 提示                                                                 | 静默续跑 + Snackbar                                             | 无可恢复 / 恢复中                                                                                                                                          |
 | `VID-RERUN`      | 用此提示重跑（回填 Composer） | 队列条目 / 播放器动作区按钮                                                                  | 同语义；触控友好                                                    | 回填提示词 + **一并恢复参考图**（若有）；**不**自动提交；忙态禁用                                                                                                         |
 
@@ -441,6 +441,7 @@ Flutter 落点：`packages/design_fluent` 与 `packages/design_material` 的 `Th
 - **首版不做**：列表内嵌自动播、多路同时播放、播放列表连播。
 - **播放失败 / 弱网（体验债 · 已落地）**：无地址 / 本地缺失 / 内存视频 / 初始化失败 / `stream.error` 等统一中文短文案；错误态提供「重试」（重新 open 当前项）；http(s) 弱网主句中文，可附极短原因，不甩整段底层英文；桌面内嵌切换失败保留上一帧并可重试。
 - **缓冲 / 加载态（体验债 · 已落地）**：首次打开（无上一帧）优先 `posterLocalPath` / `posterUrl` 占位再叠轻量 loading；无封面则 loading + 非纯黑舞台底；桌面内嵌队列切换保留上一帧 + 半透明 loading，新源可解码后再挂载；弹窗 / 全屏 / 移动推页同语义；播放中 `buffering` 叠半透明指示。
+- **播放器信息密度（Fluent · 已落地）**：有片时头栏右侧展示提示词截断摘要 + 时长/比例/模型 pill（有则显示）；无片时 hint「音量跨启动持久化 · 真全屏」。空舞台：播放器轮廓示意 + 三步引导（选完成项 → 封面/「在右侧播放」→ 载入舞台）。transport 仍单行「播放 · scrub · 时间 · 音量 · 全屏」，scrub 分层（底轨 / 缓冲 / 已播 + thumb），音量旁显示百分比。不新增连播/倍速等能力。Material 推页保持触控布局，不对齐 Fluent 桌面密度。
 
 **`VID-RERUN`（体验债 · 已落地）**
 
@@ -751,4 +752,7 @@ packages/design_material/
 | 2026-09-14 | **体验债落地**：灯箱来源可区分（E6：双端「参考」/「结果」角标；`*-TURN-REF` 与结果时间线） |
 | 2026-09-14 | **体验债落地**：空态覆盖面（E7：审计补缺；桌面提供商 CTA「添加提供商」+ 详情未选中插画空态；§3.1 / `CHAT-EMPTY`） |
 | 2026-09-14 | **体验债落地**：短动效一致性（E8：主路径对齐 `FluentMotion` / `MaterialMotion`；可打断、无超长挡操作） |
+| 2026-09-14 | **`CHAT-ATTACH`**：vision 启发式补 `grok`（`grok-4.5` 等可附图） |
 | 2026-09-14 | **体验债落地**：密度/字号极端档（E9：compact+更大 / comfortable+更小抽检；Material 底栏随字号抬高；Composer/会话顶栏/设置分段去过死高度） |
+| 2026-09-14 | **`VID-PLAYER` 信息密度**：Fluent OD 头栏摘要+元信息、空舞台示意/三步引导、transport 缓冲分层与音量%；桌面内嵌跟版；Material 不跟桌面密度；§5.6 |
+| 2026-09-14 | **`CHAT-ATTACH` UI 对齐 OD**：四端 chat 稿补附图；Flutter P0–P2（气泡角标、草稿壳、Material 圆角/padding、附加钮定尺） |

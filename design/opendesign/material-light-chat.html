@@ -150,14 +150,54 @@
       animation: pulse 1.2s ease-in-out infinite;
     }
     @keyframes pulse { 50% { opacity: .35; transform: scale(.85); } }
+    .attach-draft {
+      margin-bottom: 8px; padding: 8px 10px; border-radius: 14px;
+      background: var(--surface-muted); border: 1px solid var(--border);
+    }
+    .attach-draft .row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .attach-thumb {
+      position: relative; width: 52px; height: 52px; border-radius: 12px; border: 1px solid var(--border);
+      cursor: pointer; overflow: hidden; flex-shrink: 0; padding: 0;
+    }
+    .attach-thumb:focus-visible { outline: 2px solid var(--primary); outline-offset: 1px; }
+    .attach-thumb .rm {
+      position: absolute; top: 2px; right: 2px; width: 20px; height: 20px; border-radius: 50%;
+      border: 0; background: rgba(20,20,19,.72); color: #fff; font-size: 13px;
+      cursor: pointer; padding: 0; display: grid; place-items: center;
+    }
+    .attach-thumb.t1 { background: linear-gradient(145deg, #f0d5c4 0%, #d97757 55%, #8b5a3c 100%); }
+    .attach-thumb.t2 { background: linear-gradient(160deg, #efe6d8 0%, #c4b59a 45%, #6c6a64 100%); }
+    .attach-note { margin-top: 6px; font-size: 11px; color: var(--ink-muted); }
     .composer {
       display: flex; align-items: flex-end; gap: 8px;
     }
+    .attach-btn {
+      width: 48px; height: 48px; border: 0; border-radius: 24px;
+      background: var(--surface-muted); color: var(--ink-secondary); cursor: pointer;
+      display: grid; place-items: center; flex-shrink: 0;
+    }
+    .attach-btn:hover, .attach-btn:active { background: color-mix(in oklch, var(--primary) 12%, var(--surface-muted)); color: var(--ink); }
+    .attach-btn:focus-visible { outline: 2px solid var(--primary); outline-offset: 1px; }
+    .attach-btn svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
     .composer textarea {
       flex: 1; min-height: 48px; max-height: 100px; resize: none;
       border: 1px solid var(--border); border-radius: 24px;
       background: var(--canvas); padding: 12px 16px;
       font: inherit; font-size: 14px; color: var(--ink); outline: 0;
+    }
+    .msg-attach {
+      display: flex; align-items: flex-end; gap: 8px; flex-wrap: wrap; margin-bottom: 8px;
+    }
+    .msg-attach-thumb {
+      width: 72px; height: 72px; border-radius: 12px; border: 1px solid color-mix(in oklch, var(--primary) 25%, var(--border));
+      cursor: pointer; padding: 0; flex-shrink: 0;
+    }
+    .msg-attach-thumb:focus-visible { outline: 2px solid var(--primary); outline-offset: 1px; }
+    .msg-attach-thumb.t1 { background: linear-gradient(145deg, #f0d5c4 0%, #d97757 55%, #8b5a3c 100%); }
+    .msg-attach-thumb.t2 { background: linear-gradient(160deg, #efe6d8 0%, #c4b59a 45%, #6c6a64 100%); }
+    .attach-cap {
+      font-size: 10px; font-weight: 650; letter-spacing: 0.06em; text-transform: uppercase;
+      color: var(--ink-muted); align-self: center;
     }
     .composer textarea:focus {
       border-color: color-mix(in oklch, var(--primary) 45%, var(--border));
@@ -247,7 +287,13 @@
     <div class="messages" data-od-id="m-message-list">
       <article class="bubble user" data-od-id="msg-user-1">
         <div class="meta"><span class="role">你</span> <span class="badge-id">M-MessageList</span></div>
-        <p>移动端对话如何做到触控友好，且不依赖悬停？</p>
+        <div class="msg-attach" data-od-id="chat-attach-sent">
+          <button class="msg-attach-thumb t1" type="button" title="附图 · 点击预览灯箱" aria-label="附图 1"></button>
+          <button class="msg-attach-thumb t2" type="button" title="附图 · 点击预览灯箱" aria-label="附图 2"></button>
+          <span class="attach-cap">附图</span>
+          <span class="badge-id">CHAT-ATTACH</span>
+        </div>
+        <p>移动端对话如何做到触控友好，且不依赖悬停？附图仅作对话上下文，勿与生图参考图混用。</p>
       </article>
       <article class="bubble assistant" data-od-id="msg-assistant-1">
         <div class="meta">
@@ -269,8 +315,18 @@ M-SessionHistoryBtn → 列表层</div>
         流式输出中 · 点停止可中断
         <span class="badge-id">CHAT-COMPOSER</span>
       </div>
+      <div class="attach-draft" data-od-id="chat-attach-draft">
+        <div class="row">
+          <button class="attach-thumb t1" type="button" title="附图草稿" aria-label="附图草稿 1"><span class="rm" aria-label="移除">×</span></button>
+          <button class="attach-thumb t2" type="button" title="附图草稿" aria-label="附图草稿 2"><span class="rm" aria-label="移除">×</span></button>
+        </div>
+        <div class="attach-note">已附加 2/4 张 · 可空文发送 <span class="badge-id">CHAT-ATTACH</span></div>
+      </div>
       <div class="composer" data-od-id="m-composer">
-        <textarea rows="1" placeholder="输入消息…" disabled aria-label="消息输入（流式中禁用）"></textarea>
+        <button class="attach-btn" type="button" title="附加图片" aria-label="附加图片（CHAT-ATTACH）">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21.4 11.6l-8.5 8.5a5.5 5.5 0 01-7.8-7.8l8.5-8.5a3.5 3.5 0 015 5l-8.2 8.2a1.5 1.5 0 01-2.1-2.1l7.1-7.1"/></svg>
+        </button>
+        <textarea rows="1" placeholder="可空文发送附图…" disabled aria-label="消息输入（流式中禁用）"></textarea>
         <button class="send" type="button" aria-label="停止">
           <svg viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="1.5" fill="currentColor" stroke="none"/></svg>
         </button>

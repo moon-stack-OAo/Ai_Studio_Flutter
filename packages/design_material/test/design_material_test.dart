@@ -59,6 +59,10 @@ void main() {
     expect(UiDensity.comfortable.sessionItemVerticalPadding, 14);
     expect(UiDensity.compact.composerPadding.left, 12);
     expect(UiDensity.comfortable.composerPadding.left, 14);
+    expect(UiDensity.compact.composerFieldPadding.horizontal, 32);
+    expect(UiDensity.compact.composerFieldPadding.vertical, 24);
+    expect(UiDensity.comfortable.composerFieldPadding,
+        UiDensity.compact.composerFieldPadding);
     expect(UiDensity.compact.settingsFormGap, 10);
     expect(UiDensity.comfortable.settingsFormGap, 14);
     expect(UiDensity.compact.settingsCardPadding, 12);

@@ -8,6 +8,7 @@ import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 
 import 'video_desktop_fullscreen.dart';
+import 'video_tool_chrome.dart';
 
 /// 从 [VideoItem] 解析可播放路径（Dialog / Panel 共用）。
 String? resolveVideoItemPlayablePath(VideoItem item) {
@@ -35,19 +36,20 @@ Future<void> showVideoPlayerDialog(
         title: const Text('播放视频'),
         content: _VideoPlayerBody(item: item),
         actions: [
-          Button(
+          VideoToolButton(
             onPressed: () async {
               await onSaveAs(item);
             },
             child: const Text('另存为'),
           ),
-          Button(
+          VideoToolButton(
             onPressed: () async {
               await onOpenSystem(item);
             },
             child: const Text('系统打开'),
           ),
-          FilledButton(
+          VideoToolButton(
+            filled: true,
             onPressed: () => Navigator.of(ctx).pop(),
             child: const Text('关闭'),
           ),
@@ -464,79 +466,75 @@ class _VideoPlayerBodyState extends State<_VideoPlayerBody> {
     final playing = player.state.playing && !player.state.completed;
     final position = player.state.position;
     final duration = player.state.duration;
-    return Row(
-      children: [
-        Tooltip(
-          message: playing ? '暂停' : '播放',
-          child: Semantics(
-            button: true,
-            label: playing ? '暂停' : '播放',
-            excludeSemantics: true,
-            child: IconButton(
-              icon: Icon(
-                playing ? FluentIcons.pause : FluentIcons.play,
+    final volShown = (_muted ? 0 : _volume).round();
+    return SizedBox(
+      height: 40,
+      child: Row(
+        children: [
+          VideoTransportIconButton(
+            icon: playing ? FluentIcons.pause : FluentIcons.play,
+            tooltip: playing ? '暂停' : '播放',
+            onPressed: () => _toggle(),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: _DialogScrubber(
+              player: player,
+              playedColor: tokens.primary,
+              bufferedColor: tokens.inkMuted.withValues(alpha: 0.28),
+              backgroundColor: tokens.canvas,
+            ),
+          ),
+          const SizedBox(width: 10),
+          Text(
+            '${_fmt(position)} / ${_fmt(duration)}',
+            style: TextStyle(
+              fontSize: 12,
+              color: tokens.inkSecondary,
+              fontFamily: tokens.fontFamily,
+              fontFeatures: const [FontFeature.tabularFigures()],
+              letterSpacing: 0.02,
+            ),
+          ),
+          const SizedBox(width: 8),
+          VideoTransportIconButton(
+            icon: _muted ? FluentIcons.volume_disabled : FluentIcons.volume2,
+            tooltip: _muted ? '取消静音' : '音量 · 跨启动持久化',
+            semanticLabel: _muted ? '取消静音' : '静音',
+            onPressed: () => _toggleMute(),
+          ),
+          const SizedBox(width: 6),
+          SizedBox(
+            width: 72,
+            child: Slider(
+              value: _muted ? 0 : _volume,
+              min: 0,
+              max: 100,
+              label: '$volShown%',
+              onChanged: (v) => _setVolume(v),
+            ),
+          ),
+          const SizedBox(width: 4),
+          SizedBox(
+            width: 34,
+            child: Text(
+              '$volShown%',
+              style: TextStyle(
+                fontSize: 11,
+                color: tokens.inkSecondary,
+                fontFamily: tokens.fontFamily,
+                fontFeatures: const [FontFeature.tabularFigures()],
               ),
-              onPressed: () => _toggle(),
             ),
           ),
-        ),
-        Expanded(
-          child: _DialogScrubber(
-            player: player,
-            playedColor: tokens.primary,
-            bufferedColor: tokens.primary.withValues(alpha: 0.25),
-            backgroundColor: tokens.surfaceMuted,
+          const SizedBox(width: 4),
+          VideoTransportIconButton(
+            icon: FluentIcons.full_screen,
+            tooltip: '全屏',
+            onPressed: () => _enterFullscreen(),
           ),
-        ),
-        const SizedBox(width: 8),
-        Text(
-          '${_fmt(position)} / ${_fmt(duration)}',
-          style: TextStyle(
-            fontSize: 11,
-            color: tokens.inkMuted,
-            fontFamily: tokens.fontFamily,
-            fontFeatures: const [FontFeature.tabularFigures()],
-          ),
-        ),
-        const SizedBox(width: 4),
-        Tooltip(
-          message: _muted ? '取消静音' : '静音',
-          child: Semantics(
-            button: true,
-            label: _muted ? '取消静音' : '静音',
-            excludeSemantics: true,
-            child: IconButton(
-              icon: Icon(
-                _muted ? FluentIcons.volume_disabled : FluentIcons.volume2,
-                size: 14,
-              ),
-              onPressed: () => _toggleMute(),
-            ),
-          ),
-        ),
-        SizedBox(
-          width: 72,
-          child: Slider(
-            value: _muted ? 0 : _volume,
-            min: 0,
-            max: 100,
-            label: '${(_muted ? 0 : _volume).round()}',
-            onChanged: (v) => _setVolume(v),
-          ),
-        ),
-        Tooltip(
-          message: '全屏',
-          child: Semantics(
-            button: true,
-            label: '全屏',
-            excludeSemantics: true,
-            child: IconButton(
-              icon: const Icon(FluentIcons.full_screen, size: 14),
-              onPressed: () => _enterFullscreen(),
-            ),
-          ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
@@ -625,27 +623,64 @@ class _DialogScrubberState extends State<_DialogScrubber> {
         await _seekFraction(f, resume: widget.player.state.playing);
       },
       child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 8),
+        padding: const EdgeInsets.symmetric(vertical: 10),
         child: SizedBox(
-          height: 4,
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(2),
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                ColoredBox(color: widget.backgroundColor),
-                FractionallySizedBox(
-                  widthFactor: buffered,
-                  alignment: Alignment.centerLeft,
-                  child: ColoredBox(color: widget.bufferedColor),
+          height: 12,
+          child: Stack(
+            alignment: Alignment.centerLeft,
+            clipBehavior: Clip.none,
+            children: [
+              Positioned.fill(
+                top: 4,
+                bottom: 4,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: widget.backgroundColor,
+                    borderRadius: BorderRadius.circular(99),
+                    border: Border.all(
+                      color: widget.playedColor.withValues(alpha: 0.12),
+                    ),
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(99),
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        FractionallySizedBox(
+                          widthFactor: buffered,
+                          alignment: Alignment.centerLeft,
+                          child: ColoredBox(color: widget.bufferedColor),
+                        ),
+                        FractionallySizedBox(
+                          widthFactor: fraction.clamp(0.0, 1.0),
+                          alignment: Alignment.centerLeft,
+                          child: ColoredBox(color: widget.playedColor),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
-                FractionallySizedBox(
-                  widthFactor: fraction.clamp(0.0, 1.0),
-                  alignment: Alignment.centerLeft,
-                  child: ColoredBox(color: widget.playedColor),
+              ),
+              Align(
+                alignment: Alignment(-1 + 2 * fraction.clamp(0.0, 1.0), 0),
+                child: Container(
+                  width: 12,
+                  height: 12,
+                  decoration: BoxDecoration(
+                    color: widget.playedColor,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.white, width: 2),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.28),
+                        blurRadius: 4,
+                        offset: const Offset(0, 1),
+                      ),
+                    ],
+                  ),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),

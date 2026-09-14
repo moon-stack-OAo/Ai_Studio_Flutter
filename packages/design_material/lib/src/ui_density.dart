@@ -53,12 +53,12 @@ enum UiDensity {
         UiDensity.compact => const EdgeInsets.fromLTRB(12, 8, 12, 0),
       };
 
-  /// Composer 输入框 contentPadding。
+  /// Composer 输入框 contentPadding（对齐 OD `12px 16px`）。
   EdgeInsets get composerFieldPadding => switch (this) {
         UiDensity.comfortable =>
-          const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+          const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         UiDensity.compact =>
-          const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       };
 
   /// 设置表单项垂直间距。

@@ -9,6 +9,7 @@ import 'package:media_kit_video/media_kit_video.dart';
 
 import 'video_desktop_fullscreen.dart';
 import 'video_player_dialog.dart' show resolveVideoItemPlayablePath;
+import 'video_tool_chrome.dart';
 
 /// F-VideoPlayer · VID-PLAYER：主区内嵌播放面板。
 class VideoPlayerPanel extends StatefulWidget {
@@ -53,41 +54,32 @@ class _VideoPlayerPanelState extends State<VideoPlayerPanel> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
             decoration: BoxDecoration(
               border: Border(bottom: BorderSide(color: tokens.border)),
             ),
             child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  '播放器',
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: tokens.ink,
-                    fontFamily: tokens.fontFamily,
+                Expanded(
+                  child: Text(
+                    '播放器',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: tokens.ink,
+                      fontFamily: tokens.fontFamily,
+                    ),
                   ),
                 ),
-                const Spacer(),
-                Text(
-                  _stageLabel(item),
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: tokens.inkMuted,
-                    fontFamily: tokens.fontFamily,
+                const SizedBox(width: 12),
+                Flexible(
+                  flex: 2,
+                  child: _PlayerHeaderMeta(
+                    item: item,
+                    tokens: tokens,
                   ),
                 ),
-                if (item != null && widget.onExpand != null) ...[
-                  const SizedBox(width: 8),
-                  HyperlinkButton(
-                    onPressed: () {
-                      // 方案 A：弹窗独立 Player，打开时内嵌暂停。
-                      _inlineKey.currentState?.pausePlayback();
-                      widget.onExpand!();
-                    },
-                    child: const Text('放大'),
-                  ),
-                ],
               ],
             ),
           ),
@@ -102,6 +94,12 @@ class _VideoPlayerPanelState extends State<VideoPlayerPanel> {
                     onSaveAs: widget.onSaveAs,
                     onRerun: widget.onRerun,
                     rerunEnabled: widget.rerunEnabled,
+                    onExpand: widget.onExpand == null
+                        ? null
+                        : () {
+                            _inlineKey.currentState?.pausePlayback();
+                            widget.onExpand!();
+                          },
                   ),
           ),
         ],
@@ -110,10 +108,104 @@ class _VideoPlayerPanelState extends State<VideoPlayerPanel> {
   }
 }
 
-String _stageLabel(VideoItem? item) {
-  final raw = item?.aspectRatio?.trim();
-  if (raw != null && raw.isNotEmpty) return '$raw · 音量 / 真全屏';
-  return '音量 / 真全屏';
+String _snipPrompt(String raw, {int maxChars = 36}) {
+  final t = raw.trim().replaceAll(RegExp(r'\s+'), ' ');
+  if (t.isEmpty) return '';
+  final runes = t.runes.toList();
+  if (runes.length <= maxChars) return t;
+  return '${String.fromCharCodes(runes.take(maxChars))}…';
+}
+
+List<String> _metaChipsFor(VideoItem item) {
+  final chips = <String>[];
+  final d = item.duration;
+  if (d != null && d > 0) chips.add('${d}s');
+  final ar = item.aspectRatio?.trim();
+  if (ar != null && ar.isNotEmpty) chips.add(ar);
+  final model = item.model.trim();
+  if (model.isNotEmpty) chips.add(model);
+  return chips;
+}
+
+class _PlayerHeaderMeta extends StatelessWidget {
+  const _PlayerHeaderMeta({
+    required this.item,
+    required this.tokens,
+  });
+
+  final VideoItem? item;
+  final FluentTokens tokens;
+
+  @override
+  Widget build(BuildContext context) {
+    if (item == null) {
+      return Align(
+        alignment: Alignment.centerRight,
+        child: Text(
+          '音量跨启动持久化 · 真全屏',
+          textAlign: TextAlign.right,
+          style: TextStyle(
+            fontSize: 11,
+            height: 1.45,
+            color: tokens.inkMuted,
+            fontFamily: tokens.fontFamily,
+          ),
+        ),
+      );
+    }
+
+    final snip = _snipPrompt(item!.prompt);
+    final chips = _metaChipsFor(item!);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        if (snip.isNotEmpty)
+          Tooltip(
+            message: item!.prompt.trim(),
+            child: Text(
+              snip,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.right,
+              style: TextStyle(
+                fontSize: 12,
+                height: 1.4,
+                color: tokens.inkSecondary,
+                fontFamily: tokens.fontFamily,
+              ),
+            ),
+          ),
+        if (chips.isNotEmpty) ...[
+          if (snip.isNotEmpty) const SizedBox(height: 6),
+          Wrap(
+            spacing: 4,
+            runSpacing: 4,
+            alignment: WrapAlignment.end,
+            children: [
+              for (final c in chips)
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: tokens.surfaceMuted,
+                    borderRadius: BorderRadius.circular(999),
+                    border: Border.all(color: tokens.border),
+                  ),
+                  child: Text(
+                    c,
+                    style: TextStyle(
+                      fontSize: 10,
+                      color: tokens.inkMuted,
+                      fontFamily: tokens.fontFamily,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ],
+      ],
+    );
+  }
 }
 
 double? parseVideoAspectRatio(String? raw) {
@@ -159,6 +251,8 @@ class _EmptyStage extends StatelessWidget {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
+                      const _StageSilhouette(),
+                      const SizedBox(height: 10),
                       Text(
                         '选择左侧已完成任务',
                         textAlign: TextAlign.center,
@@ -180,6 +274,17 @@ class _EmptyStage extends StatelessWidget {
                           fontFamily: tokens.fontFamily,
                         ),
                       ),
+                      const SizedBox(height: 10),
+                      Wrap(
+                        spacing: 5,
+                        runSpacing: 5,
+                        alignment: WrapAlignment.center,
+                        children: const [
+                          _StepChip(label: '① 选完成项'),
+                          _StepChip(label: '② 点封面或「在右侧播放」'),
+                          _StepChip(label: '③ 载入此舞台'),
+                        ],
+                      ),
                     ],
                   ),
                 ),
@@ -188,15 +293,120 @@ class _EmptyStage extends StatelessWidget {
           ),
           const SizedBox(height: 10),
           Text(
-            '杀进程后可经「恢复未完成」继续轮询；进度态与生图时间线信息架构不同。',
+            'VID-RESUME 可恢复未完成任务。音量写入 prefs；重跑仅回填提示词与参考图，不自动提交。',
             style: TextStyle(
               fontSize: 11,
-              height: 1.5,
+              height: 1.45,
               color: tokens.inkMuted,
               fontFamily: tokens.fontFamily,
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _StageSilhouette extends StatelessWidget {
+  const _StageSilhouette();
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 128,
+      height: 72,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(9),
+          border: Border.all(
+            color: Colors.white.withValues(alpha: 0.32),
+            width: 1.5,
+          ),
+          color: Colors.white.withValues(alpha: 0.05),
+        ),
+        child: Stack(
+          children: [
+            Center(
+              child: CustomPaint(
+                size: const Size(13, 16),
+                painter: _PlayTrianglePainter(
+                  color: Colors.white.withValues(alpha: 0.55),
+                ),
+              ),
+            ),
+            Positioned(
+              left: 12,
+              right: 12,
+              bottom: 10,
+              child: SizedBox(
+                height: 3,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(99),
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      ColoredBox(
+                        color: Colors.white.withValues(alpha: 0.22),
+                      ),
+                      const FractionallySizedBox(
+                        widthFactor: 0.34,
+                        alignment: Alignment.centerLeft,
+                        child: ColoredBox(
+                          color: Color(0x61FFFFFF),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _PlayTrianglePainter extends CustomPainter {
+  _PlayTrianglePainter({required this.color});
+
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final path = Path()
+      ..moveTo(0, 0)
+      ..lineTo(size.width, size.height / 2)
+      ..lineTo(0, size.height)
+      ..close();
+    canvas.drawPath(path, Paint()..color = color);
+  }
+
+  @override
+  bool shouldRepaint(covariant _PlayTrianglePainter oldDelegate) =>
+      oldDelegate.color != color;
+}
+
+class _StepChip extends StatelessWidget {
+  const _StepChip({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.28)),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 10,
+          height: 1.3,
+          color: Colors.white.withValues(alpha: 0.62),
+        ),
       ),
     );
   }
@@ -211,6 +421,7 @@ class _InlinePlayer extends StatefulWidget {
     required this.onSaveAs,
     this.onRerun,
     this.rerunEnabled = true,
+    this.onExpand,
   });
 
   final VideoItem item;
@@ -219,6 +430,8 @@ class _InlinePlayer extends StatefulWidget {
   final Future<bool> Function(VideoItem item) onSaveAs;
   final void Function(VideoItem item)? onRerun;
   final bool rerunEnabled;
+  /// 窗内放大：打开 ContentDialog 预览（非系统全屏）。
+  final VoidCallback? onExpand;
 
   @override
   State<_InlinePlayer> createState() => _InlinePlayerState();
@@ -645,30 +858,36 @@ class _InlinePlayerState extends State<_InlinePlayer> {
           ],
           const SizedBox(height: 10),
           Wrap(
-            spacing: 6,
+            spacing: 8,
             runSpacing: 6,
             children: [
               if (_error != null && _ready)
-                FilledButton(
+                VideoToolButton(
+                  filled: true,
                   onPressed: _loading ? null : () => _retryPlayback(),
                   child: const Text('重试'),
                 ),
-              Button(
+              VideoToolButton(
                 onPressed: () => widget.onSaveAs(widget.item),
                 child: const Text('另存为…'),
               ),
-              Button(
+              VideoToolButton(
                 onPressed: () => widget.onOpenSystem(widget.item),
                 child: const Text('系统打开'),
               ),
               if (widget.onRerun != null &&
                   (widget.item.prompt.trim().isNotEmpty ||
                       widget.item.referenceImages.isNotEmpty))
-                Button(
+                VideoToolButton(
                   onPressed: widget.rerunEnabled
                       ? () => widget.onRerun!(widget.item)
                       : null,
                   child: const Text('用此提示重跑'),
+                ),
+              if (widget.onExpand != null)
+                VideoToolButton(
+                  onPressed: widget.onExpand,
+                  child: const Text('窗内放大'),
                 ),
             ],
           ),
@@ -833,80 +1052,78 @@ class _Transport extends StatelessWidget {
     final playing = state.playing && !state.completed;
     final position = state.position;
     final duration = state.duration;
-    return Row(
-      children: [
-        Tooltip(
-          message: playing ? '暂停' : '播放',
-          child: Semantics(
-            button: true,
-            label: playing ? '暂停' : '播放',
-            excludeSemantics: true,
-            child: IconButton(
-              icon: Icon(
-                playing ? FluentIcons.pause : FluentIcons.play,
-                size: 14,
-              ),
+    final volShown = (muted ? 0 : volume).round();
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: SizedBox(
+        height: 40,
+        child: Row(
+          children: [
+            VideoTransportIconButton(
+              icon: playing ? FluentIcons.pause : FluentIcons.play,
+              tooltip: playing ? '暂停' : '播放',
               onPressed: () => _toggle(),
             ),
-          ),
-        ),
-        Expanded(
-          child: _Scrubber(
-            player: player,
-            playedColor: tokens.primary,
-            bufferedColor: tokens.primary.withValues(alpha: 0.25),
-            backgroundColor: tokens.surfaceMuted,
-          ),
-        ),
-        const SizedBox(width: 8),
-        Text(
-          '${fmt(position)} / ${fmt(duration)}',
-          style: TextStyle(
-            fontSize: 11,
-            color: tokens.inkMuted,
-            fontFamily: tokens.fontFamily,
-            fontFeatures: const [FontFeature.tabularFigures()],
-          ),
-        ),
-        const SizedBox(width: 4),
-        Tooltip(
-          message: muted ? '取消静音' : '静音',
-          child: Semantics(
-            button: true,
-            label: muted ? '取消静音' : '静音',
-            excludeSemantics: true,
-            child: IconButton(
-              icon: Icon(
-                muted ? FluentIcons.volume_disabled : FluentIcons.volume2,
-                size: 14,
+            const SizedBox(width: 10),
+            Expanded(
+              child: _Scrubber(
+                player: player,
+                playedColor: tokens.primary,
+                bufferedColor: tokens.inkMuted.withValues(alpha: 0.28),
+                backgroundColor: tokens.canvas,
               ),
+            ),
+            const SizedBox(width: 10),
+            Text(
+              '${fmt(position)} / ${fmt(duration)}',
+              style: TextStyle(
+                fontSize: 12,
+                color: tokens.inkSecondary,
+                fontFamily: tokens.fontFamily,
+                fontFeatures: const [FontFeature.tabularFigures()],
+                letterSpacing: 0.02,
+              ),
+            ),
+            const SizedBox(width: 8),
+            VideoTransportIconButton(
+              icon: muted ? FluentIcons.volume_disabled : FluentIcons.volume2,
+              tooltip: muted ? '取消静音' : '音量 · 跨启动持久化',
+              semanticLabel: muted ? '取消静音' : '静音',
               onPressed: () => onToggleMute(),
             ),
-          ),
-        ),
-        SizedBox(
-          width: 72,
-          child: Slider(
-            value: muted ? 0 : volume,
-            min: 0,
-            max: 100,
-            label: '${(muted ? 0 : volume).round()}',
-            onChanged: (v) => onVolumeChanged(v),
-          ),
-        ),
-        Tooltip(
-          message: '全屏',
-          child: Semantics(
-            button: true,
-            label: '全屏',
-            excludeSemantics: true,
-            child: IconButton(
-              icon: const Icon(FluentIcons.full_screen, size: 14),
+            const SizedBox(width: 6),
+            SizedBox(
+              width: 72,
+              child: Slider(
+                value: muted ? 0 : volume,
+                min: 0,
+                max: 100,
+                label: '$volShown%',
+                onChanged: (v) => onVolumeChanged(v),
+              ),
+            ),
+            const SizedBox(width: 4),
+            SizedBox(
+              width: 34,
+              child: Text(
+                '$volShown%',
+                style: TextStyle(
+                  fontSize: 11,
+                  color: tokens.inkSecondary,
+                  fontFamily: tokens.fontFamily,
+                  fontFeatures: const [FontFeature.tabularFigures()],
+                ),
+              ),
+            ),
+            const SizedBox(width: 4),
+            VideoTransportIconButton(
+              icon: FluentIcons.full_screen,
+              tooltip: '全屏',
               onPressed: () => onFullscreen(),
             ),
-          ),
+          ],
         ),
-      ],
+      ),
     );
   }
 }
@@ -989,27 +1206,64 @@ class _ScrubberState extends State<_Scrubber> {
         await _seekFraction(f, resume: widget.player.state.playing);
       },
       child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 8),
+        padding: const EdgeInsets.symmetric(vertical: 10),
         child: SizedBox(
-          height: 4,
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(2),
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                ColoredBox(color: widget.backgroundColor),
-                FractionallySizedBox(
-                  widthFactor: buffered,
-                  alignment: Alignment.centerLeft,
-                  child: ColoredBox(color: widget.bufferedColor),
+          height: 12,
+          child: Stack(
+            alignment: Alignment.centerLeft,
+            clipBehavior: Clip.none,
+            children: [
+              Positioned.fill(
+                top: 4,
+                bottom: 4,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: widget.backgroundColor,
+                    borderRadius: BorderRadius.circular(99),
+                    border: Border.all(
+                      color: widget.playedColor.withValues(alpha: 0.12),
+                    ),
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(99),
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        FractionallySizedBox(
+                          widthFactor: buffered,
+                          alignment: Alignment.centerLeft,
+                          child: ColoredBox(color: widget.bufferedColor),
+                        ),
+                        FractionallySizedBox(
+                          widthFactor: fraction.clamp(0.0, 1.0),
+                          alignment: Alignment.centerLeft,
+                          child: ColoredBox(color: widget.playedColor),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
-                FractionallySizedBox(
-                  widthFactor: fraction.clamp(0.0, 1.0),
-                  alignment: Alignment.centerLeft,
-                  child: ColoredBox(color: widget.playedColor),
+              ),
+              Align(
+                alignment: Alignment(-1 + 2 * fraction.clamp(0.0, 1.0), 0),
+                child: Container(
+                  width: 12,
+                  height: 12,
+                  decoration: BoxDecoration(
+                    color: widget.playedColor,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.white, width: 2),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.28),
+                        blurRadius: 4,
+                        offset: const Offset(0, 1),
+                      ),
+                    ],
+                  ),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),

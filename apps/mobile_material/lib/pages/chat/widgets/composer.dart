@@ -183,23 +183,38 @@ class _ComposerState extends State<Composer> {
           Row(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              Semantics(
-                button: true,
-                enabled: canPick,
-                label: '附加图片',
-                excludeSemantics: true,
-                child: IconButton(
-                  onPressed: canPick ? widget.onPickAttachments : null,
-                  tooltip: attachTooltip,
-                  icon: Icon(
-                    Icons.add_photo_alternate_outlined,
-                    size: 22,
+              Tooltip(
+                message: attachTooltip,
+                child: Semantics(
+                  button: true,
+                  enabled: canPick,
+                  label: '附加图片',
+                  excludeSemantics: true,
+                  child: Material(
                     color: canPick
-                        ? tokens.inkSecondary
-                        : tokens.inkMuted.withValues(alpha: 0.55),
+                        ? tokens.surfaceMuted
+                        : tokens.surfaceMuted.withValues(alpha: 0.55),
+                    shape: const CircleBorder(),
+                    clipBehavior: Clip.antiAlias,
+                    child: InkWell(
+                      customBorder: const CircleBorder(),
+                      onTap: canPick ? widget.onPickAttachments : null,
+                      child: SizedBox(
+                        width: 48,
+                        height: 48,
+                        child: Icon(
+                          Icons.add_photo_alternate_outlined,
+                          size: 22,
+                          color: canPick
+                              ? tokens.inkSecondary
+                              : tokens.inkMuted.withValues(alpha: 0.55),
+                        ),
+                      ),
+                    ),
                   ),
                 ),
               ),
+              const SizedBox(width: 8),
               Expanded(
                 child: Semantics(
                   textField: true,
@@ -218,19 +233,19 @@ class _ComposerState extends State<Composer> {
                           isDark ? tokens.surfaceElevated : tokens.canvas,
                       contentPadding: density.composerFieldPadding,
                       border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(16),
+                        borderRadius: BorderRadius.circular(24),
                         borderSide: BorderSide(color: tokens.border),
                       ),
                       enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(16),
+                        borderRadius: BorderRadius.circular(24),
                         borderSide: BorderSide(color: tokens.border),
                       ),
                       focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(16),
+                        borderRadius: BorderRadius.circular(24),
                         borderSide: BorderSide(color: tokens.primary),
                       ),
                       disabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(16),
+                        borderRadius: BorderRadius.circular(24),
                         borderSide: BorderSide(color: tokens.border),
                       ),
                     ),
@@ -262,7 +277,7 @@ class _ComposerState extends State<Composer> {
                               padding: EdgeInsets.zero,
                               minimumSize: const Size(48, 48),
                               shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(14),
+                                borderRadius: BorderRadius.circular(24),
                               ),
                             ),
                             child: const Icon(Icons.stop_rounded, size: 22),
@@ -281,7 +296,7 @@ class _ComposerState extends State<Composer> {
                               padding: EdgeInsets.zero,
                               minimumSize: const Size(48, 48),
                               shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(14),
+                                borderRadius: BorderRadius.circular(24),
                               ),
                             ),
                             child: const Icon(Icons.send_rounded, size: 20),
@@ -291,13 +306,10 @@ class _ComposerState extends State<Composer> {
               ),
             ],
           ),
-          if (!widget.streaming &&
-              (!widget.visionSupported || _hasDraft)) ...[
+          if (!widget.streaming && !widget.visionSupported) ...[
             const SizedBox(height: 6),
             Text(
-              !widget.visionSupported
-                  ? '当前模型不支持附图'
-                  : '已附加 ${widget.draftAttachments.length}/$maxChatAttachments 张',
+              '当前模型不支持附图',
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
@@ -324,78 +336,102 @@ class _DraftAttachmentStrip extends StatelessWidget {
   final MaterialTokens tokens;
   final ValueChanged<int>? onRemove;
 
-  static const double _size = 56;
+  static const double _size = 52;
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      height: _size + 8,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        itemCount: drafts.length,
-        separatorBuilder: (context, index) => const SizedBox(width: 8),
-        itemBuilder: (context, index) {
-          final draft = drafts[index];
-          return Stack(
-            clipBehavior: Clip.none,
-            children: [
-              ClipRRect(
-                borderRadius: BorderRadius.circular(10),
-                child: Container(
+    return Container(
+      padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
+      decoration: BoxDecoration(
+        color: tokens.surfaceMuted,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: tokens.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SizedBox(
+            height: _size,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              itemCount: drafts.length,
+              separatorBuilder: (context, index) => const SizedBox(width: 8),
+              itemBuilder: (context, index) {
+                final draft = drafts[index];
+                return SizedBox(
                   width: _size,
                   height: _size,
-                  decoration: BoxDecoration(
-                    color: tokens.surfaceMuted,
-                    border: Border.all(color: tokens.border),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Image.memory(
-                    draft.bytes,
-                    fit: BoxFit.cover,
-                    errorBuilder: (context, error, stackTrace) => Center(
-                      child: Icon(
-                        Icons.broken_image_outlined,
-                        size: 20,
-                        color: tokens.inkMuted,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              if (onRemove != null)
-                Positioned(
-                  top: -6,
-                  right: -6,
-                  child: Semantics(
-                    button: true,
-                    label: '移除附图 ${index + 1}',
-                    child: Material(
-                      color: tokens.surfaceElevated,
-                      shape: const CircleBorder(),
-                      child: InkWell(
-                        customBorder: const CircleBorder(),
-                        onTap: () => onRemove!(index),
+                  child: Stack(
+                    children: [
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(12),
                         child: Container(
-                          width: 22,
-                          height: 22,
-                          alignment: Alignment.center,
+                          width: _size,
+                          height: _size,
                           decoration: BoxDecoration(
-                            shape: BoxShape.circle,
+                            color: tokens.canvas,
                             border: Border.all(color: tokens.border),
+                            borderRadius: BorderRadius.circular(12),
                           ),
-                          child: Icon(
-                            Icons.close,
-                            size: 12,
-                            color: tokens.inkSecondary,
+                          child: Image.memory(
+                            draft.bytes,
+                            fit: BoxFit.cover,
+                            errorBuilder: (context, error, stackTrace) =>
+                                Center(
+                              child: Icon(
+                                Icons.broken_image_outlined,
+                                size: 20,
+                                color: tokens.inkMuted,
+                              ),
+                            ),
                           ),
                         ),
                       ),
-                    ),
+                      if (onRemove != null)
+                        Positioned(
+                          top: 2,
+                          right: 2,
+                          child: Semantics(
+                            button: true,
+                            label: '移除附图 ${index + 1}',
+                            child: Material(
+                              color: const Color(0xB8141413),
+                              shape: const CircleBorder(),
+                              child: InkWell(
+                                customBorder: const CircleBorder(),
+                                onTap: () => onRemove!(index),
+                                child: const SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: Icon(
+                                    Icons.close,
+                                    size: 13,
+                                    color: Color(0xFFFFFFFF),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
                   ),
-                ),
-            ],
-          );
-        },
+                );
+              },
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            '已附加 ${drafts.length}/$maxChatAttachments 张 · 可空文发送',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: 11,
+              color: tokens.inkMuted,
+              fontFamily: tokens.fontFamily,
+            ),
+          ),
+        ],
       ),
     );
   }

@@ -439,47 +439,49 @@ class _ChipWrap extends StatelessWidget {
           enabled: enabled,
           label: chipLabel,
           excludeSemantics: true,
-          child: HoverButton(
-            onPressed: enabled ? () => onChanged(e) : null,
-            cursor: enabled
-                ? SystemMouseCursors.click
-                : SystemMouseCursors.basic,
-            builder: (context, states) {
-              final focused = states.isFocused;
-              return AnimatedContainer(
-                duration: FluentMotion.micro,
-                curve: FluentMotion.standard,
-                height: 28,
-                padding: const EdgeInsets.symmetric(horizontal: 10),
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  color: active
-                      ? tokens.primary.withValues(alpha: 0.14)
-                      : tokens.surfaceMuted,
-                  borderRadius: BorderRadius.circular(6),
-                  border: Border.all(
-                    color: focused
-                        ? tokens.primary
-                        : active
-                            ? Color.lerp(tokens.primary, tokens.border, 0.5)!
-                            : tokens.border,
-                    width: focused ? 1.5 : 1,
+          child: IntrinsicWidth(
+            child: HoverButton(
+              onPressed: enabled ? () => onChanged(e) : null,
+              cursor: enabled
+                  ? SystemMouseCursors.click
+                  : SystemMouseCursors.basic,
+              builder: (context, states) {
+                final focused = states.isFocused;
+                return AnimatedContainer(
+                  duration: FluentMotion.micro,
+                  curve: FluentMotion.standard,
+                  height: 28,
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: active
+                        ? tokens.primary.withValues(alpha: 0.14)
+                        : tokens.surfaceMuted,
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(
+                      color: focused
+                          ? tokens.primary
+                          : active
+                              ? Color.lerp(tokens.primary, tokens.border, 0.5)!
+                              : tokens.border,
+                      width: focused ? 1.5 : 1,
+                    ),
                   ),
-                ),
-                child: Text(
-                  chipLabel,
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: !enabled
-                        ? tokens.inkMuted
-                        : active
-                            ? tokens.primaryPressed
-                            : tokens.inkSecondary,
-                    fontFamily: tokens.fontFamily,
+                  child: Text(
+                    chipLabel,
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: !enabled
+                          ? tokens.inkMuted
+                          : active
+                              ? tokens.primaryPressed
+                              : tokens.inkSecondary,
+                      fontFamily: tokens.fontFamily,
+                    ),
                   ),
-                ),
-              );
-            },
+                );
+              },
+            ),
           ),
         );
       }).toList(),

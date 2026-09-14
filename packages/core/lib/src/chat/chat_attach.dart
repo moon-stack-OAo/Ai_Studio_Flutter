@@ -37,6 +37,7 @@ bool supportsChatVision(String? chatModel) {
     'claude-sonnet',
     'claude-opus',
     'llava',
+    'grok',
   ];
   for (final n in needles) {
     if (id.contains(n)) return true;

@@ -20,6 +20,8 @@ void main() {
       expect(supportsChatVision('gemini-2.0-flash'), isTrue);
       expect(supportsChatVision('llava-1.5'), isTrue);
       expect(supportsChatVision('my-vision-model'), isTrue);
+      expect(supportsChatVision('grok-4.5'), isTrue);
+      expect(supportsChatVision('grok-2-vision'), isTrue);
     });
 
     test('未命中', () {

@@ -278,6 +278,7 @@ class _ChatAttachmentThumbs extends StatelessWidget {
     return Wrap(
       spacing: 8,
       runSpacing: 8,
+      crossAxisAlignment: WrapCrossAlignment.center,
       alignment: WrapAlignment.end,
       children: [
         for (var index = 0; index < shown.length; index++)
@@ -302,6 +303,16 @@ class _ChatAttachmentThumbs extends StatelessWidget {
               ),
             ),
           ),
+        Text(
+          '附图',
+          style: TextStyle(
+            fontSize: 10,
+            fontWeight: FontWeight.w600,
+            letterSpacing: 0.6,
+            color: tokens.inkMuted,
+            fontFamily: tokens.fontFamily,
+          ),
+        ),
       ],
     );
   }

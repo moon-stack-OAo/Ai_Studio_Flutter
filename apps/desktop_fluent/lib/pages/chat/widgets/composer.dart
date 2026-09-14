@@ -240,7 +240,7 @@ class _ComposerState extends State<Composer> {
                     ? tokens.primary.withValues(alpha: 0.08)
                     : cardBg,
                 borderRadius: BorderRadius.circular(radius),
-                border: Border.all(color: borderColor),
+                border: Border.all(color: borderColor, width: 1),
                 boxShadow: focusRing == null
                     ? null
                     : [
@@ -254,26 +254,57 @@ class _ComposerState extends State<Composer> {
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  Tooltip(
-                    message: attachTooltip,
-                    child: Semantics(
-                      button: true,
-                      enabled: canPick,
-                      label: '附加图片',
-                      excludeSemantics: true,
-                      child: IconButton(
-                        icon: Icon(
-                          FluentIcons.attach,
-                          size: 16,
-                          color: canPick
-                              ? tokens.inkSecondary
-                              : tokens.inkMuted.withValues(alpha: 0.55),
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 4),
+                    child: Tooltip(
+                      message: attachTooltip,
+                      child: Semantics(
+                        button: true,
+                        enabled: canPick,
+                        label: '附加图片',
+                        excludeSemantics: true,
+                        child: HoverButton(
+                          onPressed:
+                              canPick ? widget.onPickAttachments : null,
+                          builder: (context, states) {
+                            final hovered = canPick &&
+                                (states.isHovered || states.isPressed);
+                            final focused = canPick && states.isFocused;
+                            final bg = !canPick
+                                ? Colors.transparent
+                                : hovered
+                                    ? tokens.surfaceMuted
+                                    : Colors.transparent;
+                            final border = !canPick
+                                ? Colors.transparent
+                                : (hovered || focused)
+                                    ? tokens.border
+                                    : Colors.transparent;
+                            final fg = canPick
+                                ? (hovered ? tokens.ink : tokens.inkSecondary)
+                                : tokens.inkMuted.withValues(alpha: 0.55);
+                            return SizedBox(
+                              width: 36,
+                              height: 36,
+                              child: DecoratedBox(
+                                decoration: BoxDecoration(
+                                  color: bg,
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(color: border),
+                                ),
+                                child: Icon(
+                                  FluentIcons.attach,
+                                  size: 18,
+                                  color: fg,
+                                ),
+                              ),
+                            );
+                          },
                         ),
-                        onPressed: canPick ? widget.onPickAttachments : null,
                       ),
                     ),
                   ),
-                  const SizedBox(width: 4),
+                  const SizedBox(width: 10),
                   Expanded(
                     child: ConstrainedBox(
                       constraints: BoxConstraints(
@@ -290,14 +321,14 @@ class _ComposerState extends State<Composer> {
                             focusNode: _focus,
                             enabled: canType,
                             maxLines: null,
-                            minLines: density == UiDensity.compact ? 1 : 2,
+                            minLines: 1,
                             placeholder: widget.streaming
                                 ? '生成中…'
                                 : (highlight
                                     ? '松开以附加图片…'
                                     : (_hasDraft
-                                        ? '可空文发送附图 · Enter 发送'
-                                        : '输入消息… Enter 发送，Shift+Enter 换行')),
+                                        ? '可空文发送附图 · Enter 发送，Shift+Enter 换行'
+                                        : '输入消息…')),
                             style: TextStyle(
                               fontFamily: tokens.fontFamily,
                               fontSize: 14,
@@ -310,7 +341,12 @@ class _ComposerState extends State<Composer> {
                               height: 1.5,
                               color: tokens.inkMuted,
                             ),
-                            padding: EdgeInsets.zero,
+                            padding: EdgeInsets.fromLTRB(
+                              4,
+                              density == UiDensity.compact ? 4 : 6,
+                              4,
+                              density == UiDensity.compact ? 4 : 6,
+                            ),
                             unfocusedColor: Colors.transparent,
                             highlightColor: Colors.transparent,
                             decoration: const WidgetStatePropertyAll(
@@ -325,98 +361,97 @@ class _ComposerState extends State<Composer> {
                     ),
                   ),
                   const SizedBox(width: 10),
-                  ConstrainedBox(
-                    constraints: const BoxConstraints(
-                      minWidth: 72,
-                      minHeight: 36,
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 4),
+                    child: SizedBox(
+                      height: 36,
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(minWidth: 72),
+                        child: widget.streaming
+                            ? Tooltip(
+                                message: '停止生成',
+                                child: Semantics(
+                                  button: true,
+                                  label: '停止生成',
+                                  excludeSemantics: true,
+                                  child: Button(
+                                    onPressed: widget.onStop,
+                                    style: ButtonStyle(
+                                      padding: const WidgetStatePropertyAll(
+                                        EdgeInsets.symmetric(horizontal: 14),
+                                      ),
+                                      backgroundColor:
+                                          WidgetStateProperty.resolveWith(
+                                        (states) {
+                                          if (states.isDisabled) {
+                                            return tokens.danger
+                                                .withValues(alpha: 0.45);
+                                          }
+                                          if (states.isPressed ||
+                                              states.isHovered) {
+                                            return Color.lerp(
+                                              tokens.danger,
+                                              tokens.ink,
+                                              0.12,
+                                            )!;
+                                          }
+                                          return tokens.danger;
+                                        },
+                                      ),
+                                      foregroundColor: WidgetStatePropertyAll(
+                                        tokens.onPrimary,
+                                      ),
+                                      shape: WidgetStatePropertyAll(
+                                        RoundedRectangleBorder(
+                                          borderRadius:
+                                              BorderRadius.circular(8),
+                                        ),
+                                      ),
+                                    ),
+                                    child: Text(
+                                      '停止',
+                                      style: TextStyle(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w600,
+                                        fontFamily: tokens.fontFamily,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              )
+                            : Tooltip(
+                                message: '发送（Enter）',
+                                child: Semantics(
+                                  button: true,
+                                  label: '发送消息',
+                                  excludeSemantics: true,
+                                  child: FilledButton(
+                                    onPressed:
+                                        _canSubmitContent ? _submit : null,
+                                    style: ButtonStyle(
+                                      padding: const WidgetStatePropertyAll(
+                                        EdgeInsets.symmetric(horizontal: 14),
+                                      ),
+                                      shape: WidgetStatePropertyAll(
+                                        RoundedRectangleBorder(
+                                          borderRadius:
+                                              BorderRadius.circular(8),
+                                        ),
+                                      ),
+                                    ),
+                                    child: Text(
+                                      '发送',
+                                      style: TextStyle(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w600,
+                                        fontFamily: tokens.fontFamily,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                      ),
                     ),
-                    child: widget.streaming
-                        ? Tooltip(
-                            message: '停止生成',
-                            child: Semantics(
-                              button: true,
-                              label: '停止生成',
-                              excludeSemantics: true,
-                              child: Button(
-                                onPressed: widget.onStop,
-                                style: ButtonStyle(
-                                  padding: const WidgetStatePropertyAll(
-                                    EdgeInsets.symmetric(
-                                      horizontal: 14,
-                                      vertical: 8,
-                                    ),
-                                  ),
-                                  backgroundColor:
-                                      WidgetStateProperty.resolveWith(
-                                    (states) {
-                                      if (states.isDisabled) {
-                                        return tokens.danger
-                                            .withValues(alpha: 0.45);
-                                      }
-                                      if (states.isPressed ||
-                                          states.isHovered) {
-                                        return Color.lerp(
-                                          tokens.danger,
-                                          tokens.ink,
-                                          0.12,
-                                        )!;
-                                      }
-                                      return tokens.danger;
-                                    },
-                                  ),
-                                  foregroundColor: WidgetStatePropertyAll(
-                                    tokens.onPrimary,
-                                  ),
-                                  shape: WidgetStatePropertyAll(
-                                    RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
-                                  ),
-                                ),
-                                child: Text(
-                                  '停止',
-                                  style: TextStyle(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w600,
-                                    fontFamily: tokens.fontFamily,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          )
-                        : Tooltip(
-                            message: '发送（Enter）',
-                            child: Semantics(
-                              button: true,
-                              label: '发送消息',
-                              excludeSemantics: true,
-                              child: FilledButton(
-                                onPressed:
-                                    _canSubmitContent ? _submit : null,
-                                style: ButtonStyle(
-                                  padding: const WidgetStatePropertyAll(
-                                    EdgeInsets.symmetric(
-                                      horizontal: 14,
-                                      vertical: 8,
-                                    ),
-                                  ),
-                                  shape: WidgetStatePropertyAll(
-                                    RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
-                                  ),
-                                ),
-                                child: Text(
-                                  '发送',
-                                  style: TextStyle(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w600,
-                                    fontFamily: tokens.fontFamily,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
                   ),
                 ],
               ),
@@ -471,73 +506,102 @@ class _DraftAttachmentStrip extends StatelessWidget {
   final FluentTokens tokens;
   final ValueChanged<int>? onRemove;
 
-  static const double _size = 56;
+  static const double _size = 44;
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      height: _size + 8,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        itemCount: drafts.length,
-        separatorBuilder: (context, index) => const SizedBox(width: 8),
-        itemBuilder: (context, index) {
-          final draft = drafts[index];
-          return Stack(
-            clipBehavior: Clip.none,
-            children: [
-              ClipRRect(
-                borderRadius: BorderRadius.circular(8),
-                child: Container(
-                  width: _size,
-                  height: _size,
-                  decoration: BoxDecoration(
-                    color: tokens.canvas,
-                    border: Border.all(color: tokens.border),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Image.memory(
-                    draft.bytes,
-                    fit: BoxFit.cover,
-                    errorBuilder: (context, error, stackTrace) => Center(
-                      child: Icon(
-                        FluentIcons.photo,
-                        size: 18,
-                        color: tokens.inkMuted,
-                      ),
+    return Container(
+      padding: const EdgeInsets.fromLTRB(8, 6, 8, 6),
+      decoration: BoxDecoration(
+        color: tokens.surfaceMuted,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: tokens.border),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: SizedBox(
+              height: _size,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                itemCount: drafts.length,
+                separatorBuilder: (context, index) =>
+                    const SizedBox(width: 6),
+                itemBuilder: (context, index) {
+                  final draft = drafts[index];
+                  return SizedBox(
+                    width: _size,
+                    height: _size,
+                    child: Stack(
+                      clipBehavior: Clip.none,
+                      children: [
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(7),
+                          child: Container(
+                            width: _size,
+                            height: _size,
+                            decoration: BoxDecoration(
+                              color: tokens.canvas,
+                              border: Border.all(color: tokens.border),
+                              borderRadius: BorderRadius.circular(7),
+                            ),
+                            child: Image.memory(
+                              draft.bytes,
+                              fit: BoxFit.cover,
+                              errorBuilder: (context, error, stackTrace) =>
+                                  Center(
+                                child: Icon(
+                                  FluentIcons.photo,
+                                  size: 16,
+                                  color: tokens.inkMuted,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                        if (onRemove != null)
+                          Positioned(
+                            top: 1,
+                            right: 1,
+                            child: Semantics(
+                              button: true,
+                              label: '移除附图 ${index + 1}',
+                              child: GestureDetector(
+                                onTap: () => onRemove!(index),
+                                child: Container(
+                                  width: 16,
+                                  height: 16,
+                                  decoration: const BoxDecoration(
+                                    color: Color(0xB8141413),
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: const Icon(
+                                    FluentIcons.clear,
+                                    size: 8,
+                                    color: Color(0xFFFFFFFF),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                      ],
                     ),
-                  ),
-                ),
+                  );
+                },
               ),
-              if (onRemove != null)
-                Positioned(
-                  top: -6,
-                  right: -6,
-                  child: Semantics(
-                    button: true,
-                    label: '移除附图 ${index + 1}',
-                    child: GestureDetector(
-                      onTap: () => onRemove!(index),
-                      child: Container(
-                        width: 20,
-                        height: 20,
-                        decoration: BoxDecoration(
-                          color: tokens.surfaceElevated,
-                          shape: BoxShape.circle,
-                          border: Border.all(color: tokens.border),
-                        ),
-                        child: Icon(
-                          FluentIcons.clear,
-                          size: 10,
-                          color: tokens.inkSecondary,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-            ],
-          );
-        },
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            '${drafts.length}/$maxChatAttachments',
+            style: TextStyle(
+              fontSize: 11,
+              color: tokens.inkMuted,
+              fontFamily: tokens.fontFamily,
+              fontFeatures: const [FontFeature.tabularFigures()],
+            ),
+          ),
+        ],
       ),
     );
   }

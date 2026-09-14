@@ -229,12 +229,38 @@
       animation: pulse 1.2s ease-in-out infinite;
     }
     @keyframes pulse { 50% { opacity: .35; transform: scale(.85); } }
+    .attach-draft {
+      margin-bottom: 8px; padding: 8px 10px; border-radius: 10px;
+      background: var(--surface-muted); border: 1px solid var(--border);
+    }
+    .attach-draft .row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .attach-thumb {
+      position: relative; width: 52px; height: 52px; border-radius: 8px; border: 1px solid var(--border);
+      cursor: pointer; overflow: hidden; flex-shrink: 0; padding: 0;
+    }
+    .attach-thumb:focus-visible { outline: 2px solid var(--primary); outline-offset: 1px; }
+    .attach-thumb .rm {
+      position: absolute; top: 2px; right: 2px; width: 18px; height: 18px; border-radius: 50%;
+      border: 0; background: rgba(20,20,19,.72); color: #fff; font-size: 12px; line-height: 18px;
+      cursor: pointer; padding: 0; display: grid; place-items: center;
+    }
+    .attach-thumb.t1 { background: linear-gradient(145deg, #f0d5c4 0%, #d97757 55%, #8b5a3c 100%); }
+    .attach-thumb.t2 { background: linear-gradient(160deg, #efe6d8 0%, #c4b59a 45%, #6c6a64 100%); }
+    .attach-note { margin-top: 6px; font-size: 11px; color: var(--ink-muted); }
     .composer {
       display: flex; gap: 10px; align-items: flex-end;
       border: 1px solid var(--border); border-radius: 12px;
       background: var(--canvas); padding: 10px 10px 10px 14px;
     }
     .composer:focus-within { border-color: color-mix(in oklch, var(--primary) 45%, var(--border)); box-shadow: 0 0 0 3px color-mix(in oklch, var(--primary) 16%, transparent); }
+    .attach-btn {
+      width: 36px; height: 36px; border-radius: 8px; border: 1px solid transparent;
+      background: transparent; color: var(--ink-secondary); cursor: pointer;
+      display: grid; place-items: center; flex-shrink: 0;
+    }
+    .attach-btn:hover { background: var(--surface-muted); color: var(--ink); border-color: var(--border); }
+    .attach-btn:focus-visible { outline: 2px solid var(--primary); outline-offset: 1px; }
+    .attach-btn svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
     .composer textarea {
       flex: 1; border: 0; outline: 0; resize: none; background: transparent;
       font: inherit; font-size: 14px; line-height: 1.5; min-height: 44px; max-height: 120px;
@@ -247,7 +273,21 @@
     }
     .send-stop:hover { background: color-mix(in oklch, var(--danger) 88%, black); }
     .send-stop:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
-    .hint { margin-top: 8px; font-size: 11px; color: var(--ink-muted); display: flex; justify-content: space-between; }
+    .hint { margin-top: 8px; font-size: 11px; color: var(--ink-muted); display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+    .msg-attach {
+      display: flex; align-items: flex-end; gap: 8px; flex-wrap: wrap; margin-bottom: 10px;
+    }
+    .msg-attach-thumb {
+      width: 72px; height: 72px; border-radius: 8px; border: 1px solid var(--border);
+      cursor: pointer; padding: 0; flex-shrink: 0;
+    }
+    .msg-attach-thumb:focus-visible { outline: 2px solid var(--primary); outline-offset: 1px; }
+    .msg-attach-thumb.t1 { background: linear-gradient(145deg, #f0d5c4 0%, #d97757 55%, #8b5a3c 100%); }
+    .msg-attach-thumb.t2 { background: linear-gradient(160deg, #efe6d8 0%, #c4b59a 45%, #6c6a64 100%); }
+    .attach-cap {
+      font-size: 10px; font-weight: 650; letter-spacing: 0.06em; text-transform: uppercase;
+      color: var(--ink-muted); align-self: center;
+    }
     .corner-tag {
       position: fixed; right: 18px; bottom: 14px; z-index: 20;
       font-size: 10px; font-family: var(--mono); color: var(--ink-muted);
@@ -340,7 +380,13 @@
           <article class="msg user" data-od-id="msg-user-1">
             <div class="msg-meta"><span class="role user">你</span></div>
             <div class="msg-body">
-              <p>请按「能力对等、UI 独立」原则，概括 Fluent 桌面对话页的关键状态与组件边界。</p>
+              <div class="msg-attach" data-od-id="chat-attach-sent">
+                <button class="msg-attach-thumb t1" type="button" title="附图 · 点击预览灯箱" aria-label="附图 1"></button>
+                <button class="msg-attach-thumb t2" type="button" title="附图 · 点击预览灯箱" aria-label="附图 2"></button>
+                <span class="attach-cap">附图</span>
+                <span class="badge-id">CHAT-ATTACH</span>
+              </div>
+              <p>请按「能力对等、UI 独立」原则，概括 Fluent 桌面对话页的关键状态与组件边界。附图仅作对话上下文，勿与生图参考图混用。</p>
             </div>
             <div class="msg-actions" data-od-id="f-msg-actions">
               <button class="act" type="button">复制</button>
@@ -384,13 +430,23 @@ class ChatSessionFacade {
             正在流式输出 · 可随时停止
             <span class="badge-id">CHAT-STREAM · 流式中</span>
           </div>
+          <div class="attach-draft" data-od-id="chat-attach-draft">
+            <div class="row">
+              <button class="attach-thumb t1" type="button" title="附图草稿" aria-label="附图草稿 1"><span class="rm" aria-label="移除">×</span></button>
+              <button class="attach-thumb t2" type="button" title="附图草稿" aria-label="附图草稿 2"><span class="rm" aria-label="移除">×</span></button>
+            </div>
+            <div class="attach-note">已附加 2/4 张 · png/jpeg/webp · 活跃 vision 可空文发送 <span class="badge-id">CHAT-ATTACH</span></div>
+          </div>
           <div class="composer" data-od-id="f-composer">
-            <textarea rows="2" placeholder="输入消息… Enter 发送，Shift+Enter 换行" disabled aria-label="消息输入（流式中禁用）"></textarea>
+            <button class="attach-btn" type="button" title="附加图片" aria-label="附加图片（CHAT-ATTACH）">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21.4 11.6l-8.5 8.5a5.5 5.5 0 01-7.8-7.8l8.5-8.5a3.5 3.5 0 015 5l-8.2 8.2a1.5 1.5 0 01-2.1-2.1l7.1-7.1"/></svg>
+            </button>
+            <textarea rows="2" placeholder="可空文发送附图 · Enter 发送，Shift+Enter 换行" disabled aria-label="消息输入（流式中禁用）"></textarea>
             <button class="send-stop" type="button">停止</button>
           </div>
           <div class="hint">
-            <span>F-Composer · CHAT-COMPOSER · 状态：流式中</span>
-            <span>本地密钥 · 无云同步</span>
+            <span>F-Composer · CHAT-COMPOSER · CHAT-ATTACH · 流式中</span>
+            <span>最多 4 张 · 禁用/拖放高亮本期未画</span>
           </div>
         </div>
       </section>

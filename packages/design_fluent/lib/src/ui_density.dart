@@ -41,11 +41,11 @@ enum UiDensity {
         UiDensity.compact => const EdgeInsets.fromLTRB(16, 8, 16, 12),
       };
 
-  /// Composer 输入卡片内边距。
+  /// Composer 输入卡片内边距（左略收，让附加钮更贴左边框）。
   EdgeInsets get composerInnerPadding => switch (this) {
         UiDensity.comfortable =>
-          const EdgeInsets.fromLTRB(14, 10, 10, 10),
-        UiDensity.compact => const EdgeInsets.fromLTRB(10, 8, 8, 8),
+          const EdgeInsets.fromLTRB(8, 10, 10, 10),
+        UiDensity.compact => const EdgeInsets.fromLTRB(6, 8, 8, 8),
       };
 
   /// 设置表单项垂直间距。
