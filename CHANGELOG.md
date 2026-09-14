@@ -13,6 +13,22 @@
 
 ### Added
 
+（暂无）
+
+### Changed
+
+（暂无）
+
+### Fixed
+
+（暂无）
+
+---
+
+## [1.0.5] — 2026-09-14
+
+### Added
+
 - **`IMG-TURN-REF` / `VID-TURN-REF`（P4）**：提交图生图/图生视频时将参考图落盘为会话资产（`referenceImages: List<ImageRef>`），双端用户气泡展示缩略并可点开灯箱；旧回合无资产仅显示提示词；删除会话/清数据时一并清理；备份导出省略本地 file 字节
 - **DESIGN P4 规格**：`VID-PLAYER` 音量 + 系统级全屏；`VID-QUEUE` 成功项封面缩略；`IMG-TURN-REF` / `VID-TURN-REF`（图生图/图生视频用户气泡回看参考图）；对话气泡附图本期不做
 - **`VID-QUEUE` 成功项封面缩略（P2.3）**：双端队列对 `success` 条目显示小封面；来源优先 CDN/`posterUrl` → 本机成片抽帧 JPEG 缓存（`video_poster_cache`）→ 占位；点击封面等同播放；`VideoPosterStore`/`VideoPosterService` 在 core，抽帧由双端注入 `media_kit`；清数据/`SET-DATA` 一并清理封面缓存
@@ -25,22 +41,12 @@
 - **Fluent 生视频 OD 精修跟版**：对照 `fluent-*-video.html` — 忙态 CTA「停止任务」；参考图空态虚线/「首帧」文案；队列气泡密度与筛选 chip；abandoned 淡化；空舞台两级文案与播放器头 hint；移动端同步「停止任务」文案（不跟 Fluent 视觉密度）
 - **`*-TURN-REF` 气泡布局**：参考图缩略由提示词下方改为 **左侧**（meta 通栏；左缩略 + 右提示词）；对齐 OD 稿；双端生图/生视频用户气泡
 - **双端 `VID-PLAYER` 迁 `media_kit`**：`desktop_fluent` 内嵌 / 放大弹窗与 `mobile_material` 推页播放均改用 `media_kit` + `media_kit_video` + `media_kit_libs_video`；移除 `video_player` / `video_player_win` 与 `VideoPlaybackGuard`；桌面弹窗独立 Player（关闭 dispose，打开时内嵌暂停），移动推页 pop 即 dispose
-
-
-### Fixed
-
-（暂无）
-
----
-
-## [1.0.5] — 2026-09-11
-
-### Changed
-
 - **CI / 发版钉死 Flutter 3.44.5**：`ci.yml` / `build.yml` / `release.yml` 的 `flutter-action` 增加 `flutter-version: "3.44.5"`，避免 `channel: stable` 漂到 3.47.x
 
 ### Fixed
 
+- **桌面 `VID-PLAYER` 切换黑闪**：队列切换任务时保留上一帧（或封面），新源可解码后再挂载，避免先清空成黑底
+- **桌面 `VID-PLAYER` 控件条**：进度 / 音量 / 全屏合并为 OD `transport` 单行（内嵌面板与放大弹窗）
 - **Windows 安装包内嵌视频黑屏**：`v1.0.4` 由 CI 的 Flutter **3.47.3** 构建，同机本机 **3.44.5** 的 `flutter run` / `build windows --release` 可播；安装目录 exe 仍黑。根因是引擎版本漂移（非业务代码 / 非视频文件）；钉版本后重打 Windows 安装包即可
 
 ---

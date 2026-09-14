@@ -219,6 +219,7 @@ class _InlinePlayerState extends State<_InlinePlayer> {
   final List<StreamSubscription<dynamic>> _subs = [];
   String? _error;
   bool _ready = false;
+  bool _loading = false;
   String? _boundItemId;
   String? _boundPath;
   int _bindToken = 0;
@@ -344,6 +345,75 @@ class _InlinePlayerState extends State<_InlinePlayer> {
     if (mounted) setState(() {});
   }
 
+  Future<void> _awaitDecodable(Player player, int token) async {
+    bool ready() {
+      final w = player.state.width;
+      final h = player.state.height;
+      return w != null && h != null && w > 0 && h > 0;
+    }
+
+    if (ready()) return;
+    final done = Completer<void>();
+    late final StreamSubscription<int?> sub;
+    sub = player.stream.width.listen((_) {
+      if (token != _bindToken || ready()) {
+        if (!done.isCompleted) done.complete();
+      }
+    });
+    try {
+      await done.future.timeout(const Duration(milliseconds: 1200));
+    } on TimeoutException {
+      // 超时仍切换，避免卡住
+    } finally {
+      await sub.cancel();
+    }
+  }
+
+  Future<void> _failBind({
+    required int token,
+    required Player? oldPlayer,
+    required String message,
+    required String? restoreBoundId,
+    required String? restoreBoundPath,
+    Player? failedPlayer,
+  }) async {
+    if (failedPlayer != null && !identical(failedPlayer, oldPlayer)) {
+      await _disposePlayer(failedPlayer);
+    }
+    if (!mounted || token != _bindToken) {
+      return;
+    }
+    final keepFrame = _ready && _videoController != null;
+    if (keepFrame) {
+      // 切换失败：保留上一任务画面；bound 回滚以便可重试
+      _boundItemId = restoreBoundId;
+      _boundPath = restoreBoundPath;
+      if (_player != null && _subs.isEmpty) {
+        _attachSubs(_player!);
+      }
+      setState(() {
+        _loading = false;
+        _error = message;
+      });
+      return;
+    }
+    _clearSubs();
+    final current = _player;
+    _player = null;
+    _videoController = null;
+    _boundItemId = null;
+    _boundPath = null;
+    setState(() {
+      _ready = false;
+      _loading = false;
+      _error = message;
+    });
+    if (oldPlayer != null && !identical(oldPlayer, current)) {
+      await _disposePlayer(oldPlayer);
+    }
+    await _disposePlayer(current);
+  }
+
   Future<void> _bind(VideoItem item, {bool force = false}) async {
     if (!force && !_shouldRebind(item)) {
       return;
@@ -351,70 +421,114 @@ class _InlinePlayerState extends State<_InlinePlayer> {
 
     final path = resolveVideoItemPlayablePath(item);
     final token = ++_bindToken;
-    final old = _player;
-    _clearSubs();
-    _player = null;
-    _videoController = null;
+    final oldPlayer = _player;
+    final keepFrame = _ready && _videoController != null;
+    final prevBoundId = _boundItemId;
+    final prevBoundPath = _boundPath;
+    // 先记下目标，避免 loading 中 didUpdateWidget 重复 _bind
     _boundItemId = item.id;
     _boundPath = path;
+
     if (mounted) {
       setState(() {
-        _ready = false;
         _error = null;
+        _loading = true;
+        if (!keepFrame) {
+          _ready = false;
+        }
       });
     }
-    await _disposePlayer(old);
+
+    // 保留旧画面；先暂停旧源，避免切换时双路出声
+    if (oldPlayer != null) {
+      try {
+        await oldPlayer.pause();
+      } catch (_) {}
+    }
     if (!mounted || token != _bindToken) return;
 
     if (path == null || path.isEmpty) {
-      if (mounted && token == _bindToken) {
-        setState(() => _error = '没有可播放的视频地址');
-      }
+      await _failBind(
+        token: token,
+        oldPlayer: oldPlayer,
+        restoreBoundId: prevBoundId,
+        restoreBoundPath: prevBoundPath,
+        message: '没有可播放的视频地址',
+      );
       return;
     }
     if (path.startsWith('memory://')) {
-      if (mounted && token == _bindToken) {
-        setState(() => _error = '内存视频请先另存或系统打开');
-      }
+      await _failBind(
+        token: token,
+        oldPlayer: oldPlayer,
+        restoreBoundId: prevBoundId,
+        restoreBoundPath: prevBoundPath,
+        message: '内存视频请先另存或系统打开',
+      );
       return;
     }
+
+    Player? created;
     try {
       if (!_isHttp(path)) {
         final filePath =
             path.startsWith('file:') ? Uri.parse(path).toFilePath() : path;
         final f = File(filePath);
         if (!await f.exists()) {
-          if (mounted && token == _bindToken) {
-            setState(() => _error = '本地文件不存在');
-          }
+          await _failBind(
+            token: token,
+            oldPlayer: oldPlayer,
+            restoreBoundId: prevBoundId,
+            restoreBoundPath: prevBoundPath,
+            message: '本地文件不存在',
+          );
           return;
         }
       }
 
-      final player = Player();
-      await player.setPlaylistMode(PlaylistMode.none);
-      await player.setVolume(_muted ? 0 : _volume);
+      created = Player();
+      await created.setPlaylistMode(PlaylistMode.none);
+      await created.setVolume(_muted ? 0 : _volume);
       if (!mounted || token != _bindToken) {
-        await _disposePlayer(player);
+        await _disposePlayer(created);
         return;
       }
-      final video = VideoController(player);
-      _player = player;
-      _videoController = video;
-      _attachSubs(player);
+      final video = VideoController(created);
 
-      await player.open(Media(_toMediaUri(path)), play: true);
+      // 先解码到可显示尺寸，再挂到舞台，避免黑帧闪一下
+      await created.open(Media(_toMediaUri(path)), play: true);
       if (!mounted || token != _bindToken) {
-        _clearSubs();
-        _player = null;
-        _videoController = null;
-        await _disposePlayer(player);
+        await _disposePlayer(created);
         return;
       }
-      setState(() => _ready = true);
+      await _awaitDecodable(created, token);
+      if (!mounted || token != _bindToken) {
+        await _disposePlayer(created);
+        return;
+      }
+
+      _clearSubs();
+      final toDispose = _player;
+      _player = created;
+      _videoController = video;
+      _attachSubs(created);
+      setState(() {
+        _ready = true;
+        _loading = false;
+        _error = null;
+      });
+      if (toDispose != null && !identical(toDispose, created)) {
+        unawaited(_disposePlayer(toDispose));
+      }
     } catch (e) {
-      if (!mounted || token != _bindToken) return;
-      setState(() => _error = '播放器初始化失败：$e');
+      await _failBind(
+        token: token,
+        oldPlayer: oldPlayer,
+        failedPlayer: created,
+        restoreBoundId: prevBoundId,
+        restoreBoundPath: prevBoundPath,
+        message: '播放器初始化失败：$e',
+      );
     }
   }
 
@@ -457,12 +571,14 @@ class _InlinePlayerState extends State<_InlinePlayer> {
         children: [
           AspectRatio(
             aspectRatio: _stageAspectRatio(),
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                color: const Color(0xFF0F1115),
-                borderRadius: BorderRadius.circular(10),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(10),
+              child: DecoratedBox(
+                decoration: const BoxDecoration(
+                  color: Color(0xFF0F1115),
+                ),
+                child: _buildStage(tokens),
               ),
-              child: _buildStage(tokens),
             ),
           ),
           if (_ready && _player != null) ...[
@@ -491,11 +607,6 @@ class _InlinePlayerState extends State<_InlinePlayer> {
                 onPressed: () => widget.onOpenSystem(widget.item),
                 child: const Text('系统打开'),
               ),
-              if (_ready)
-                Button(
-                  onPressed: () => _enterFullscreen(),
-                  child: const Text('全屏'),
-                ),
             ],
           ),
         ],
@@ -503,8 +614,31 @@ class _InlinePlayerState extends State<_InlinePlayer> {
     );
   }
 
+  Widget? _buildPoster() {
+    final local = (widget.item.posterLocalPath ?? '').trim();
+    if (local.isNotEmpty && !local.startsWith('memory-poster://')) {
+      final file = File(local);
+      if (file.existsSync()) {
+        return Image.file(
+          file,
+          fit: BoxFit.cover,
+          errorBuilder: (_, _, _) => const SizedBox.shrink(),
+        );
+      }
+    }
+    final url = (widget.item.posterUrl ?? '').trim();
+    if (VideoPosterService.isRemotePosterUrl(url)) {
+      return Image.network(
+        url,
+        fit: BoxFit.cover,
+        errorBuilder: (_, _, _) => const SizedBox.shrink(),
+      );
+    }
+    return null;
+  }
+
   Widget _buildStage(FluentTokens tokens) {
-    if (_error != null) {
+    if (_error != null && !_ready) {
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(16),
@@ -520,14 +654,39 @@ class _InlinePlayerState extends State<_InlinePlayer> {
         ),
       );
     }
-    if (!_ready || _videoController == null) {
+
+    final children = <Widget>[];
+    if (_ready && _videoController != null) {
+      children.add(
+        Video(
+          controller: _videoController!,
+          controls: NoVideoControls,
+          fit: BoxFit.contain,
+        ),
+      );
+    } else {
+      final poster = _buildPoster();
+      if (poster != null) {
+        children.add(Positioned.fill(child: poster));
+      }
+    }
+
+    if (_loading) {
+      children.add(
+        const ColoredBox(
+          color: Color(0x66000000),
+          child: Center(child: ProgressRing()),
+        ),
+      );
+    }
+
+    if (children.isEmpty) {
       return const Center(child: ProgressRing());
     }
-    return Video(
-      controller: _videoController!,
-      controls: NoVideoControls,
-      fit: BoxFit.contain,
-    );
+    if (children.length == 1) {
+      return children.first;
+    }
+    return Stack(fit: StackFit.expand, children: children);
   }
 }
 
@@ -573,99 +732,78 @@ class _Transport extends StatelessWidget {
     final playing = state.playing && !state.completed;
     final position = state.position;
     final duration = state.duration;
-    return Column(
+    return Row(
       children: [
-        Row(
-          children: [
-            Tooltip(
-              message: playing ? '暂停' : '播放',
-              child: Semantics(
-                button: true,
-                label: playing ? '暂停' : '播放',
-                excludeSemantics: true,
-                child: IconButton(
-                  icon: Icon(
-                    playing ? FluentIcons.pause : FluentIcons.play,
-                    size: 14,
-                  ),
-                  onPressed: () => _toggle(),
-                ),
+        Tooltip(
+          message: playing ? '暂停' : '播放',
+          child: Semantics(
+            button: true,
+            label: playing ? '暂停' : '播放',
+            excludeSemantics: true,
+            child: IconButton(
+              icon: Icon(
+                playing ? FluentIcons.pause : FluentIcons.play,
+                size: 14,
               ),
+              onPressed: () => _toggle(),
             ),
-            Expanded(
-              child: _Scrubber(
-                player: player,
-                playedColor: tokens.primary,
-                bufferedColor: tokens.primary.withValues(alpha: 0.25),
-                backgroundColor: tokens.surfaceMuted,
-              ),
-            ),
-            const SizedBox(width: 8),
-            Text(
-              '${fmt(position)} / ${fmt(duration)}',
-              style: TextStyle(
-                fontSize: 11,
-                color: tokens.inkMuted,
-                fontFamily: tokens.fontFamily,
-                fontFeatures: const [FontFeature.tabularFigures()],
-              ),
-            ),
-            const SizedBox(width: 4),
-            Tooltip(
-              message: '全屏',
-              child: Semantics(
-                button: true,
-                label: '全屏',
-                excludeSemantics: true,
-                child: IconButton(
-                  icon: const Icon(FluentIcons.full_screen, size: 14),
-                  onPressed: () => onFullscreen(),
-                ),
-              ),
-            ),
-          ],
+          ),
         ),
-        const SizedBox(height: 4),
-        Row(
-          children: [
-            Tooltip(
-              message: muted ? '取消静音' : '静音',
-              child: Semantics(
-                button: true,
-                label: muted ? '取消静音' : '静音',
-                excludeSemantics: true,
-                child: IconButton(
-                  icon: Icon(
-                    muted ? FluentIcons.volume_disabled : FluentIcons.volume2,
-                    size: 14,
-                  ),
-                  onPressed: () => onToggleMute(),
-                ),
+        Expanded(
+          child: _Scrubber(
+            player: player,
+            playedColor: tokens.primary,
+            bufferedColor: tokens.primary.withValues(alpha: 0.25),
+            backgroundColor: tokens.surfaceMuted,
+          ),
+        ),
+        const SizedBox(width: 8),
+        Text(
+          '${fmt(position)} / ${fmt(duration)}',
+          style: TextStyle(
+            fontSize: 11,
+            color: tokens.inkMuted,
+            fontFamily: tokens.fontFamily,
+            fontFeatures: const [FontFeature.tabularFigures()],
+          ),
+        ),
+        const SizedBox(width: 4),
+        Tooltip(
+          message: muted ? '取消静音' : '静音',
+          child: Semantics(
+            button: true,
+            label: muted ? '取消静音' : '静音',
+            excludeSemantics: true,
+            child: IconButton(
+              icon: Icon(
+                muted ? FluentIcons.volume_disabled : FluentIcons.volume2,
+                size: 14,
               ),
+              onPressed: () => onToggleMute(),
             ),
-            Expanded(
-              child: Slider(
-                value: muted ? 0 : volume,
-                min: 0,
-                max: 100,
-                label: '${(muted ? 0 : volume).round()}',
-                onChanged: (v) => onVolumeChanged(v),
-              ),
+          ),
+        ),
+        SizedBox(
+          width: 72,
+          child: Slider(
+            value: muted ? 0 : volume,
+            min: 0,
+            max: 100,
+            label: '${(muted ? 0 : volume).round()}',
+            onChanged: (v) => onVolumeChanged(v),
+          ),
+        ),
+        Tooltip(
+          message: '全屏',
+          child: Semantics(
+            button: true,
+            label: '全屏',
+            excludeSemantics: true,
+            child: IconButton(
+              icon: const Icon(FluentIcons.full_screen, size: 14),
+              onPressed: () => onFullscreen(),
             ),
-            SizedBox(
-              width: 36,
-              child: Text(
-                '${(muted ? 0 : volume).round()}',
-                textAlign: TextAlign.end,
-                style: TextStyle(
-                  fontSize: 11,
-                  color: tokens.inkMuted,
-                  fontFamily: tokens.fontFamily,
-                  fontFeatures: const [FontFeature.tabularFigures()],
-                ),
-              ),
-            ),
-          ],
+          ),
         ),
       ],
     );

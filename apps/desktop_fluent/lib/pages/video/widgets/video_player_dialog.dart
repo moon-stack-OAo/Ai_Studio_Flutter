@@ -325,23 +325,7 @@ class _VideoPlayerBodyState extends State<_VideoPlayerBody> {
                 fontFeatures: const [FontFeature.tabularFigures()],
               ),
             ),
-            Tooltip(
-              message: '全屏',
-              child: Semantics(
-                button: true,
-                label: '全屏',
-                excludeSemantics: true,
-                child: IconButton(
-                  icon: const Icon(FluentIcons.full_screen, size: 14),
-                  onPressed: () => _enterFullscreen(),
-                ),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 4),
-        Row(
-          children: [
+            const SizedBox(width: 4),
             Tooltip(
               message: _muted ? '取消静音' : '静音',
               child: Semantics(
@@ -359,7 +343,8 @@ class _VideoPlayerBodyState extends State<_VideoPlayerBody> {
                 ),
               ),
             ),
-            Expanded(
+            SizedBox(
+              width: 72,
               child: Slider(
                 value: _muted ? 0 : _volume,
                 min: 0,
@@ -368,16 +353,15 @@ class _VideoPlayerBodyState extends State<_VideoPlayerBody> {
                 onChanged: (v) => _setVolume(v),
               ),
             ),
-            SizedBox(
-              width: 36,
-              child: Text(
-                '${(_muted ? 0 : _volume).round()}',
-                textAlign: TextAlign.end,
-                style: TextStyle(
-                  fontSize: 11,
-                  color: tokens.inkMuted,
-                  fontFamily: tokens.fontFamily,
-                  fontFeatures: const [FontFeature.tabularFigures()],
+            Tooltip(
+              message: '全屏',
+              child: Semantics(
+                button: true,
+                label: '全屏',
+                excludeSemantics: true,
+                child: IconButton(
+                  icon: const Icon(FluentIcons.full_screen, size: 14),
+                  onPressed: () => _enterFullscreen(),
                 ),
               ),
             ),
