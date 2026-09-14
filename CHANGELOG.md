@@ -11,6 +11,10 @@
 
 ## [Unreleased]
 
+---
+
+## [1.0.6] — 2026-09-14
+
 ### Added
 
 - **`CHAT-ATTACH`（P5 · 对话附图）**：Composer 附加图片 → 多模态发送 → 用户气泡缩略 / 灯箱「附图」回看；非 vision 入口禁用；有图可空文；与 `*-TURN-REF` 分轨（`chat_image_cache`）；清会话/备份 omit 本地附件。OD 四端 chat 稿已同步附加入口与「附图」角标
