@@ -39,8 +39,55 @@ void main() {
       expect(entries[0].date, '2026-09-14');
       expect(entries[0].bodyMarkdown.contains('对话附图'), isTrue);
       expect(entries[0].bodyMarkdown.contains('### Added'), isTrue);
+      expect(entries[0].summaryMarkdown, isNull);
       expect(entries[1].version, '1.0.5');
       expect(entries[1].date, '2026-09-01');
+    });
+
+    test('splits 用户摘要 from body', () {
+      const src = '''
+## [1.0.6] — 2026-09-14
+
+### 用户摘要
+
+- 对话可附图发送
+- 生图失败可一键回填再改
+
+### Added
+
+- **CHAT-ATTACH**
+- **IMG-RERUN**
+
+### Fixed
+
+- bug
+''';
+      final entries = parseChangelogMarkdown(src);
+      expect(entries, hasLength(1));
+      final e = entries.single;
+      expect(e.summaryMarkdown, contains('对话可附图发送'));
+      expect(e.summaryMarkdown, contains('生图失败可一键回填再改'));
+      expect(e.summaryMarkdown!.contains('### 用户摘要'), isFalse);
+      expect(e.bodyMarkdown.contains('### Added'), isTrue);
+      expect(e.bodyMarkdown.contains('CHAT-ATTACH'), isTrue);
+      expect(e.bodyMarkdown.contains('用户摘要'), isFalse);
+      expect(e.hasSummary, isTrue);
+      expect(e.displayMarkdown, contains('### 详细变更'));
+      expect(e.displayMarkdown, startsWith('- 对话可附图发送'));
+    });
+
+    test('summary only when no other sections', () {
+      const src = '''
+## [1.0.7] — 2026-09-20
+
+### 用户摘要
+
+- 仅摘要
+''';
+      final e = parseChangelogMarkdown(src).single;
+      expect(e.summaryMarkdown, '- 仅摘要');
+      expect(e.bodyMarkdown, isEmpty);
+      expect(e.displayMarkdown, '- 仅摘要');
     });
 
     test('skips empty and sorts when out of order', () {
@@ -138,6 +185,7 @@ void main() {
       expect(entries.first.version, '1.0.7');
       expect(entries.first.date, '2026-09-20');
       expect(entries.first.bodyMarkdown.contains('remote feature'), isTrue);
+      expect(entries.first.summaryMarkdown, isNull);
       expect(entries.first.isLatest, isTrue);
       expect(entries[1].version, '1.0.6');
       expect(entries[1].isCurrent, isTrue);
@@ -149,6 +197,10 @@ void main() {
         bundledSource: '''
 ## [1.0.6] — 2026-09-14
 
+### 用户摘要
+
+- 本地摘要
+
 ### Added
 
 - bundled long
@@ -159,8 +211,36 @@ void main() {
       expect(entries.single.version, '1.0.6');
       expect(entries.single.bodyMarkdown.contains('release short'), isTrue);
       expect(entries.single.bodyMarkdown.contains('bundled'), isFalse);
+      expect(entries.single.summaryMarkdown, isNull);
       expect(entries.single.isLatest, isTrue);
       expect(entries.single.isCurrent, isFalse);
+    });
+
+    test('remote notes with 用户摘要 are split', () {
+      final entries = resolveChangelogEntries(
+        currentVersion: '1.0.6',
+        bundledSource: '''
+## [1.0.6] — 2026-09-14
+
+### Added
+
+- local
+''',
+        remoteVersion: '1.0.7',
+        remoteNotes: '''
+### 用户摘要
+
+- 远端白话
+
+### Added
+
+- remote detail
+''',
+      );
+      expect(entries.first.version, '1.0.7');
+      expect(entries.first.summaryMarkdown, contains('远端白话'));
+      expect(entries.first.bodyMarkdown.contains('remote detail'), isTrue);
+      expect(entries.first.bodyMarkdown.contains('用户摘要'), isFalse);
     });
   });
 

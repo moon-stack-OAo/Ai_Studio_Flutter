@@ -13,6 +13,7 @@ class ChangelogEntry {
     required this.version,
     this.date,
     required this.bodyMarkdown,
+    this.summaryMarkdown,
     this.isCurrent = false,
     this.isLatest = false,
   });
@@ -23,7 +24,10 @@ class ChangelogEntry {
   /// ISO 日期 `yyyy-MM-dd`；解析不到时为 null。
   final String? date;
 
-  /// 该版本正文（含 `### Added` 等），供 [prepareUpdateNotes] + Markdown 渲染。
+  /// 面向用户的白话摘要（`### 用户摘要`）；无则 null。
+  final String? summaryMarkdown;
+
+  /// 工程明细（`### Added` 等），供 [prepareUpdateNotes] + Markdown 渲染。
   final String bodyMarkdown;
 
   /// 与当前安装版本相等。
@@ -37,6 +41,13 @@ class ChangelogEntry {
   String get dateLabel =>
       (date != null && date!.trim().isNotEmpty) ? date!.trim() : '—';
 
+  bool get hasSummary {
+    final s = summaryMarkdown;
+    return s != null && s.trim().isNotEmpty;
+  }
+
+  bool get hasBody => bodyMarkdown.trim().isNotEmpty;
+
   /// 行上状态 pill：优先「当前」，否则「最新」。
   String? get statusPill {
     if (isCurrent) return '当前';
@@ -44,10 +55,23 @@ class ChangelogEntry {
     return null;
   }
 
+  /// 无 UI 折叠时的拼接正文；关于页优先自行拼摘要 + 折叠明细。
+  String get displayMarkdown {
+    final s = summaryMarkdown?.trim() ?? '';
+    final b = bodyMarkdown.trim();
+    if (s.isNotEmpty && b.isNotEmpty) {
+      return '$s\n\n### 详细变更\n\n$b';
+    }
+    if (s.isNotEmpty) return s;
+    return b;
+  }
+
   ChangelogEntry copyWith({
     String? version,
     String? date,
     String? bodyMarkdown,
+    String? summaryMarkdown,
+    bool clearSummaryMarkdown = false,
     bool? isCurrent,
     bool? isLatest,
   }) {
@@ -55,6 +79,9 @@ class ChangelogEntry {
       version: version ?? this.version,
       date: date ?? this.date,
       bodyMarkdown: bodyMarkdown ?? this.bodyMarkdown,
+      summaryMarkdown: clearSummaryMarkdown
+          ? null
+          : (summaryMarkdown ?? this.summaryMarkdown),
       isCurrent: isCurrent ?? this.isCurrent,
       isLatest: isLatest ?? this.isLatest,
     );
@@ -118,6 +145,46 @@ final _headerRe = RegExp(
   multiLine: true,
 );
 
+final _summaryHeadingRe = RegExp(
+  r'^###\s+用户摘要\s*$',
+  multiLine: true,
+);
+
+final _h3HeadingRe = RegExp(
+  r'^###\s+',
+  multiLine: true,
+);
+
+/// 从章节正文拆出 `### 用户摘要`；其余为工程明细。
+({String? summary, String body}) splitChangelogSummaryAndBody(String sectionBody) {
+  final text = sectionBody.replaceAll('\r\n', '\n');
+  final m = _summaryHeadingRe.firstMatch(text);
+  if (m == null) {
+    return (summary: null, body: text.trim());
+  }
+
+  final after = text.substring(m.end);
+  final next = _h3HeadingRe.firstMatch(after);
+  final String rawSummary;
+  final String rawBody;
+  if (next == null) {
+    rawSummary = after;
+    rawBody = text.substring(0, m.start);
+  } else {
+    rawSummary = after.substring(0, next.start);
+    rawBody = '${text.substring(0, m.start)}${after.substring(next.start)}';
+  }
+
+  final summary = rawSummary.trim();
+  final body = rawBody
+      .replaceAll(RegExp(r'\n{3,}'), '\n\n')
+      .trim();
+  return (
+    summary: summary.isEmpty ? null : summary,
+    body: body,
+  );
+}
+
 /// 解析 Keep a Changelog 风格 Markdown 为版本条目（新→旧）。
 ///
 /// 跳过 `[Unreleased]`；忽略章节之间的 `---`。
@@ -142,11 +209,13 @@ List<ChangelogEntry> parseChangelogMarkdown(String source) {
     body = body.replaceAll(RegExp(r'\n---\s*$'), '').trim();
     body = body.replaceAll(RegExp(r'\n{3,}'), '\n\n').trim();
 
+    final split = splitChangelogSummaryAndBody(body);
     out.add(
       ChangelogEntry(
         version: normalizeVersion(verRaw),
         date: m.group(2),
-        bodyMarkdown: body,
+        summaryMarkdown: split.summary,
+        bodyMarkdown: split.body,
       ),
     );
   }
@@ -177,6 +246,7 @@ List<ChangelogEntry> annotateChangelogEntries(
 /// - 无远端多版本 API 时，以 [bundledSource] 为主（通常来自 asset）。
 /// - 若检查到比嵌入头更新的 [remoteVersion]，则在列表头插入一条（body=notes）。
 /// - 若远端版本已在列表中且 notes 非空，用远端 notes 覆盖该条正文。
+/// - 远端 notes 若无 `### 用户摘要`，整段进 [ChangelogEntry.bodyMarkdown]。
 List<ChangelogEntry> resolveChangelogEntries({
   required String? currentVersion,
   String? bundledSource,
@@ -196,19 +266,23 @@ List<ChangelogEntry> resolveChangelogEntries({
       (e) => compareVersions(e.version, remoteVer) == 0,
     );
     final date = _tryIsoDate(remotePubDate);
+    final split = splitChangelogSummaryAndBody(notes);
     if (idx < 0) {
       parsed.insert(
         0,
         ChangelogEntry(
           version: remoteVer,
           date: date,
-          bodyMarkdown: notes,
+          summaryMarkdown: split.summary,
+          bodyMarkdown: split.body,
         ),
       );
       parsed.sort((a, b) => compareVersions(b.version, a.version));
     } else {
       parsed[idx] = parsed[idx].copyWith(
-        bodyMarkdown: notes,
+        bodyMarkdown: split.body,
+        summaryMarkdown: split.summary,
+        clearSummaryMarkdown: split.summary == null,
         date: date ?? parsed[idx].date,
       );
     }

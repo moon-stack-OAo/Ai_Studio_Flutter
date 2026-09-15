@@ -2,6 +2,8 @@
 /**
  * 从 CHANGELOG.md 提取指定版本章节，写入 release-notes.md
  * 用法: node .github/scripts/extract-changelog.mjs v1.0.0
+ *
+ * 章节顶部若有 `### 用户摘要`，会一并进入 Release 正文；发版前请优先写好白话摘要。
  */
 import fs from 'node:fs'
 import path from 'node:path'

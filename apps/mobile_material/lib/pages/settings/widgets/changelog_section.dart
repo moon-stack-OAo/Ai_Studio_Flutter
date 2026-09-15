@@ -276,7 +276,7 @@ class _ChangelogEntryListState extends State<ChangelogEntryList> {
   }
 }
 
-class _ChangelogRow extends StatelessWidget {
+class _ChangelogRow extends StatefulWidget {
   const _ChangelogRow({
     required this.entry,
     required this.expanded,
@@ -288,10 +288,33 @@ class _ChangelogRow extends StatelessWidget {
   final VoidCallback onToggle;
 
   @override
+  State<_ChangelogRow> createState() => _ChangelogRowState();
+}
+
+class _ChangelogRowState extends State<_ChangelogRow> {
+  bool _detailsOpen = false;
+
+  @override
+  void didUpdateWidget(covariant _ChangelogRow oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!widget.expanded && oldWidget.expanded) {
+      _detailsOpen = false;
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     final tokens = materialTokensOf(context);
+    final entry = widget.entry;
+    final expanded = widget.expanded;
     final pill = entry.statusPill;
+    final summary = prepareUpdateNotes(
+      entry.summaryMarkdown ?? '',
+      maxChars: 12000,
+    );
     final body = prepareUpdateNotes(entry.bodyMarkdown, maxChars: 12000);
+    final showSummaryFirst = entry.hasSummary;
+    final empty = !entry.hasSummary && body.isEmpty;
 
     return Material(
       color: tokens.surfaceElevated,
@@ -304,7 +327,7 @@ class _ChangelogRow extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           InkWell(
-            onTap: onToggle,
+            onTap: widget.onToggle,
             child: ConstrainedBox(
               constraints: const BoxConstraints(minHeight: 48),
               child: Padding(
@@ -362,12 +385,57 @@ class _ChangelogRow extends StatelessWidget {
             Divider(height: 1, color: tokens.border),
             Padding(
               padding: const EdgeInsets.fromLTRB(38, 10, 12, 12),
-              child: body.isEmpty
+              child: empty
                   ? Text(
                       '暂无说明',
                       style: TextStyle(fontSize: 12, color: tokens.inkMuted),
                     )
-                  : MarkdownHost(data: body, compact: true),
+                  : Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (showSummaryFirst)
+                          MarkdownHost(data: summary, compact: true)
+                        else
+                          MarkdownHost(data: body, compact: true),
+                        if (showSummaryFirst && body.isNotEmpty) ...[
+                          const SizedBox(height: 4),
+                          TextButton(
+                            style: TextButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 0,
+                                vertical: 4,
+                              ),
+                              foregroundColor: tokens.primary,
+                              textStyle: const TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                              ),
+                              minimumSize: Size.zero,
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            ),
+                            onPressed: () {
+                              setState(() => _detailsOpen = !_detailsOpen);
+                            },
+                            child: Text(
+                              _detailsOpen ? '收起详细变更' : '显示详细变更',
+                            ),
+                          ),
+                          if (_detailsOpen) ...[
+                            const SizedBox(height: 4),
+                            Text(
+                              '详细变更',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: tokens.inkMuted,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            MarkdownHost(data: body, compact: true),
+                          ],
+                        ],
+                      ],
+                    ),
             ),
           ],
         ],
