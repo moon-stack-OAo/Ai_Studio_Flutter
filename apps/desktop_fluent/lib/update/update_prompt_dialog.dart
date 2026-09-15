@@ -60,7 +60,7 @@ Future<UpdatePromptAction?> showUpdatePromptDialog({
             if (notes.isNotEmpty) ...[
               const SizedBox(height: 12),
               ConstrainedBox(
-                constraints: const BoxConstraints(maxHeight: 220),
+                constraints: const BoxConstraints(maxHeight: 260),
                 child: Container(
                   width: double.infinity,
                   decoration: BoxDecoration(

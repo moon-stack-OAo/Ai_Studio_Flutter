@@ -71,14 +71,38 @@ a.cat .desc{display:block;font-size:11px;color:var(--ink-muted);font-weight:400;
 .dialog-body{padding:12px 22px 0;overflow:hidden;display:flex;flex-direction:column;min-height:0;flex:1}
 .dialog-body .msg{font-size:13px;color:var(--ink-secondary);line-height:1.55;margin-bottom:12px}
 .changelog{
-  flex:1;min-height:120px;max-height:220px;overflow:auto;
+  flex:1;min-height:140px;max-height:260px;overflow:auto;
   border:1px solid var(--border);border-radius:8px;
   background:var(--elev);padding:12px 14px;
-  font-size:13px;line-height:1.55;color:var(--ink);
+  font-size:13px;line-height:1.5;color:var(--ink);
 }
-.changelog h3{font-size:13px;font-weight:650;margin-bottom:8px;color:var(--ink)}
-.changelog ul{padding-left:1.15em;margin:0}
-.changelog li{margin:4px 0;color:var(--ink-secondary)}
+.changelog > :first-child{margin-top:0}
+.changelog > :last-child{margin-bottom:0}
+.changelog h2{
+  font-size:14px;font-weight:650;letter-spacing:0;line-height:1.35;
+  color:var(--ink);margin:0 0 10px;
+}
+.changelog h3{
+  font-size:12px;font-weight:600;letter-spacing:0;line-height:1.35;
+  color:var(--ink);margin:10px 0 4px;
+}
+.changelog h4{
+  font-size:12px;font-weight:600;letter-spacing:0;line-height:1.35;
+  color:var(--ink-secondary);margin:8px 0 4px;
+}
+.changelog p{margin:0 0 8px;color:var(--ink-secondary);line-height:1.5}
+.changelog ul,.changelog ol{padding-left:1.2em;margin:0 0 8px}
+.changelog li{margin:3px 0;color:var(--ink-secondary);line-height:1.45}
+.changelog strong{color:var(--ink);font-weight:650}
+.changelog em{font-style:italic}
+.changelog code{
+  font-family:var(--mono);font-size:11.5px;
+  background:color-mix(in oklch,var(--ink) 12%,var(--elev));
+  color:var(--ink);padding:1px 5px;border-radius:4px;
+}
+.changelog a{color:var(--primary);text-decoration:underline;text-underline-offset:2px}
+.changelog a:hover{color:var(--primary-pressed)}
+.changelog hr{border:0;border-top:1px solid var(--border);margin:10px 0}
 .dialog-foot{
   padding:16px 22px 18px;
   display:flex;justify-content:flex-end;align-items:center;gap:8px;flex-wrap:wrap;
@@ -140,7 +164,7 @@ a.back{position:fixed;left:18px;bottom:14px;z-index:40;font-size:12px;color:var(
       <p class="lead">版本信息、直链更新与桌面关闭行为。<span class="badge">SET-ABOUT</span></p>
       <div class="section">
         <h3>AI Studio</h3>
-        <p class="hint">版本 1.0.1 · Fluent 桌面 · Windows / macOS</p>
+        <p class="hint">版本 1.0.5 · Fluent 桌面 · Windows / macOS</p>
         <p class="hint" style="margin-top:8px">更新通道：GitHub latest.json（签名校验）</p>
         <div class="actions-inline">
           <button class="primary-btn" type="button">检查更新</button>
@@ -153,18 +177,27 @@ a.back{position:fixed;left:18px;bottom:14px;z-index:40;font-size:12px;color:var(
   <div class="scrim" data-od-id="f-update-scrim" title="点击遮罩等同「稍后」" role="presentation">
     <div class="dialog" data-od-id="f-update-prompt" role="dialog" aria-modal="true" aria-labelledby="upd-title" onclick="event.stopPropagation()">
       <div class="dialog-head">
-        <h2 id="upd-title">发现新版本 v1.0.2 <span class="badge">FB-UPDATE · F-UpdatePrompt</span></h2>
+        <h2 id="upd-title">发现新版本 v1.0.6 <span class="badge">FB-UPDATE · F-UpdatePrompt</span></h2>
       </div>
       <div class="dialog-body">
-        <p class="msg">当前版本 v1.0.1。是否下载并安装更新？将下载 Windows 安装包并校验签名；安装完成后将退出并启动安装器。不上架 · 直链分发。</p>
+        <p class="msg">当前版本 v1.0.5。是否下载并安装更新？将下载 Windows 安装包并校验签名；安装完成后将退出并启动安装器。不上架 · 直链分发。</p>
         <div class="changelog" data-od-id="f-update-changelog" tabindex="0">
-          <h3>## 1.0.2</h3>
+          <h2>[1.0.6] — 2026-09-14</h2>
+          <h3>Added</h3>
           <ul>
-            <li>检查更新体验完善</li>
-            <li>修复若干稳定性问题</li>
-            <li>设置 · 关于页文案与签名校验提示对齐</li>
-            <li>托盘「检查更新」入口与冷启动提示一致</li>
+            <li><strong>对话附图</strong>：Composer 附加图片并回看</li>
+            <li><code>IMG-RERUN</code> / <code>VID-RERUN</code>：用此提示重跑</li>
           </ul>
+          <h3>Changed</h3>
+          <ul>
+            <li>对话 Composer 视觉对齐</li>
+            <li>桌面播放器 chrome 精修</li>
+          </ul>
+          <h3>Fixed</h3>
+          <ul>
+            <li>若干稳定性问题</li>
+          </ul>
+          <p><a href="#">Full Changelog</a></p>
         </div>
       </div>
       <div class="dialog-foot" data-od-id="f-update-actions">
