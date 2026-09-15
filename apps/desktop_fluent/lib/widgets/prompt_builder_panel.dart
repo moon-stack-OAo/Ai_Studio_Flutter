@@ -46,6 +46,7 @@ class _PromptBuilderPanelState extends State<PromptBuilderPanel> {
   http.Client? _enhanceHttp;
   /// 上区预览局部切换：0=草稿，1=润色。
   int _previewTab = 0;
+  String _enhanceSkillId = defaultPromptEnhanceSkill.id;
 
   @override
   void initState() {
@@ -115,19 +116,27 @@ class _PromptBuilderPanelState extends State<PromptBuilderPanel> {
     });
   }
 
+  Future<void> _cancelEnhance() async {
+    _enhanceHttp?.close();
+    _enhanceHttp = null;
+    setState(() {
+      _enhancing = false;
+      _enhancedPreview = null;
+      _enhanceError = '已取消';
+    });
+  }
+
   Future<void> _runEnhance() async {
     if (_enhancing) {
-      _enhanceHttp?.close();
-      _enhanceHttp = null;
-      setState(() {
-        _enhancing = false;
-        _enhanceError = '已取消';
-      });
+      await _cancelEnhance();
       return;
     }
 
     final draft = _state.preview.trim();
-    if (draft.isEmpty) {
+    final previous = _enhancedPreview?.trim();
+    final useEnhancedAsBase = previous != null && previous.isNotEmpty;
+    final sourceText = useEnhancedAsBase ? previous : draft;
+    if (sourceText.isEmpty) {
       setState(() {
         _enhanceError = '请先选择标签生成草稿';
         _enhancedPreview = null;
@@ -157,18 +166,23 @@ class _PromptBuilderPanelState extends State<PromptBuilderPanel> {
       _enhancing = true;
       _enhanceError = null;
       _enhancedPreview = null;
+      _previewTab = 1;
     });
 
     try {
       final result = await enhancePrompt(
-        text: draft,
+        text: sourceText,
         domain: widget.domain,
         mode: widget.mode,
+        skillId: _enhanceSkillId,
         credentials: creds,
         chatClient: client,
-        temperature: defaults.temperature,
         timeout: defaults.apiTimeout,
         client: ownedHttp,
+        onDelta: (delta, full) {
+          if (!mounted || !_enhancing) return;
+          setState(() => _enhancedPreview = full);
+        },
       );
       if (!mounted) return;
       setState(() {
@@ -181,6 +195,7 @@ class _PromptBuilderPanelState extends State<PromptBuilderPanel> {
       if (!mounted) return;
       setState(() {
         _enhancing = false;
+        _enhancedPreview = null;
         _enhanceError = '已取消';
       });
     } catch (e) {
@@ -188,6 +203,97 @@ class _PromptBuilderPanelState extends State<PromptBuilderPanel> {
       if (isAbortLike(e)) {
         setState(() {
           _enhancing = false;
+          _enhancedPreview = null;
+          _enhanceError = '已取消';
+        });
+        return;
+      }
+      final msg = e is ChatApiException
+          ? e.message
+          : sanitizeErrorText(e.toString(), '优化失败，请稍后重试');
+      setState(() {
+        _enhancing = false;
+        _enhanceError = msg.isEmpty ? '优化失败，请稍后重试' : msg;
+      });
+    } finally {
+      if (_enhanceHttp == ownedHttp) {
+        ownedHttp.close();
+        _enhanceHttp = null;
+      }
+    }
+  }
+
+  Future<void> _runRefine(String instruction) async {
+    if (_enhancing) return;
+
+    final previous = _enhancedPreview?.trim();
+    if (previous == null || previous.isEmpty) {
+      setState(() {
+        _enhanceError = '请先完成一次润色再继续修改';
+        _previewTab = 1;
+      });
+      return;
+    }
+
+    final providers = widget.providerRepository;
+    final creds = providers?.activeChatCredentials;
+    if (providers == null || creds == null) {
+      setState(() {
+        _enhanceError = '请先在设置中配置对话模型与 API Key';
+        _previewTab = 1;
+      });
+      return;
+    }
+
+    final defaults =
+        widget.chatDefaultsRepository?.defaults ?? ChatDefaults.recommended;
+    final client = widget.chatClient ?? OpenAiCompatibleChatClient();
+    final ownedHttp = createSafeHttpClient();
+    _enhanceHttp = ownedHttp;
+
+    setState(() {
+      _enhancing = true;
+      _enhanceError = null;
+      _enhancedPreview = null;
+      _previewTab = 1;
+    });
+
+    try {
+      final result = await refineEnhancedPrompt(
+        previous: previous,
+        instruction: instruction,
+        domain: widget.domain,
+        mode: widget.mode,
+        skillId: _enhanceSkillId,
+        credentials: creds,
+        chatClient: client,
+        timeout: defaults.apiTimeout,
+        client: ownedHttp,
+        onDelta: (delta, full) {
+          if (!mounted || !_enhancing) return;
+          setState(() => _enhancedPreview = full);
+        },
+      );
+      if (!mounted) return;
+      setState(() {
+        _enhancedPreview = result;
+        _enhancing = false;
+        _enhanceError = null;
+        _previewTab = 1;
+      });
+    } on ChatAbortException {
+      if (!mounted) return;
+      setState(() {
+        _enhancing = false;
+        _enhancedPreview = null;
+        _enhanceError = '已取消';
+      });
+    } catch (e) {
+      if (!mounted) return;
+      if (isAbortLike(e)) {
+        setState(() {
+          _enhancing = false;
+          _enhancedPreview = null;
           _enhanceError = '已取消';
         });
         return;
@@ -213,26 +319,81 @@ class _PromptBuilderPanelState extends State<PromptBuilderPanel> {
     required bool empty,
   }) {
     return Container(
-      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
       decoration: BoxDecoration(
         color: tokens.surfaceMuted,
         borderRadius: BorderRadius.circular(8),
         border: Border.all(color: tokens.border),
       ),
       child: ConstrainedBox(
-        constraints: const BoxConstraints(minHeight: 56, maxHeight: 120),
+        constraints: const BoxConstraints(minHeight: 48, maxHeight: 96),
         child: SingleChildScrollView(
           child: Text(
             body,
             style: TextStyle(
-              fontSize: 12,
-              height: 1.45,
+              fontSize: 13,
+              height: 1.5,
               color: empty ? tokens.inkMuted : tokens.inkSecondary,
               fontFamily: tokens.fontFamily,
             ),
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildToolRow({
+    required FluentTokens tokens,
+    required bool polishEmpty,
+  }) {
+    final hasEnhanced = _enhancedPreview?.trim().isNotEmpty ?? false;
+    return Row(
+      children: [
+        promptToolRowHeight(
+          Button(
+            onPressed: widget.disabled || _enhancing ? null : _onClear,
+            child: Text(
+              '清空',
+              style: TextStyle(fontSize: 12, fontFamily: tokens.fontFamily),
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        promptToolRowHeight(
+          Button(
+            onPressed: widget.disabled || !_hasPreview || _enhancing
+                ? null
+                : _onApplyDraft,
+            child: Text(
+              '填入',
+              style: TextStyle(fontSize: 12, fontFamily: tokens.fontFamily),
+            ),
+          ),
+        ),
+        const Spacer(),
+        if (_canEnhance)
+          _EnhanceButton(
+            tokens: tokens,
+            enhancing: _enhancing,
+            enabled: !widget.disabled &&
+                (_hasPreview || hasEnhanced || _enhancing),
+            emptyHint: !_hasPreview && !hasEnhanced && !_enhancing,
+            onPressed: _runEnhance,
+          ),
+        if (_canEnhance && !_enhancing) ...[
+          const SizedBox(width: 8),
+          promptToolRowHeight(
+            FilledButton(
+              onPressed:
+                  widget.disabled || polishEmpty ? null : _onApplyEnhanced,
+              child: Text(
+                '应用润色',
+                style: TextStyle(fontSize: 12, fontFamily: tokens.fontFamily),
+              ),
+            ),
+          ),
+        ],
+      ],
     );
   }
 
@@ -257,85 +418,33 @@ class _PromptBuilderPanelState extends State<PromptBuilderPanel> {
             onChanged: (v) => setState(() => _previewTab = v),
           ),
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 6),
         _previewCard(
           tokens: tokens,
           body: previewBody,
           empty: previewEmpty && !_enhancing,
         ),
-        SizedBox(height: gap),
-        if (!_showingPolish)
-          Row(
-            children: [
-              promptToolRowHeight(
-                Button(
-                  onPressed: widget.disabled || _enhancing ? null : _onClear,
-                  child: Text(
-                    '清空',
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontFamily: tokens.fontFamily,
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              if (_canEnhance)
-                _EnhanceButton(
-                  tokens: tokens,
-                  enhancing: _enhancing,
-                  enabled: !widget.disabled && (_hasPreview || _enhancing),
-                  emptyHint: !_hasPreview && !_enhancing,
-                  onPressed: _runEnhance,
-                ),
-              const Spacer(),
-              promptToolRowHeight(
-                FilledButton(
-                  onPressed: widget.disabled || !_hasPreview || _enhancing
-                      ? null
-                      : _onApplyDraft,
-                  child: Text(
-                    '填入',
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontFamily: tokens.fontFamily,
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          )
-        else
-          Row(
-            children: [
-              if (_enhancing)
-                _EnhanceButton(
-                  tokens: tokens,
-                  enhancing: true,
-                  enabled: !widget.disabled,
-                  emptyHint: false,
-                  onPressed: _runEnhance,
-                ),
-              const Spacer(),
-              if (!_enhancing)
-                promptToolRowHeight(
-                  FilledButton(
-                    onPressed: widget.disabled || polishEmpty
-                        ? null
-                        : _onApplyEnhanced,
-                    child: Text(
-                      '应用润色结果',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontFamily: tokens.fontFamily,
-                      ),
-                    ),
-                  ),
-                ),
-            ],
+        if (_canEnhance) ...[
+          SizedBox(height: gap),
+          PromptEnhanceSkillSelector(
+            tokens: tokens,
+            selectedId: _enhanceSkillId,
+            enabled: !widget.disabled && !_enhancing,
+            onSelected: (id) => setState(() => _enhanceSkillId = id),
           ),
+        ],
+        if (_canEnhance &&
+            (_enhancedPreview?.trim().isNotEmpty ?? false) &&
+            !_enhancing) ...[
+          SizedBox(height: gap),
+          PromptRefineChips(
+            tokens: tokens,
+            enabled: !widget.disabled,
+            onRefine: _runRefine,
+          ),
+        ],
         if (_enhancing) ...[
-          const SizedBox(height: 10),
+          SizedBox(height: gap),
           const ProgressBar(),
           const SizedBox(height: 4),
           Text(
@@ -348,7 +457,7 @@ class _PromptBuilderPanelState extends State<PromptBuilderPanel> {
           ),
         ],
         if (_enhanceError != null && _enhanceError!.isNotEmpty) ...[
-          const SizedBox(height: 10),
+          SizedBox(height: gap),
           InfoBar(
             title: Text(_enhanceError!),
             severity: _enhanceError == '已取消'
@@ -363,15 +472,13 @@ class _PromptBuilderPanelState extends State<PromptBuilderPanel> {
   @override
   Widget build(BuildContext context) {
     final tokens = fluentTokensOf(context);
-    // 与 PromptAssist「模板」Tab 同一套间距/卡片/按钮层级。
-    final gap = widget.compact ? 8.0 : 12.0;
+    final gap = widget.compact ? 8.0 : 10.0;
     const groupGap = 8.0;
     const chipGap = 8.0;
     const chipPadH = 10.0;
     const chipPadV = 6.0;
     const chipFont = 12.0;
-    // compact：对话框约 600 高，限制上区以免挤掉 chip 视口。
-    final topMaxH = widget.compact ? 240.0 : 320.0;
+    final polishEmpty = _enhancedPreview == null;
 
     final chipBody = Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -391,24 +498,19 @@ class _PromptBuilderPanelState extends State<PromptBuilderPanel> {
       ],
     );
 
-    // 上区非 flex + ListView.shrinkWrap：高度跟内容走并封顶；勿用 Flexible，
-    // 否则与 Expanded(chip) 均分后未用完的配额会变成 Column 底部留白。
+    // 上区非 flex；chips Expanded 吃剩余高度；底栏一行工具。
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        ConstrainedBox(
-          constraints: BoxConstraints(maxHeight: topMaxH),
-          child: ListView(
-            shrinkWrap: true,
-            primary: false,
-            padding: EdgeInsets.zero,
-            children: [_buildTopSection(tokens, gap)],
-          ),
-        ),
+        _buildTopSection(tokens, gap),
         SizedBox(height: gap),
         Expanded(
           child: SingleChildScrollView(child: chipBody),
         ),
+        SizedBox(height: gap),
+        Container(height: 1, color: tokens.border),
+        const SizedBox(height: 10),
+        _buildToolRow(tokens: tokens, polishEmpty: polishEmpty),
       ],
     );
   }
@@ -535,6 +637,181 @@ class _DraftPolishToggleItem extends StatelessWidget {
               fontSize: 12,
               fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
               color: selected ? tokens.primary : tokens.inkSecondary,
+              fontFamily: tokens.fontFamily,
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+/// 快捷迭代指令（B2）；勿称 skill。
+const List<String> kPromptRefineInstructions = [
+  '再短一点',
+  '更电影感',
+  '少加点戏',
+];
+
+/// 有润色结果且非润色中时显示的快捷迭代 Chip。
+class PromptRefineChips extends StatelessWidget {
+  const PromptRefineChips({
+    super.key,
+    required this.tokens,
+    required this.onRefine,
+    this.enabled = true,
+  });
+
+  final FluentTokens tokens;
+  final ValueChanged<String> onRefine;
+  final bool enabled;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          '快捷迭代',
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w600,
+            color: tokens.inkMuted,
+            fontFamily: tokens.fontFamily,
+          ),
+        ),
+        const SizedBox(height: 6),
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            children: [
+              for (var i = 0; i < kPromptRefineInstructions.length; i++) ...[
+                if (i > 0) const SizedBox(width: 6),
+                _SkillChip(
+                  label: kPromptRefineInstructions[i],
+                  active: false,
+                  enabled: enabled,
+                  tokens: tokens,
+                  onTap: () => onRefine(kPromptRefineInstructions[i]),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// 润色风格横滑 Chip（文案用「润色风格」，不用「技能」）。
+class PromptEnhanceSkillSelector extends StatelessWidget {
+  const PromptEnhanceSkillSelector({
+    super.key,
+    required this.tokens,
+    required this.selectedId,
+    required this.onSelected,
+    this.enabled = true,
+  });
+
+  final FluentTokens tokens;
+  final String selectedId;
+  final ValueChanged<String> onSelected;
+  final bool enabled;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          '润色风格',
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w600,
+            color: tokens.inkMuted,
+            fontFamily: tokens.fontFamily,
+          ),
+        ),
+        const SizedBox(height: 6),
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            children: [
+              for (var i = 0; i < promptEnhanceSkills.length; i++) ...[
+                if (i > 0) const SizedBox(width: 6),
+                _SkillChip(
+                  label: promptEnhanceSkills[i].label,
+                  active: selectedId == promptEnhanceSkills[i].id,
+                  enabled: enabled,
+                  tokens: tokens,
+                  onTap: () => onSelected(promptEnhanceSkills[i].id),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _SkillChip extends StatelessWidget {
+  const _SkillChip({
+    required this.label,
+    required this.active,
+    required this.enabled,
+    required this.tokens,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool active;
+  final bool enabled;
+  final FluentTokens tokens;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return HoverButton(
+      onPressed: enabled ? onTap : null,
+      builder: (context, states) {
+        final hovered = states.isHovered || states.isPressed;
+        final Color bg;
+        final Color border;
+        final Color fg;
+        if (!enabled) {
+          bg = tokens.surface;
+          border = tokens.border;
+          fg = tokens.inkMuted;
+        } else if (active) {
+          bg = tokens.primary.withValues(alpha: 0.08);
+          border = tokens.primary;
+          fg = tokens.primaryPressed;
+        } else if (hovered) {
+          bg = tokens.primary.withValues(alpha: 0.05);
+          border = tokens.border;
+          fg = tokens.inkSecondary;
+        } else {
+          bg = tokens.surface;
+          border = tokens.border;
+          fg = tokens.inkSecondary;
+        }
+        return AnimatedContainer(
+          duration: FluentMotion.micro,
+          curve: FluentMotion.standard,
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+          decoration: BoxDecoration(
+            color: bg,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: border),
+          ),
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              height: 1,
+              fontWeight: active ? FontWeight.w600 : FontWeight.w500,
+              color: fg,
               fontFamily: tokens.fontFamily,
             ),
           ),

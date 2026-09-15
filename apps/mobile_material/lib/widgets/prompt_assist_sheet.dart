@@ -71,6 +71,7 @@ class _PromptAssistSheetState extends State<PromptAssistSheet> {
   String? _selectedPresetId;
   /// 模板上区预览局部切换：0=草稿，1=润色。
   int _previewTab = 0;
+  String _enhanceSkillId = defaultPromptEnhanceSkill.id;
 
   @override
   void initState() {
@@ -99,19 +100,27 @@ class _PromptAssistSheetState extends State<PromptAssistSheet> {
     });
   }
 
+  Future<void> _cancelEnhance() async {
+    _enhanceHttp?.close();
+    _enhanceHttp = null;
+    setState(() {
+      _enhancing = false;
+      _enhancedPreview = null;
+      _enhanceError = '已取消';
+    });
+  }
+
   Future<void> _runEnhance() async {
     if (_enhancing) {
-      _enhanceHttp?.close();
-      _enhanceHttp = null;
-      setState(() {
-        _enhancing = false;
-        _enhanceError = '已取消';
-      });
+      await _cancelEnhance();
       return;
     }
 
     final draft = _workingPrompt.trim();
-    if (draft.isEmpty) {
+    final previous = _enhancedPreview?.trim();
+    final useEnhancedAsBase = previous != null && previous.isNotEmpty;
+    final sourceText = useEnhancedAsBase ? previous : draft;
+    if (sourceText.isEmpty) {
       setState(() {
         _enhanceError = '请先选中模板或输入提示词再优化';
         _enhancedPreview = null;
@@ -141,18 +150,23 @@ class _PromptAssistSheetState extends State<PromptAssistSheet> {
       _enhancing = true;
       _enhanceError = null;
       _enhancedPreview = null;
+      _previewTab = 1;
     });
 
     try {
       final result = await enhancePrompt(
-        text: draft,
+        text: sourceText,
         domain: widget.domain,
         mode: widget.mode,
+        skillId: _enhanceSkillId,
         credentials: creds,
         chatClient: client,
-        temperature: defaults.temperature,
         timeout: defaults.apiTimeout,
         client: ownedHttp,
+        onDelta: (delta, full) {
+          if (!mounted || !_enhancing) return;
+          setState(() => _enhancedPreview = full);
+        },
       );
       if (!mounted) return;
       setState(() {
@@ -165,6 +179,7 @@ class _PromptAssistSheetState extends State<PromptAssistSheet> {
       if (!mounted) return;
       setState(() {
         _enhancing = false;
+        _enhancedPreview = null;
         _enhanceError = '已取消';
       });
     } catch (e) {
@@ -172,6 +187,97 @@ class _PromptAssistSheetState extends State<PromptAssistSheet> {
       if (isAbortLike(e)) {
         setState(() {
           _enhancing = false;
+          _enhancedPreview = null;
+          _enhanceError = '已取消';
+        });
+        return;
+      }
+      final msg = e is ChatApiException
+          ? e.message
+          : sanitizeErrorText(e.toString(), '优化失败，请稍后重试');
+      setState(() {
+        _enhancing = false;
+        _enhanceError = msg.isEmpty ? '优化失败，请稍后重试' : msg;
+      });
+    } finally {
+      if (_enhanceHttp == ownedHttp) {
+        ownedHttp.close();
+        _enhanceHttp = null;
+      }
+    }
+  }
+
+  Future<void> _runRefine(String instruction) async {
+    if (_enhancing) return;
+
+    final previous = _enhancedPreview?.trim();
+    if (previous == null || previous.isEmpty) {
+      setState(() {
+        _enhanceError = '请先完成一次润色再继续修改';
+        _previewTab = 1;
+      });
+      return;
+    }
+
+    final providers = widget.providerRepository;
+    final creds = providers?.activeChatCredentials;
+    if (providers == null || creds == null) {
+      setState(() {
+        _enhanceError = '请先在设置中配置对话模型与 API Key';
+        _previewTab = 1;
+      });
+      return;
+    }
+
+    final defaults =
+        widget.chatDefaultsRepository?.defaults ?? ChatDefaults.recommended;
+    final client = widget.chatClient ?? OpenAiCompatibleChatClient();
+    final ownedHttp = createSafeHttpClient();
+    _enhanceHttp = ownedHttp;
+
+    setState(() {
+      _enhancing = true;
+      _enhanceError = null;
+      _enhancedPreview = null;
+      _previewTab = 1;
+    });
+
+    try {
+      final result = await refineEnhancedPrompt(
+        previous: previous,
+        instruction: instruction,
+        domain: widget.domain,
+        mode: widget.mode,
+        skillId: _enhanceSkillId,
+        credentials: creds,
+        chatClient: client,
+        timeout: defaults.apiTimeout,
+        client: ownedHttp,
+        onDelta: (delta, full) {
+          if (!mounted || !_enhancing) return;
+          setState(() => _enhancedPreview = full);
+        },
+      );
+      if (!mounted) return;
+      setState(() {
+        _enhancedPreview = result;
+        _enhancing = false;
+        _enhanceError = null;
+        _previewTab = 1;
+      });
+    } on ChatAbortException {
+      if (!mounted) return;
+      setState(() {
+        _enhancing = false;
+        _enhancedPreview = null;
+        _enhanceError = '已取消';
+      });
+    } catch (e) {
+      if (!mounted) return;
+      if (isAbortLike(e)) {
+        setState(() {
+          _enhancing = false;
+          _enhancedPreview = null;
           _enhanceError = '已取消';
         });
         return;
@@ -203,14 +309,15 @@ class _PromptAssistSheetState extends State<PromptAssistSheet> {
         side: BorderSide(color: tokens.border),
       ),
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+        padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
         child: ConstrainedBox(
-          constraints: const BoxConstraints(minHeight: 56, maxHeight: 120),
+          // OD ~72px；触控略放宽，避免再挤没模板列表。
+          constraints: const BoxConstraints(minHeight: 48, maxHeight: 88),
           child: SingleChildScrollView(
             child: Text(
               body,
               style: TextStyle(
-                fontSize: 12,
+                fontSize: 13,
                 height: 1.45,
                 color: empty ? tokens.inkMuted : tokens.inkSecondary,
                 fontFamily: tokens.fontFamily,
@@ -219,6 +326,90 @@ class _PromptAssistSheetState extends State<PromptAssistSheet> {
           ),
         ),
       ),
+    );
+  }
+
+  /// 外层「模板 | 结构化」无边框下划线 Tab（对齐 OD `.outer-seg`）。
+  Widget _buildOuterUnderlineTab(MaterialTokens tokens) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        border: Border(bottom: BorderSide(color: tokens.border)),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: _OuterUnderlineTabItem(
+              label: '模板',
+              selected: _tabIndex == 0,
+              tokens: tokens,
+              onTap: () => setState(() => _tabIndex = 0),
+            ),
+          ),
+          Expanded(
+            child: _OuterUnderlineTabItem(
+              label: '结构化',
+              selected: _tabIndex == 1,
+              tokens: tokens,
+              onTap: () => setState(() => _tabIndex = 1),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTemplateToolRow({
+    required List<PromptPreset> presets,
+    required bool canEnhance,
+    required bool hasWorking,
+    required bool polishEmpty,
+  }) {
+    final hasEnhanced = _enhancedPreview?.trim().isNotEmpty ?? false;
+    return Row(
+      children: [
+        TextButton(
+          onPressed: presets.isEmpty || _enhancing
+              ? null
+              : () {
+                  final p = pickRandomPromptPreset(
+                    widget.domain,
+                    mode: widget.mode,
+                  );
+                  if (p != null) {
+                    _selectPrompt(p.prompt, presetId: p.id);
+                  }
+                },
+          style: kPromptToolRowBtnStyle,
+          child: const Text('随机'),
+        ),
+        const SizedBox(width: 4),
+        OutlinedButton(
+          onPressed: !hasWorking || _enhancing
+              ? null
+              : () => widget.onApply(_workingPrompt),
+          style: kPromptToolRowBtnStyle,
+          child: const Text('填入'),
+        ),
+        const Spacer(),
+        if (canEnhance)
+          FilledButton.tonal(
+            onPressed: (!hasWorking && !hasEnhanced && !_enhancing)
+                ? null
+                : _runEnhance,
+            style: kPromptToolRowBtnStyle,
+            child: Text(_enhancing ? '取消' : 'AI 润色'),
+          ),
+        if (canEnhance && !_enhancing) ...[
+          const SizedBox(width: 8),
+          FilledButton(
+            onPressed: polishEmpty
+                ? null
+                : () => widget.onApply(_enhancedPreview!),
+            style: kPromptToolRowBtnStyle,
+            child: const Text('应用润色'),
+          ),
+        ],
+      ],
     );
   }
 
@@ -232,9 +423,10 @@ class _PromptAssistSheetState extends State<PromptAssistSheet> {
         ? (polishEmpty
             ? (_enhancing ? '正在润色…' : '暂无润色结果，可先在「草稿」点 AI 润色')
             : _enhancedPreview!)
-        : (hasWorking ? _workingPrompt : '从下方选模板，或点「随机一条」');
+        : (hasWorking ? _workingPrompt : '从下方选模板，或点「随机」');
     final previewEmpty = showingPolish ? polishEmpty : !hasWorking;
 
+    // 上区非 flex；模板 ListView Expanded 吃剩余高度（对齐 OD tpl-list）。
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -246,62 +438,33 @@ class _PromptAssistSheetState extends State<PromptAssistSheet> {
             onChanged: (v) => setState(() => _previewTab = v),
           ),
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 6),
         _previewCard(
           tokens: tokens,
           body: previewBody,
           empty: previewEmpty && !_enhancing,
         ),
-        const SizedBox(height: 12),
-        if (!showingPolish)
-          Row(
-            children: [
-              OutlinedButton(
-                onPressed: presets.isEmpty || _enhancing
-                    ? null
-                    : () {
-                        final p = pickRandomPromptPreset(
-                          widget.domain,
-                          mode: widget.mode,
-                        );
-                        if (p != null) {
-                          _selectPrompt(p.prompt, presetId: p.id);
-                        }
-                      },
-                style: kPromptToolRowBtnStyle,
-                child: const Text('随机一条'),
-              ),
-              const SizedBox(width: 8),
-              if (canEnhance)
-                FilledButton.tonal(
-                  onPressed: (!hasWorking && !_enhancing) ? null : _runEnhance,
-                  style: kPromptToolRowBtnStyle,
-                  child: Text(_enhancing ? '取消' : 'AI 润色'),
-                ),
-            ],
-          )
-        else
-          Row(
-            children: [
-              if (_enhancing)
-                FilledButton.tonal(
-                  onPressed: _runEnhance,
-                  style: kPromptToolRowBtnStyle,
-                  child: const Text('取消'),
-                ),
-              const Spacer(),
-              if (!_enhancing)
-                FilledButton(
-                  onPressed: polishEmpty
-                      ? null
-                      : () => widget.onApply(_enhancedPreview!),
-                  style: kPromptToolRowBtnStyle,
-                  child: const Text('应用润色结果'),
-                ),
-            ],
+        if (canEnhance) ...[
+          const SizedBox(height: 8),
+          PromptEnhanceSkillSelector(
+            tokens: tokens,
+            selectedId: _enhanceSkillId,
+            enabled: !_enhancing,
+            onSelected: (id) => setState(() => _enhanceSkillId = id),
           ),
+        ],
+        if (canEnhance &&
+            (_enhancedPreview?.trim().isNotEmpty ?? false) &&
+            !_enhancing) ...[
+          const SizedBox(height: 8),
+          PromptRefineChips(
+            tokens: tokens,
+            enabled: true,
+            onRefine: _runRefine,
+          ),
+        ],
         if (_enhancing) ...[
-          const SizedBox(height: 10),
+          const SizedBox(height: 8),
           const LinearProgressIndicator(),
           const SizedBox(height: 4),
           Text(
@@ -314,7 +477,7 @@ class _PromptAssistSheetState extends State<PromptAssistSheet> {
           ),
         ],
         if (_enhanceError != null && _enhanceError!.isNotEmpty) ...[
-          const SizedBox(height: 10),
+          const SizedBox(height: 8),
           Material(
             color: _enhanceError == '已取消'
                 ? tokens.surfaceMuted
@@ -335,7 +498,7 @@ class _PromptAssistSheetState extends State<PromptAssistSheet> {
             ),
           ),
         ],
-        const SizedBox(height: 12),
+        const SizedBox(height: 8),
         Expanded(
           child: ListView.separated(
             itemCount: presets.length,
@@ -392,12 +555,20 @@ class _PromptAssistSheetState extends State<PromptAssistSheet> {
             },
           ),
         ),
-        const SizedBox(height: 12),
-        FilledButton(
-          onPressed: !hasWorking || _enhancing
-              ? null
-              : () => widget.onApply(_workingPrompt),
-          child: const Text('填入提示词'),
+        const SizedBox(height: 8),
+        DecoratedBox(
+          decoration: BoxDecoration(
+            border: Border(top: BorderSide(color: tokens.border)),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: _buildTemplateToolRow(
+              presets: presets,
+              canEnhance: canEnhance,
+              hasWorking: hasWorking,
+              polishEmpty: polishEmpty,
+            ),
+          ),
         ),
       ],
     );
@@ -419,8 +590,8 @@ class _PromptAssistSheetState extends State<PromptAssistSheet> {
     final tokens = materialTokensOf(context);
     final media = MediaQuery.of(context);
     final keyboard = media.viewInsets.bottom;
-    // 默认贴底固定约 88% 屏高；键盘弹出时缩短，避免顶出屏幕。
-    final targetH = media.size.height * 0.88;
+    // OD sheet 约 92%；键盘弹出时缩短，避免顶出屏幕。
+    final targetH = media.size.height * 0.90;
     final sheetH = keyboard > 0
         ? (media.size.height - keyboard).clamp(0.0, targetH)
         : targetH;
@@ -441,7 +612,7 @@ class _PromptAssistSheetState extends State<PromptAssistSheet> {
                       child: Text(
                         '提示词辅助',
                         style: TextStyle(
-                          fontSize: 16,
+                          fontSize: 18,
                           fontWeight: FontWeight.w600,
                           color: tokens.ink,
                           fontFamily: tokens.fontFamily,
@@ -463,19 +634,9 @@ class _PromptAssistSheetState extends State<PromptAssistSheet> {
                     fontFamily: tokens.fontFamily,
                   ),
                 ),
-                const SizedBox(height: 12),
-                SegmentedButton<int>(
-                  segments: const [
-                    ButtonSegment(value: 0, label: Text('模板')),
-                    ButtonSegment(value: 1, label: Text('结构化')),
-                  ],
-                  selected: {_tabIndex},
-                  onSelectionChanged: (set) {
-                    if (set.isEmpty) return;
-                    setState(() => _tabIndex = set.first);
-                  },
-                ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 8),
+                _buildOuterUnderlineTab(tokens),
+                const SizedBox(height: 8),
                 Expanded(
                   child: IndexedStack(
                     index: _tabIndex,
@@ -487,6 +648,50 @@ class _PromptAssistSheetState extends State<PromptAssistSheet> {
                 ),
               ],
             ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _OuterUnderlineTabItem extends StatelessWidget {
+  const _OuterUnderlineTabItem({
+    required this.label,
+    required this.selected,
+    required this.tokens,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final MaterialTokens tokens;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: MaterialMotion.micro,
+        curve: MaterialMotion.standard,
+        alignment: Alignment.center,
+        constraints: const BoxConstraints(minHeight: 44),
+        decoration: BoxDecoration(
+          border: Border(
+            bottom: BorderSide(
+              color: selected ? tokens.primary : const Color(0x00000000),
+              width: 2,
+            ),
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+            color: selected ? tokens.primaryPressed : tokens.inkMuted,
+            fontFamily: tokens.fontFamily,
           ),
         ),
       ),

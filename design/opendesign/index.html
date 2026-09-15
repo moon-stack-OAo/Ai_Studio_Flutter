@@ -68,9 +68,48 @@
   background-clip: padding-box;
 }
 *::-webkit-scrollbar-corner { background: transparent; }
+
+    html { scroll-behavior: smooth; }
+    body { display: block; }
+    .layout { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 28px; max-width: 1280px; margin: 0 auto; padding: 32px 24px 80px; align-items: start; }
+    @media (max-width: 960px) {
+      .layout { grid-template-columns: 1fr; padding-top: 20px; }
+      .toc { position: static !important; display: flex; flex-wrap: wrap; gap: 6px 10px; padding: 12px 14px; margin-bottom: 8px; }
+      .toc .toc-title { width: 100%; margin-bottom: 4px; }
+      .toc a { padding: 4px 8px; border: 1px solid var(--border); border-radius: 999px; background: var(--surface); }
+    }
+    .toc {
+      position: sticky; top: 24px; align-self: start;
+      padding: 14px 12px; border: 1px solid var(--border); border-radius: 14px;
+      background: var(--surface); max-height: calc(100vh - 48px); overflow: auto;
+    }
+    .toc .toc-title { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-weight: 650; margin: 0 8px 10px; }
+    .toc nav { display: flex; flex-direction: column; gap: 2px; }
+    .toc a {
+      display: block; text-decoration: none; color: var(--muted); font-size: 13px;
+      padding: 7px 10px; border-radius: 8px; line-height: 1.35;
+    }
+    .toc a:hover { color: var(--ink); background: color-mix(in oklch, var(--primary) 8%, transparent); }
+    .toc a:focus-visible { outline: 2px solid var(--primary); outline-offset: 1px; }
+    .wrap { max-width: none; margin: 0; padding: 0; }
 </style>
 </head>
 <body>
+<div class="layout">
+  <aside class="toc" aria-label="页面大纲">
+    <div class="toc-title">大纲</div>
+    <nav>
+      <a href="#sec-splash">开屏封面</a>
+      <a href="#sec-fluent-light">Fluent · 亮色</a>
+      <a href="#sec-fluent-dark">Fluent · 暗色</a>
+      <a href="#sec-material-light">Material · 亮色</a>
+      <a href="#sec-material-dark">Material · 暗色</a>
+      <a href="#sec-fluent-settings">Fluent · 设置</a>
+      <a href="#sec-update">软件更新弹窗</a>
+      <a href="#sec-prompt-assist">提示词辅助</a>
+    </nav>
+  </aside>
+
   <div class="wrap">
     <header>
       <div class="eyebrow">AI Studio · Flutter 原型</div>
@@ -85,7 +124,7 @@
       </div>
     </header>
 
-    <section class="stack-fluent">
+    <section id="sec-splash" class="stack-fluent">
       <div class="sec-h"><h2>开屏封面 · 静态参考</h2><span>非主导航 · 仅视觉定稿</span></div>
       <div class="grid">
         <a class="card" href="fluent-light-splash.html"><div class="row"><div><div class="title">Fluent · 亮色开屏</div><div class="sub">桌面窗口构图 · #faf9f5</div></div><span class="arrow">→</span></div><div class="tags"><span class="tag sys">Light</span><span class="tag">Splash</span></div></a>
@@ -95,7 +134,7 @@
       </div>
     </section>
 
-    <section class="stack-fluent">
+    <section id="sec-fluent-light" class="stack-fluent">
       <div class="sec-h"><h2>Fluent · 亮色</h2><span>侧栏可切换</span></div>
       <div class="grid">
         <a class="card" href="fluent-light-chat.html"><div class="row"><div><div class="title">对话</div><div class="sub">流式 · Composer 停止</div></div><span class="arrow">→</span></div><div class="tags"><span class="tag sys">Light</span><span class="tag">F-NavView</span></div></a>
@@ -105,7 +144,7 @@
       </div>
     </section>
 
-    <section class="stack-fluent">
+    <section id="sec-fluent-dark" class="stack-fluent">
       <div class="sec-h"><h2>Fluent · 暗色</h2><span>侧栏可切换</span></div>
       <div class="grid">
         <a class="card dark" href="fluent-dark-chat.html"><div class="row"><div><div class="title">对话</div><div class="sub">Cursor 近黑 IDE</div></div><span class="arrow">→</span></div><div class="tags"><span class="tag sys">Dark</span><span class="tag">F-Composer</span></div></a>
@@ -115,7 +154,7 @@
       </div>
     </section>
 
-    <section class="stack-material">
+    <section id="sec-material-light" class="stack-material">
       <div class="sec-h"><h2>Material · 亮色</h2><span>底栏四入口联动</span></div>
       <div class="grid">
         <a class="card" href="material-light-chat.html"><div class="row"><div><div class="title">对话</div><div class="sub">顶栏可进会话列表</div></div><span class="arrow">→</span></div><div class="tags"><span class="tag sys">Light</span><span class="tag">M-NavBar</span></div></a>
@@ -126,7 +165,7 @@
       </div>
     </section>
 
-    <section class="stack-material">
+    <section id="sec-material-dark" class="stack-material">
       <div class="sec-h"><h2>Material · 暗色</h2><span>底栏四入口联动</span></div>
       <div class="grid">
         <a class="card dark" href="material-dark-chat.html"><div class="row"><div><div class="title">对话</div><div class="sub">流式 · 触控操作</div></div><span class="arrow">→</span></div><div class="tags"><span class="tag sys">Dark</span><span class="tag">M-Composer</span></div></a>
@@ -137,7 +176,7 @@
       </div>
     </section>
 
-    <section class="stack-fluent">
+    <section id="sec-fluent-settings" class="stack-fluent">
       <div class="sec-h"><h2>Fluent · 设置分类页</h2><span>对齐现网：关闭行为在关于 · 含日志</span></div>
       <div class="grid">
         <a class="card" href="fluent-light-settings-providers.html"><div class="row"><div><div class="title">亮色 · 提供商</div><div class="sub">列表 + 表单</div></div><span class="arrow">→</span></div></a>
@@ -153,7 +192,7 @@
       </div>
     </section>
 
-    <section class="stack-fluent">
+    <section id="sec-update" class="stack-fluent">
       <div class="sec-h"><h2>FB-UPDATE · 软件更新弹窗</h2><span>仅确认态 · 冷启动 / 托盘 / 检查更新</span></div>
       <div class="grid">
         <a class="card" href="fluent-light-update-dialog.html"><div class="row"><div><div class="title">Fluent · 亮色更新弹窗</div><div class="sub">ContentDialog · Windows 安装包</div></div><span class="arrow">→</span></div><div class="tags"><span class="tag sys">Light</span><span class="tag">FB-UPDATE</span><span class="tag">F-UpdatePrompt</span><span class="tag">确认态</span></div></a>
@@ -162,10 +201,21 @@
         <a class="card dark" href="material-dark-update-dialog.html"><div class="row"><div><div class="title">Material · 暗色更新弹窗</div><div class="sub">AlertDialog · iOS 非 Store 说明</div></div><span class="arrow">→</span></div><div class="tags"><span class="tag sys">Dark</span><span class="tag">FB-UPDATE</span><span class="tag">M-UpdatePrompt</span><span class="tag">确认态</span></div></a>
       </div>
     </section>
+
+    <section id="sec-prompt-assist" class="stack-fluent">
+      <div class="sec-h"><h2>IMG-PROMPT · 提示词辅助</h2><span>模板 / 结构化 · AI 润色 · 快捷迭代</span></div>
+      <div class="grid">
+        <a class="card" href="fluent-light-prompt-assist.html"><div class="row"><div><div class="title">Fluent · 亮色提示词辅助</div><div class="sub">ContentDialog · F-PromptAssist</div></div><span class="arrow">→</span></div><div class="tags"><span class="tag sys">Light</span><span class="tag">IMG-PROMPT</span><span class="tag">F-PromptAssist</span><span class="tag">润色完成</span></div></a>
+        <a class="card dark" href="fluent-dark-prompt-assist.html"><div class="row"><div><div class="title">Fluent · 暗色提示词辅助</div><div class="sub">ContentDialog · 模板/结构化</div></div><span class="arrow">→</span></div><div class="tags"><span class="tag sys">Dark</span><span class="tag">IMG-PROMPT</span><span class="tag">F-PromptAssist</span><span class="tag">润色完成</span></div></a>
+        <a class="card" href="material-light-prompt-assist.html"><div class="row"><div><div class="title">Material · 亮色提示词辅助</div><div class="sub">ModalBottomSheet · ~92%</div></div><span class="arrow">→</span></div><div class="tags"><span class="tag sys">Light</span><span class="tag">IMG-PROMPT</span><span class="tag">M-PromptAssist</span><span class="tag">润色完成</span></div></a>
+        <a class="card dark" href="material-dark-prompt-assist.html"><div class="row"><div><div class="title">Material · 暗色提示词辅助</div><div class="sub">ModalBottomSheet · 触控 Chip</div></div><span class="arrow">→</span></div><div class="tags"><span class="tag sys">Dark</span><span class="tag">IMG-PROMPT</span><span class="tag">M-PromptAssist</span><span class="tag">润色完成</span></div></a>
+      </div>
+    </section>
     <div class="note">
       联动规则：Fluent 侧栏 / Material 底栏只跳转<strong>同主题</strong>页面；设置页内 Tab 为页内切换（无需跳转）。开屏稿仅作静态构图参考（亮暗互跳），<strong>不进入</strong>主导航矩阵，也不作为原生 splash 实现源。生视频 Fluent 页由生图稿派生，细节可再抛光。
     </div>
     <footer>对照 DESIGN.md §5 / §10 · 项目 id：ai-studio-flutter-proto · 副本：Ai_Studio_Flutter/design/opendesign/</footer>
   </div>
+</div>
 </body>
 </html>

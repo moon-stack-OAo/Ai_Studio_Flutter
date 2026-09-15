@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>AI Studio · Material 亮色 · 提示词辅助</title>
+<style>
+:root {
+  --canvas:#faf9f5; --surface:#ffffff; --surface-elevated:#efeeeb;
+  --ink:#141413; --ink-secondary:#3d3d3a; --ink-muted:#6c6a64; --border:#e7e6e1;
+  --primary:#d97757; --primary-pressed:#a9583e; --on-primary:#ffffff;
+  --success:#3f6f4e; --danger:#b42318;
+  --font: Roboto, "Noto Sans SC", system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+  --mono: ui-monospace, "Roboto Mono", "Noto Sans Mono", "SF Mono", Consolas, monospace;
+  --scrim: rgba(40, 32, 24, .45);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:var(--font);background:#d8d4cb;color:var(--ink);min-height:100vh;display:grid;place-items:center;padding:24px 16px}
+.phone{width:min(390px,100%);height:min(844px,92vh);background:var(--canvas);border-radius:36px;border:1px solid var(--border);box-shadow:0 28px 64px rgba(40,30,20,.18);overflow:hidden;display:flex;flex-direction:column;position:relative}
+.status{height:44px;padding:12px 22px 0;display:flex;justify-content:space-between;align-items:center;font-size:12px;font-weight:600;background:var(--surface)}
+.topbar{height:56px;display:flex;align-items:center;gap:6px;padding:0 10px;background:var(--surface);border-bottom:1px solid var(--border)}
+.topbar h1{font-size:17px;font-weight:650;letter-spacing:0}
+.sub{font-size:11px;color:var(--ink-muted)}
+.icon-btn{width:48px;height:48px;border:0;border-radius:24px;background:transparent;color:var(--ink-secondary);display:grid;place-items:center;text-decoration:none}
+.icon-btn svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.main{flex:1;overflow:auto;padding:12px;display:flex;flex-direction:column;gap:12px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:12px}
+.label{font-size:11px;color:var(--ink-muted);font-weight:650;letter-spacing:.06em;text-transform:uppercase;margin-bottom:8px}
+.textarea{width:100%;border:1px solid var(--border);border-radius:10px;background:var(--surface-elevated);color:var(--ink);font:inherit;font-size:14px;padding:10px 12px;min-height:72px;resize:none}
+.btn{height:48px;border:0;border-radius:12px;background:var(--primary);color:var(--on-primary);font-weight:650;font-size:14px;width:100%;margin-top:8px}
+.assist{height:48px;border-radius:12px;border:1px solid var(--border);background:var(--surface-elevated);color:var(--ink-secondary);font-size:13px;font-weight:550;width:100%;margin-top:8px}
+.navbar{height:64px;display:grid;grid-template-columns:repeat(4,1fr);background:var(--surface);border-top:1px solid var(--border);padding-bottom:8px}
+a.nav-item{text-decoration:none;color:inherit}
+.nav-item{border:0;background:transparent;color:var(--ink-muted);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font-size:11px;min-height:48px}
+.nav-item svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.nav-item.active{color:var(--primary-pressed)}
+.home{position:absolute;left:50%;bottom:6px;transform:translateX(-50%);width:120px;height:4px;border-radius:4px;background:var(--ink);opacity:.2;z-index:5}
+.badge-id{display:inline-block;font-size:9px;color:var(--ink-muted);border:1px dashed #cfc9bd;padding:1px 5px;border-radius:3px;font-family:var(--mono);vertical-align:middle;margin-left:4px}
+.backdrop-blur{filter:blur(2px);pointer-events:none;user-select:none}
+
+.scrim{position:absolute;inset:0;z-index:40;background:var(--scrim);display:flex;align-items:flex-end;cursor:pointer}
+.sheet{
+  width:100%;height:92%;max-height:92%;
+  background:var(--surface);border-radius:28px 28px 0 0;
+  border:1px solid var(--border);border-bottom:0;
+  box-shadow:0 -12px 40px rgba(40,30,20,.18);
+  display:flex;flex-direction:column;cursor:default;overflow:hidden;
+}
+.handle{width:40px;height:4px;border-radius:4px;background:color-mix(in oklch,var(--ink) 18%,transparent);margin:10px auto 4px;flex-shrink:0}
+.sheet-head{padding:4px 16px 10px;display:flex;align-items:flex-start;justify-content:space-between;gap:8px;flex-shrink:0}
+.sheet-head h2{font-size:18px;font-weight:650;letter-spacing:0;line-height:1.35}
+.sheet-sub{font-size:12px;color:var(--ink-muted);margin-top:4px;line-height:1.45}
+.close-btn{width:48px;height:48px;border:0;border-radius:24px;background:transparent;color:var(--ink-secondary);display:grid;place-items:center;flex-shrink:0;cursor:pointer}
+.close-btn:hover{background:color-mix(in oklch,var(--ink) 6%,transparent);color:var(--ink)}
+.close-btn:focus-visible{outline:2px solid var(--primary);outline-offset:2px}
+.close-btn svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round}
+
+.sheet-body{flex:1;min-height:0;overflow-y:auto;padding:0 16px 8px;display:flex;flex-direction:column;gap:8px}
+.outer-seg{display:flex;gap:4px;padding:0;border:0;border-bottom:1px solid var(--border);border-radius:0;background:transparent;flex-shrink:0}
+.outer-seg button{flex:1;min-height:44px;border:0;border-radius:0;background:transparent;color:var(--ink-muted);font-size:14px;font-weight:550;cursor:pointer;font-family:inherit;border-bottom:2px solid transparent;margin-bottom:-1px}
+.outer-seg button:hover{color:var(--ink);background:transparent}
+.outer-seg button.active{background:transparent;color:var(--primary-pressed);font-weight:650;box-shadow:none;border-bottom-color:var(--primary)}
+.pane{display:none;flex-direction:column;gap:8px;min-height:0}
+.pane.show{display:flex;flex:1 1 auto;min-height:220px}
+.tpl-list{display:flex;flex-direction:column;gap:8px;flex:1 1 auto;min-height:200px;max-height:none;overflow:auto}
+.pane[data-pane="builder"]{overflow:auto;min-height:220px}
+/* template viewport guarantee */
+.pane[data-pane="template"].show,.pane.show[data-pane="template"]{min-height:240px}
+.tpl-card{text-align:left;border:1px solid var(--border);border-radius:14px;padding:12px 14px;background:var(--surface-elevated);cursor:pointer;font-family:inherit}
+.tpl-card.active{border-color:color-mix(in oklch,var(--primary) 50%,var(--border));background:color-mix(in oklch,var(--primary) 12%,var(--surface))}
+.tpl-card .t{font-size:14px;font-weight:650;color:var(--ink);margin-bottom:2px}
+.tpl-card .d{font-size:12px;color:var(--ink-muted);line-height:1.4}
+.dim-block{display:flex;flex-direction:column;gap:8px}
+.dim-label{font-size:11px;color:var(--ink-muted);font-weight:650;letter-spacing:.06em;text-transform:uppercase}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{min-height:36px;padding:0 12px;border-radius:999px;border:1px solid var(--border);background:var(--surface-elevated);color:var(--ink-secondary);font-size:13px;cursor:pointer;font-family:inherit}
+.chip:hover{color:var(--ink);border-color:color-mix(in oklch,var(--ink) 20%,var(--border))}
+.chip.active{border-color:color-mix(in oklch,var(--primary) 50%,var(--border));color:var(--primary-pressed);background:color-mix(in oklch,var(--primary) 14%,transparent);font-weight:650}
+.chip:focus-visible{outline:2px solid var(--primary);outline-offset:2px}
+
+.preview-block{border:1px solid var(--border);border-radius:16px;background:var(--canvas);overflow:hidden;flex-shrink:0}
+.preview-tabs{display:flex;gap:20px;padding:0 14px;border-bottom:1px solid var(--border);background:var(--surface)}
+.preview-tabs button{min-height:36px;border:0;background:transparent;color:var(--ink-muted);font-size:14px;font-weight:550;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;font-family:inherit;padding:0 2px}
+.preview-tabs button.active{color:var(--primary-pressed);border-bottom-color:var(--primary);font-weight:650}
+.preview-text{min-height:48px;max-height:72px;overflow:auto;padding:8px 12px;font-size:13px;line-height:1.45;color:var(--ink);white-space:pre-wrap}
+.preview-text .muted{color:var(--ink-muted)}
+.preview-text .streaming{border-right:2px solid var(--primary);padding-right:2px;animation:blink 1s step-end infinite}
+@keyframes blink{50%{border-color:transparent}}
+
+.style-row,.refine-row{display:flex;flex-direction:column;gap:4px;flex-shrink:0}
+.style-row .chips,.refine-row .chips{flex-wrap:nowrap;overflow-x:auto;padding-bottom:2px;-webkit-overflow-scrolling:touch}
+.section-cap{font-size:11px;color:var(--ink-muted);font-weight:650;letter-spacing:.06em;text-transform:uppercase}
+
+.progress-row{display:none;align-items:center;gap:10px;font-size:12px;color:var(--ink-secondary);flex-shrink:0}
+.progress-row.show{display:flex}
+.progress-track{flex:1;height:4px;border-radius:99px;background:var(--surface-elevated);overflow:hidden}
+.progress-track>i{display:block;height:100%;width:42%;background:var(--primary);border-radius:99px;animation:indeterminate 1.2s ease-in-out infinite}
+@keyframes indeterminate{0%{transform:translateX(-120%)}100%{transform:translateX(280%)}}
+
+.sheet-foot{padding:8px 16px 14px;border-top:1px solid var(--border);display:flex;flex-direction:column;gap:0;flex-shrink:0;background:var(--surface)}
+.tool-row{display:flex;align-items:center;gap:8px;flex-wrap:nowrap}
+.tool-row .spacer{flex:1;min-width:4px}
+.tool-row.primary-pair{display:none}
+.clear-row{display:none}
+.text-btn,.outline-btn,.filled-btn{min-height:44px;padding:0 14px;border-radius:999px;font-size:13px;font-weight:650;cursor:pointer;font-family:inherit;white-space:nowrap}
+.text-btn{border:0;background:transparent;color:var(--primary-pressed)}
+.text-btn:hover{background:color-mix(in oklch,var(--primary) 10%,transparent)}
+.outline-btn{border:1px solid var(--border);background:transparent;color:var(--ink-secondary)}
+.outline-btn:hover{color:var(--ink);border-color:color-mix(in oklch,var(--primary) 40%,var(--border))}
+.filled-btn{border:0;background:var(--primary);color:var(--on-primary)}
+.filled-btn:hover{background:var(--primary-pressed)}
+.filled-btn.danger{background:var(--danger)}
+.text-btn:focus-visible,.outline-btn:focus-visible,.filled-btn:focus-visible{outline:2px solid var(--primary);outline-offset:2px}
+.filled-btn[hidden],.outline-btn[hidden]{display:none!important}
+
+.state-bar{display:flex;gap:6px;flex-wrap:wrap;padding:0 16px 6px;flex-shrink:0}
+.state-bar button{min-height:32px;padding:0 10px;border-radius:999px;border:1px dashed var(--border);background:transparent;color:var(--ink-muted);font-size:10px;font-family:var(--mono);cursor:pointer}
+.state-bar button.on{border-style:solid;color:var(--primary-pressed);border-color:color-mix(in oklch,var(--primary) 45%,var(--border));background:color-mix(in oklch,var(--primary) 10%,transparent)}
+.hidden{display:none!important}
+
+a.back,a.theme-switch,a.jump{position:fixed;bottom:14px;z-index:50;font-size:12px;color:var(--ink-secondary);text-decoration:none;background:var(--surface);border:1px solid var(--border);padding:6px 10px;border-radius:8px}
+a.back{left:18px} a.theme-switch{left:110px} a.jump{left:210px}
+.corner-tag{position:fixed;right:18px;bottom:14px;z-index:50;font-size:10px;font-family:var(--mono);color:var(--ink-muted);background:var(--surface);border:1px dashed var(--border);padding:4px 8px;border-radius:6px}
+
+*{scrollbar-width:thin;scrollbar-color:color-mix(in oklch,var(--ink-muted,#71717a) 55%,transparent) transparent}
+*::-webkit-scrollbar{width:6px;height:6px}
+*::-webkit-scrollbar-button{display:none;width:0;height:0}
+*::-webkit-scrollbar-track{background:transparent}
+*::-webkit-scrollbar-thumb{background:color-mix(in oklch,var(--ink-muted,#71717a) 45%,transparent);border-radius:999px;border:1px solid transparent;background-clip:padding-box}
+*::-webkit-scrollbar-thumb:hover{background:color-mix(in oklch,var(--ink-muted,#71717a) 70%,transparent);background-clip:padding-box}
+*::-webkit-scrollbar-corner{background:transparent}
+</style>
+</head>
+<body>
+<div class="phone" data-od-id="material-light-prompt-assist">
+  <div class="backdrop-blur" style="display:flex;flex-direction:column;flex:1;min-height:0" aria-hidden="true">
+    <div class="status"><span>9:41</span><span>▌▌▌ · 100%</span></div>
+    <header class="topbar">
+      <a class="icon-btn" href="material-light-sessions.html" aria-label="会话"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></svg></a>
+      <div style="flex:1;min-width:0"><h1>生图</h1><div class="sub">Material · light <span class="badge-id">M-ImageParams</span></div></div>
+    </header>
+    <div class="main">
+      <div class="card">
+        <div class="label">提示词 · M-PromptBox</div>
+        <textarea class="textarea">暖奶油纸面工作区，克制陶土强调，桌面工具气质</textarea>
+        <button class="assist" type="button">提示词辅助 · M-PromptAssist</button>
+        <button class="btn" type="button">生成 · M-GenPrimary</button>
+      </div>
+    </div>
+    <nav class="navbar">
+      <a class="nav-item" href="material-light-chat.html"><svg viewBox="0 0 24 24"><path d="M4 6h16v10H8l-4 3V6z"/></svg>对话</a>
+      <a class="nav-item active" href="material-light-image.html"><svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="14" rx="2"/><circle cx="9" cy="10" r="1.5"/><path d="M4 16l5-4 4 3 3-2 4 3"/></svg>生图</a>
+      <a class="nav-item" href="material-light-video.html"><svg viewBox="0 0 24 24"><rect x="3" y="6" width="13" height="12" rx="2"/><path d="M16 10l5-3v10l-5-3z"/></svg>视频</a>
+      <a class="nav-item" href="material-light-settings.html"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 3v2M12 19v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M3 12h2M19 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>设置</a>
+    </nav>
+    <div class="home"></div>
+  </div>
+
+  <div class="scrim" data-od-id="m-prompt-assist-scrim" title="点击遮罩关闭" role="presentation">
+    <div class="sheet" data-od-id="m-prompt-assist" role="dialog" aria-modal="true" aria-labelledby="pa-title" onclick="event.stopPropagation()">
+      <div class="handle" aria-hidden="true"></div>
+      <div class="sheet-head">
+        <div>
+          <h2 id="pa-title">提示词辅助 <span class="badge-id">IMG-PROMPT · M-PromptAssist</span></h2>
+          <p class="sheet-sub">选模板或拼标签，可润色后填入</p>
+        </div>
+        <button class="close-btn" type="button" aria-label="关闭"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+      </div>
+
+      <div class="sheet-body">
+        <div class="outer-seg" role="tablist">
+          <button type="button" class="active" data-od-id="prompt-assist-seg-template" data-seg="template">模板</button>
+          <button type="button" data-od-id="prompt-assist-seg-builder" data-seg="builder">结构化</button>
+        </div>
+
+        <div class="preview-block">
+          <div class="preview-tabs">
+            <button type="button" data-od-id="prompt-assist-tab-draft" data-tab="draft">草稿</button>
+            <button type="button" class="active" data-od-id="prompt-assist-tab-enhanced" data-tab="enhanced">润色</button>
+          </div>
+          <div class="preview-text" data-od-id="prompt-assist-preview" id="pa-preview">暖奶油纸面工作区，克制陶土强调色点缀主操作，桌面工具气质，无商标、无霓虹，适合产品说明与界面氛围配图。</div>
+        </div>
+
+        <div class="style-row" data-od-id="prompt-assist-style-chips">
+          <div class="section-cap">润色风格</div>
+          <div class="chips">
+            <button class="chip active" type="button">均衡</button>
+            <button class="chip" type="button">精简</button>
+            <button class="chip" type="button">电影感</button>
+            <button class="chip" type="button">写实</button>
+            <button class="chip" type="button">保真润色</button>
+          </div>
+        </div>
+
+        <div class="refine-row" data-od-id="prompt-assist-refine-chips" id="pa-refine">
+          <div class="section-cap">快捷迭代</div>
+          <div class="chips">
+            <button class="chip" type="button">再短一点</button>
+            <button class="chip" type="button">更电影感</button>
+            <button class="chip" type="button">少加点戏</button>
+          </div>
+        </div>
+
+        <div class="progress-row" data-od-id="prompt-assist-progress" id="pa-progress">
+          <div class="progress-track"><i></i></div>
+
+                  <span>正在用对话模型润色…</span>
+        </div>
+
+        <div class="pane show" data-pane="template">
+          <div class="tpl-list">
+            <button class="tpl-card" type="button"><div class="t">产品静物棚拍</div><div class="d">柔光 · 干净背景 · 材质细节</div></button>
+            <button class="tpl-card active" type="button"><div class="t">电影感广角场景</div><div class="d">景深 · 体积光 · 叙事构图</div></button>
+            <button class="tpl-card" type="button"><div class="t">UI / 界面氛围图</div><div class="d">桌面工具气质 · 无商标</div></button>
+          
+            <button class="tpl-card" type="button"><div class="t">人像写真</div><div class="d">侧光 · 浅景深 · 写实</div></button>
+            <button class="tpl-card" type="button"><div class="t">风景大片</div><div class="d">广角 · 晨光 · 层次</div></button>
+          </div>
+        </div>
+
+        <div class="pane" data-pane="builder">
+          <div class="dim-block">
+            <div class="dim-label">主体</div>
+            <div class="chips">
+              <button class="chip active" type="button">工作区桌面</button>
+              <button class="chip" type="button">人物肖像</button>
+              <button class="chip" type="button">产品特写</button>
+            </div>
+          </div>
+          <div class="dim-block">
+            <div class="dim-label">光线 / 镜头</div>
+            <div class="chips">
+              <button class="chip" type="button">柔光棚拍</button>
+              <button class="chip active" type="button">侧逆光</button>
+              <button class="chip" type="button">35mm</button>
+              <button class="chip" type="button">浅景深</button>
+            </div>
+          </div>
+          <div class="dim-block">
+            <div class="dim-label">风格</div>
+            <div class="chips">
+              <button class="chip active" type="button">写实</button>
+              <button class="chip" type="button">插画</button>
+              <button class="chip" type="button">极简</button>
+              <button class="chip" type="button">电影感</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="state-bar" aria-label="原型态切换">
+        <button type="button" data-state="empty">空草稿</button>
+        <button type="button" data-state="running">润色中</button>
+        <button type="button" class="on" data-state="done">润色完成</button>
+      </div>
+
+      <div class="sheet-foot">
+        <div class="tool-row">
+          <button class="text-btn" type="button" id="pa-clear">清空</button>
+          <button class="outline-btn" type="button" data-od-id="prompt-assist-btn-fill">填入</button>
+          <div class="spacer"></div>
+          <button class="filled-btn" type="button" data-od-id="prompt-assist-btn-enhance" id="pa-enhance">AI 润色</button>
+          <button class="filled-btn danger" type="button" data-od-id="prompt-assist-btn-cancel" id="pa-cancel" hidden>取消</button>
+          <button class="filled-btn" type="button" data-od-id="prompt-assist-btn-apply" id="pa-apply">应用润色</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<a class="back" href="index.html">← 总览</a>
+<a class="theme-switch" href="material-dark-prompt-assist.html">暗色稿 →</a>
+<a class="jump" href="material-light-image.html">生图页</a>
+<div class="corner-tag">Material 亮色 · M-PromptAssist</div>
+<script>
+(function () {
+  var root = document.querySelector('.sheet');
+  var draft = '暖奶油纸面工作区，克制陶土强调，桌面工具气质';
+  var enhanced = '暖奶油纸面工作区，克制陶土强调色点缀主操作，桌面工具气质，无商标、无霓虹，适合产品说明与界面氛围配图。';
+  var streaming = '暖奶油纸面工作区，克制陶土强调色点缀主操作';
+  var preview = document.getElementById('pa-preview');
+  var refine = document.getElementById('pa-refine');
+  var progress = document.getElementById('pa-progress');
+  var enhanceBtn = document.getElementById('pa-enhance');
+  var cancelBtn = document.getElementById('pa-cancel');
+  var applyBtn = document.getElementById('pa-apply');
+  var activeTab = 'enhanced';
+  var state = 'done';
+
+  function paint() {
+    if (activeTab === 'draft') {
+      preview.innerHTML = state === 'empty' ? '<span class="muted">在此编辑草稿，或从模板 / 结构化拼出…</span>' : draft;
+    } else if (state === 'running') {
+      preview.innerHTML = '<span class="streaming">' + streaming + '</span>';
+    } else if (state === 'empty') {
+      preview.innerHTML = '<span class="muted">尚无润色结果 · 点「AI 润色」生成</span>';
+    } else {
+      preview.textContent = enhanced;
+    }
+    refine.classList.toggle('hidden', !(activeTab === 'enhanced' && state === 'done'));
+    progress.classList.toggle('show', state === 'running');
+    enhanceBtn.hidden = state === 'running';
+    cancelBtn.hidden = state !== 'running';
+    applyBtn.disabled = !(activeTab === 'enhanced' && state === 'done');
+    applyBtn.style.opacity = applyBtn.disabled ? '.45' : '1';
+  }
+
+  root.querySelectorAll('[data-seg]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      root.querySelectorAll('[data-seg]').forEach(function (b) { b.classList.toggle('active', b === btn); });
+      root.querySelectorAll('[data-pane]').forEach(function (p) { p.classList.toggle('show', p.getAttribute('data-pane') === btn.getAttribute('data-seg')); });
+    });
+  });
+  root.querySelectorAll('[data-tab]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      activeTab = btn.getAttribute('data-tab');
+      root.querySelectorAll('[data-tab]').forEach(function (b) { b.classList.toggle('active', b === btn); });
+      paint();
+    });
+  });
+  root.querySelectorAll('.tpl-card').forEach(function (card) {
+    card.addEventListener('click', function () {
+      root.querySelectorAll('.tpl-card').forEach(function (c) { c.classList.toggle('active', c === card); });
+    });
+  });
+  root.querySelectorAll('.chips').forEach(function (group) {
+    group.querySelectorAll('.chip').forEach(function (chip) {
+      chip.addEventListener('click', function () {
+        if (group.closest('[data-od-id="prompt-assist-refine-chips"]')) return;
+        if (group.parentElement && group.parentElement.classList.contains('dim-block')) {
+          group.querySelectorAll('.chip').forEach(function (c) { c.classList.toggle('active', c === chip); });
+        } else if (group.closest('[data-od-id="prompt-assist-style-chips"]')) {
+          group.querySelectorAll('.chip').forEach(function (c) { c.classList.toggle('active', c === chip); });
+        }
+      });
+    });
+  });
+  document.querySelectorAll('.state-bar [data-state]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      state = btn.getAttribute('data-state');
+      document.querySelectorAll('.state-bar [data-state]').forEach(function (b) { b.classList.toggle('on', b === btn); });
+      if (state !== 'empty') {
+        activeTab = 'enhanced';
+        root.querySelectorAll('[data-tab]').forEach(function (b) { b.classList.toggle('active', b.getAttribute('data-tab') === 'enhanced'); });
+      }
+      paint();
+    });
+  });
+  document.getElementById('pa-clear').addEventListener('click', function () {
+    state = 'empty'; activeTab = 'draft';
+    root.querySelectorAll('[data-tab]').forEach(function (b) { b.classList.toggle('active', b.getAttribute('data-tab') === 'draft'); });
+    document.querySelectorAll('.state-bar [data-state]').forEach(function (b) { b.classList.toggle('on', b.getAttribute('data-state') === 'empty'); });
+    paint();
+  });
+  paint();
+})();
+</script>
+</body>
+</html>

@@ -414,6 +414,15 @@ Flutter 落点：`packages/design_fluent` 与 `packages/design_material` 的 `Th
 - **不**自动提交；用户确认后再点生成。生成中（全局 busy）按钮禁用；点按可提示「当前有任务进行中」。
 - 原参考图不可读时：仅回填提示词与参数，并短提示说明。
 
+**`IMG-PROMPT` 辅助 · AI 润色（已落地）**
+
+- **润色风格**（内置，core `PromptEnhanceSkill`）：均衡 / 精简 / 电影感 / 写实 / 保真润色；默认均衡。
+- **流式预览**：开始即切上区「润色」Tab，边生成边显示。
+- **取消清空**：取消流式后清空润色结果，不保留半成品。
+- **换风格再跑**：已有润色结果时，「AI 润色」以**当前润色结果**为输入；否则用草稿。
+- **快捷迭代**：有结果时显示「再短一点」「更电影感」「少加点戏」，走 `refineEnhancedPrompt`。
+- 仍用当前对话模型；system 约束只输出提示词正文（无解释 / markdown / Negative）。
+
 **`IMG-TURN-REF` / 参考图持久化（已决）**
 
 - **范围**：仅生图（及生视频对齐项）；**对话气泡附图**见 `CHAT-ATTACH`（§5.4 / §9 P5），**不在本能力实现**。
@@ -432,7 +441,7 @@ Flutter 落点：`packages/design_fluent` 与 `packages/design_material` 的 `Th
 | 能力 ID            | 职责                   | Fluent（F）                                                                         | Material（M）                                                 | 关键状态                                                                                                                                                |
 |------------------|----------------------|-----------------------------------------------------------------------------------|-------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------|
 | `VID-PARAMS`     | 时长、比例等               | `F-VideoParams`：属性窗格                                                              | `M-VideoParams`：sheet / 折叠                                  | 按能力显隐                                                                                                                                               |
-| `VID-PROMPT-REF` | Composer 提示词 + 参考图   | 复用 Prompt/Ref 的 Fluent 变体                                                         | 复用 Material 变体                                              | 同生图                                                                                                                                                 |
+| `VID-PROMPT-REF` | Composer 提示词 + 参考图（含 AI 润色，对齐 `IMG-PROMPT`） | 复用 Prompt/Ref 的 Fluent 变体                                                         | 复用 Material 变体                                              | 同生图；润色行为见 `IMG-PROMPT` 辅助                                                                                                                                                 |
 | `VID-TURN-REF`   | **用户气泡**回看本回合参考图     | 对齐 `IMG-TURN-REF` 的 Fluent 变体                                                     | 对齐 Material 变体                                              | 同 `IMG-TURN-REF`                                                                                                                                    |
 | `VID-GENERATE`   | 创建任务 / 取消            | `F-VideoPrimary`                                                                  | `M-VideoPrimary`                                            | 空闲 / 提交中                                                                                                                                            |
 | `VID-QUEUE`      | 任务队列与进度（**按回合时间分隔**） | `F-VideoQueue`：筛选 Chip + 每回合提示词（± `VID-TURN-REF`）+ 任务卡（可含封面）+ ProgressBar + 放弃/重试 + **用此提示重跑** | `M-VideoQueue`：筛选 Chip + 卡片列表（可含封面）+ LinearProgress + 放弃/重试 + **用此提示重跑** | 筛选：全部 / 生成中 / 待恢复 / 已完成 / 失败 / 已放弃；条目态 loading / pending_resume / success / error / abandoned（规格文案 queued·running·succeeded·failed·abandoned 为对外表述） |
@@ -454,6 +463,8 @@ Flutter 落点：`packages/design_fluent` 与 `packages/design_material` 的 `Th
 
 - 从队列或播放器对某条任务「用此提示重跑」：将 `prompt` 写入 Composer 草稿，并将该回合 `referenceImages`（若有且文件仍可读）恢复为当前参考图；**一并回填**时长 / 比例 / size / resolution（item 上有则写入 facade，并 `syncParamsToActiveProvider`）。
 - **不**自动调用生成；生成中禁用该入口或明确提示。
+
+**`VID-PROMPT-REF` 辅助 · AI 润色**：与 `IMG-PROMPT` 辅助润色行为一致（风格档、流式预览、取消清空、基于当前结果换风格、快捷迭代）；视频基座 system 另含镜头运动/节奏。
 
 **`VID-QUEUE` 封面缩略（已决）**
 
@@ -764,3 +775,4 @@ packages/design_material/
 | 2026-09-14 | **`VID-PLAYER` 信息密度**：Fluent OD 头栏摘要+元信息、空舞台示意/三步引导、transport 缓冲分层与音量%；桌面内嵌跟版；Material 不跟桌面密度；§5.6 |
 | 2026-09-14 | **`IMG-RERUN`**：双端生图时间线「用此提示重跑」（回填提示词+参数+可读参考图；不自动提交；忙态禁用）；§5.5 对齐 `VID-RERUN` |
 | 2026-09-14 | **`CHAT-ATTACH` UI 对齐 OD**：四端 chat 稿补附图；Flutter P0–P2（气泡角标、草稿壳、Material 圆角/padding、附加钮定尺） |
+| 2026-09-15 | **`IMG-PROMPT` / `VID-PROMPT-REF` AI 润色**：风格档（均衡/精简/电影感/写实/保真）、流式预览、取消清空、换风格基于当前结果、快捷迭代；§5.5 / §5.6 |

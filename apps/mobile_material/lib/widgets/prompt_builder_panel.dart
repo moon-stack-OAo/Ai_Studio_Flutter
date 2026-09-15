@@ -45,6 +45,7 @@ class _PromptBuilderPanelState extends State<PromptBuilderPanel> {
   http.Client? _enhanceHttp;
   /// 上区预览局部切换：0=草稿，1=润色。
   int _previewTab = 0;
+  String _enhanceSkillId = defaultPromptEnhanceSkill.id;
 
   @override
   void initState() {
@@ -114,19 +115,27 @@ class _PromptBuilderPanelState extends State<PromptBuilderPanel> {
     });
   }
 
+  Future<void> _cancelEnhance() async {
+    _enhanceHttp?.close();
+    _enhanceHttp = null;
+    setState(() {
+      _enhancing = false;
+      _enhancedPreview = null;
+      _enhanceError = '已取消';
+    });
+  }
+
   Future<void> _runEnhance() async {
     if (_enhancing) {
-      _enhanceHttp?.close();
-      _enhanceHttp = null;
-      setState(() {
-        _enhancing = false;
-        _enhanceError = '已取消';
-      });
+      await _cancelEnhance();
       return;
     }
 
     final draft = _state.preview.trim();
-    if (draft.isEmpty) {
+    final previous = _enhancedPreview?.trim();
+    final useEnhancedAsBase = previous != null && previous.isNotEmpty;
+    final sourceText = useEnhancedAsBase ? previous : draft;
+    if (sourceText.isEmpty) {
       setState(() {
         _enhanceError = '请先选择标签生成草稿';
         _enhancedPreview = null;
@@ -156,18 +165,23 @@ class _PromptBuilderPanelState extends State<PromptBuilderPanel> {
       _enhancing = true;
       _enhanceError = null;
       _enhancedPreview = null;
+      _previewTab = 1;
     });
 
     try {
       final result = await enhancePrompt(
-        text: draft,
+        text: sourceText,
         domain: widget.domain,
         mode: widget.mode,
+        skillId: _enhanceSkillId,
         credentials: creds,
         chatClient: client,
-        temperature: defaults.temperature,
         timeout: defaults.apiTimeout,
         client: ownedHttp,
+        onDelta: (delta, full) {
+          if (!mounted || !_enhancing) return;
+          setState(() => _enhancedPreview = full);
+        },
       );
       if (!mounted) return;
       setState(() {
@@ -180,6 +194,7 @@ class _PromptBuilderPanelState extends State<PromptBuilderPanel> {
       if (!mounted) return;
       setState(() {
         _enhancing = false;
+        _enhancedPreview = null;
         _enhanceError = '已取消';
       });
     } catch (e) {
@@ -187,6 +202,97 @@ class _PromptBuilderPanelState extends State<PromptBuilderPanel> {
       if (isAbortLike(e)) {
         setState(() {
           _enhancing = false;
+          _enhancedPreview = null;
+          _enhanceError = '已取消';
+        });
+        return;
+      }
+      final msg = e is ChatApiException
+          ? e.message
+          : sanitizeErrorText(e.toString(), '优化失败，请稍后重试');
+      setState(() {
+        _enhancing = false;
+        _enhanceError = msg.isEmpty ? '优化失败，请稍后重试' : msg;
+      });
+    } finally {
+      if (_enhanceHttp == ownedHttp) {
+        ownedHttp.close();
+        _enhanceHttp = null;
+      }
+    }
+  }
+
+  Future<void> _runRefine(String instruction) async {
+    if (_enhancing) return;
+
+    final previous = _enhancedPreview?.trim();
+    if (previous == null || previous.isEmpty) {
+      setState(() {
+        _enhanceError = '请先完成一次润色再继续修改';
+        _previewTab = 1;
+      });
+      return;
+    }
+
+    final providers = widget.providerRepository;
+    final creds = providers?.activeChatCredentials;
+    if (providers == null || creds == null) {
+      setState(() {
+        _enhanceError = '请先在设置中配置对话模型与 API Key';
+        _previewTab = 1;
+      });
+      return;
+    }
+
+    final defaults =
+        widget.chatDefaultsRepository?.defaults ?? ChatDefaults.recommended;
+    final client = widget.chatClient ?? OpenAiCompatibleChatClient();
+    final ownedHttp = createSafeHttpClient();
+    _enhanceHttp = ownedHttp;
+
+    setState(() {
+      _enhancing = true;
+      _enhanceError = null;
+      _enhancedPreview = null;
+      _previewTab = 1;
+    });
+
+    try {
+      final result = await refineEnhancedPrompt(
+        previous: previous,
+        instruction: instruction,
+        domain: widget.domain,
+        mode: widget.mode,
+        skillId: _enhanceSkillId,
+        credentials: creds,
+        chatClient: client,
+        timeout: defaults.apiTimeout,
+        client: ownedHttp,
+        onDelta: (delta, full) {
+          if (!mounted || !_enhancing) return;
+          setState(() => _enhancedPreview = full);
+        },
+      );
+      if (!mounted) return;
+      setState(() {
+        _enhancedPreview = result;
+        _enhancing = false;
+        _enhanceError = null;
+        _previewTab = 1;
+      });
+    } on ChatAbortException {
+      if (!mounted) return;
+      setState(() {
+        _enhancing = false;
+        _enhancedPreview = null;
+        _enhanceError = '已取消';
+      });
+    } catch (e) {
+      if (!mounted) return;
+      if (isAbortLike(e)) {
+        setState(() {
+          _enhancing = false;
+          _enhancedPreview = null;
           _enhanceError = '已取消';
         });
         return;
@@ -218,14 +324,14 @@ class _PromptBuilderPanelState extends State<PromptBuilderPanel> {
         side: BorderSide(color: tokens.border),
       ),
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+        padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
         child: ConstrainedBox(
-          constraints: const BoxConstraints(minHeight: 56, maxHeight: 120),
+          constraints: const BoxConstraints(minHeight: 48, maxHeight: 88),
           child: SingleChildScrollView(
             child: Text(
               body,
               style: TextStyle(
-                fontSize: 12,
+                fontSize: 13,
                 height: 1.45,
                 color: empty ? tokens.inkMuted : tokens.inkSecondary,
                 fontFamily: tokens.fontFamily,
@@ -237,17 +343,59 @@ class _PromptBuilderPanelState extends State<PromptBuilderPanel> {
     );
   }
 
+  Widget _buildToolRow({
+    required bool polishEmpty,
+  }) {
+    final hasEnhanced = _enhancedPreview?.trim().isNotEmpty ?? false;
+    final enhanceBtn = FilledButton.tonal(
+      onPressed: widget.disabled ||
+              (!_hasPreview && !hasEnhanced && !_enhancing)
+          ? null
+          : _runEnhance,
+      style: kPromptToolRowBtnStyle,
+      child: Text(_enhancing ? '取消' : 'AI 润色'),
+    );
+
+    return Row(
+      children: [
+        TextButton(
+          onPressed: widget.disabled || _enhancing ? null : _onClear,
+          style: kPromptToolRowBtnStyle,
+          child: const Text('清空'),
+        ),
+        const SizedBox(width: 4),
+        OutlinedButton(
+          onPressed:
+              widget.disabled || !_hasPreview || _enhancing ? null : _onApplyDraft,
+          style: kPromptToolRowBtnStyle,
+          child: const Text('填入'),
+        ),
+        const Spacer(),
+        if (_canEnhance)
+          (!_hasPreview && !hasEnhanced && !_enhancing)
+              ? Tooltip(message: '请先选择标签生成草稿', child: enhanceBtn)
+              : enhanceBtn,
+        if (_canEnhance && !_enhancing) ...[
+          const SizedBox(width: 8),
+          FilledButton(
+            onPressed: widget.disabled || polishEmpty ? null : _onApplyEnhanced,
+            style: kPromptToolRowBtnStyle,
+            child: const Text('应用润色'),
+          ),
+        ],
+      ],
+    );
+  }
+
   Widget _buildTopSection(MaterialTokens tokens) {
-    const gap = 12.0;
+    const gap = 8.0;
     final polishEmpty = _enhancedPreview == null;
     final previewBody = _showingPolish
         ? (polishEmpty
             ? (_enhancing ? '正在润色…' : '暂无润色结果，可先在「草稿」点 AI 润色')
             : _enhancedPreview!)
         : (_hasPreview ? _state.preview : '选择下方标签生成草稿');
-    final previewEmpty = _showingPolish
-        ? polishEmpty
-        : !_hasPreview;
+    final previewEmpty = _showingPolish ? polishEmpty : !_hasPreview;
 
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -261,66 +409,33 @@ class _PromptBuilderPanelState extends State<PromptBuilderPanel> {
             onChanged: (v) => setState(() => _previewTab = v),
           ),
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 6),
         _previewCard(
           tokens: tokens,
           body: previewBody,
           empty: previewEmpty && !_enhancing,
         ),
-        const SizedBox(height: gap),
-        if (!_showingPolish)
-          Row(
-            children: [
-              OutlinedButton(
-                onPressed: widget.disabled || _enhancing ? null : _onClear,
-                style: kPromptToolRowBtnStyle,
-                child: const Text('清空'),
-              ),
-              const SizedBox(width: 8),
-              if (_canEnhance)
-                Builder(
-                  builder: (context) {
-                    final btn = FilledButton.tonal(
-                      onPressed: widget.disabled ||
-                              (!_hasPreview && !_enhancing)
-                          ? null
-                          : _runEnhance,
-                      style: kPromptToolRowBtnStyle,
-                      child: Text(_enhancing ? '取消' : 'AI 润色'),
-                    );
-                    if (!_hasPreview && !_enhancing) {
-                      return Tooltip(
-                        message: '请先选择标签生成草稿',
-                        child: btn,
-                      );
-                    }
-                    return btn;
-                  },
-                ),
-            ],
-          )
-        else
-          Row(
-            children: [
-              if (_enhancing)
-                FilledButton.tonal(
-                  onPressed: widget.disabled ? null : _runEnhance,
-                  style: kPromptToolRowBtnStyle,
-                  child: const Text('取消'),
-                ),
-              const Spacer(),
-              if (!_enhancing)
-                FilledButton(
-                  onPressed: widget.disabled || polishEmpty
-                      ? null
-                      : _onApplyEnhanced,
-                  style: kPromptToolRowBtnStyle,
-                  child: const Text('应用润色结果'),
-                ),
-            ],
+        if (_canEnhance) ...[
+          const SizedBox(height: gap),
+          PromptEnhanceSkillSelector(
+            tokens: tokens,
+            selectedId: _enhanceSkillId,
+            enabled: !widget.disabled && !_enhancing,
+            onSelected: (id) => setState(() => _enhanceSkillId = id),
           ),
+        ],
+        if (_canEnhance &&
+            (_enhancedPreview?.trim().isNotEmpty ?? false) &&
+            !_enhancing) ...[
+          const SizedBox(height: gap),
+          PromptRefineChips(
+            tokens: tokens,
+            enabled: !widget.disabled,
+            onRefine: _runRefine,
+          ),
+        ],
         if (_enhancing) ...[
-          const SizedBox(height: 10),
+          const SizedBox(height: gap),
           const LinearProgressIndicator(),
           const SizedBox(height: 4),
           Text(
@@ -333,7 +448,7 @@ class _PromptBuilderPanelState extends State<PromptBuilderPanel> {
           ),
         ],
         if (_enhanceError != null && _enhanceError!.isNotEmpty) ...[
-          const SizedBox(height: 10),
+          const SizedBox(height: gap),
           Material(
             color: _enhanceError == '已取消'
                 ? tokens.surfaceMuted
@@ -361,24 +476,14 @@ class _PromptBuilderPanelState extends State<PromptBuilderPanel> {
   @override
   Widget build(BuildContext context) {
     final tokens = materialTokensOf(context);
-    const gap = 12.0;
-    // Sheet 有限高度：限制上区，保证下方 chip 与「填入」按钮仍有视口。
-    const topMaxH = 220.0;
+    const gap = 8.0;
+    final polishEmpty = _enhancedPreview == null;
 
-    // 上区非 flex + ListView.shrinkWrap：高度跟内容走并封顶；勿用 Flexible，
-    // 否则与 Expanded(chip) 均分后未用完的配额会变成 Column 底部留白。
+    // 上区非 flex；结构化 chips Expanded 吃剩余高度；底栏一行工具。
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        ConstrainedBox(
-          constraints: const BoxConstraints(maxHeight: topMaxH),
-          child: ListView(
-            shrinkWrap: true,
-            primary: false,
-            padding: EdgeInsets.zero,
-            children: [_buildTopSection(tokens)],
-          ),
-        ),
+        _buildTopSection(tokens),
         const SizedBox(height: gap),
         Expanded(
           child: SingleChildScrollView(
@@ -394,10 +499,14 @@ class _PromptBuilderPanelState extends State<PromptBuilderPanel> {
           ),
         ),
         const SizedBox(height: gap),
-        FilledButton(
-          onPressed:
-              widget.disabled || !_hasPreview || _enhancing ? null : _onApplyDraft,
-          child: const Text('填入提示词'),
+        DecoratedBox(
+          decoration: BoxDecoration(
+            border: Border(top: BorderSide(color: tokens.border)),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: _buildToolRow(polishEmpty: polishEmpty),
+          ),
         ),
       ],
     );
@@ -459,6 +568,143 @@ class _PromptBuilderPanelState extends State<PromptBuilderPanel> {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// 快捷迭代指令（B2）；勿称 skill。
+const List<String> kPromptRefineInstructions = [
+  '再短一点',
+  '更电影感',
+  '少加点戏',
+];
+
+/// 有润色结果且非润色中时显示的快捷迭代 Chip。
+class PromptRefineChips extends StatelessWidget {
+  const PromptRefineChips({
+    super.key,
+    required this.tokens,
+    required this.onRefine,
+    this.enabled = true,
+  });
+
+  final MaterialTokens tokens;
+  final ValueChanged<String> onRefine;
+  final bool enabled;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          '快捷迭代',
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w600,
+            color: tokens.inkMuted,
+            fontFamily: tokens.fontFamily,
+          ),
+        ),
+        const SizedBox(height: 6),
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            children: [
+              for (final tip in kPromptRefineInstructions)
+                Padding(
+                  padding: const EdgeInsets.only(right: 6),
+                  child: FilterChip(
+                    label: Text(tip),
+                    selected: false,
+                    showCheckmark: false,
+                    onSelected: enabled ? (_) => onRefine(tip) : null,
+                    visualDensity: VisualDensity.compact,
+                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    labelStyle: TextStyle(
+                      fontSize: 12,
+                      fontFamily: tokens.fontFamily,
+                      color: tokens.inkSecondary,
+                    ),
+                    side: BorderSide(color: tokens.border),
+                    backgroundColor: tokens.surface,
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// 润色风格横滑 Chip（文案用「润色风格」，不用「技能」）。
+class PromptEnhanceSkillSelector extends StatelessWidget {
+  const PromptEnhanceSkillSelector({
+    super.key,
+    required this.tokens,
+    required this.selectedId,
+    required this.onSelected,
+    this.enabled = true,
+  });
+
+  final MaterialTokens tokens;
+  final String selectedId;
+  final ValueChanged<String> onSelected;
+  final bool enabled;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          '润色风格',
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w600,
+            color: tokens.inkMuted,
+            fontFamily: tokens.fontFamily,
+          ),
+        ),
+        const SizedBox(height: 6),
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            children: [
+              for (final skill in promptEnhanceSkills) ...[
+                Padding(
+                  padding: const EdgeInsets.only(right: 6),
+                  child: FilterChip(
+                    label: Text(skill.label),
+                    selected: selectedId == skill.id,
+                    showCheckmark: false,
+                    onSelected: enabled
+                        ? (_) => onSelected(skill.id)
+                        : null,
+                    visualDensity: VisualDensity.compact,
+                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    labelStyle: TextStyle(
+                      fontSize: 12,
+                      fontFamily: tokens.fontFamily,
+                      color: selectedId == skill.id
+                          ? tokens.primary
+                          : tokens.inkSecondary,
+                    ),
+                    selectedColor: tokens.primary.withValues(alpha: 0.14),
+                    side: BorderSide(
+                      color: selectedId == skill.id
+                          ? tokens.primary
+                          : tokens.border,
+                    ),
+                    backgroundColor: tokens.surface,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ],
     );
   }
 }
