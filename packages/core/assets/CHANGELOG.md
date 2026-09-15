@@ -13,15 +13,13 @@
 
 ### Added
 
-- **`SET-ABOUT` 多版本折叠更新日志**：双端关于页按 Keep a Changelog 展示多版本折叠行（版本 · 日期 · 当前/最新 pill）；默认全折叠；Fluent ContentDialog / Material BottomSheet 查看完整历史；core 解析 + **`packages/core/assets/CHANGELOG.md`**（`sync-changelog-asset.mjs` / `bump-version` 同步根目录 CHANGELOG；可并入检查到的远端 notes）；历史浏览不影响更新态
-- **提示词 AI 润色（`IMG-PROMPT` / `VID-PROMPT-REF`）**：辅助面板支持润色风格（均衡 / 精简 / 电影感 / 写实 / 保真润色）；流式预览（开始即切「润色」Tab）；取消后清空半成品；已有结果时「AI 润色」基于当前润色结果换风格再跑；快捷迭代「再短一点」「更电影感」「少加点戏」（`refineEnhancedPrompt`）；仍用当前对话模型，只输出提示词正文
+- **`SET-ABOUT` 多版本折叠更新日志**：双端关于页按 Keep a Changelog 展示多版本折叠行（版本 · 日期 · 当前/最新 pill）；默认全折叠；Fluent ContentDialog / Material BottomSheet 查看完整历史；完整历史弹层右下角「回到顶部」浮钮；core 解析 + **`packages/core/assets/CHANGELOG.md`**（`sync-changelog-asset.mjs` / `bump-version` 同步根目录 CHANGELOG；可并入检查到的远端 notes）；历史浏览不影响更新态
+- **设置页「回到顶部」浮层**：双端各设置可滚动页（含日志列表、提供商编辑）滚过阈值后右下角圆形上箭头，Tooltip「回到顶部」
+- **提示词 AI 润色（`IMG-PROMPT` / `VID-PROMPT-REF`）**：辅助面板润色风格（均衡 / 精简 / 电影感 / 写实 / 保真润色）；流式预览；取消清空半成品；已有结果可换风格再跑；快捷迭代「再短一点」「更电影感」「少加点戏」（`refineEnhancedPrompt`）；仍用当前对话模型，只输出提示词正文
 
-### 验收样例（简）
+### Changed
 
-- 选风格 → 润色 → Tab 流式出现正文 →「应用润色结果」回填
-- 润色中点取消 → 润色区清空、无半成品
-- 有结果后改风格再点「AI 润色」→ 以当前润色结果为输入
-- 点「再短一点」等快捷 Chip → 在上一版上再改一版
+- **更新说明 Markdown 紧凑样式**：双端 `MarkdownHost(compact)` 与更新确认弹窗 changelog 区对齐 OD（语义化标题/列表，无字面 `##`）；Material 更新弹窗疏密度微调
 
 ---
 
