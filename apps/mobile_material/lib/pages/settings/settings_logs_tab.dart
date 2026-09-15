@@ -3,6 +3,8 @@ import 'package:design_material/design_material.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../widgets/back_to_top_host.dart';
+
 class SettingsLogsTab extends StatefulWidget {
   const SettingsLogsTab({
     super.key,
@@ -243,55 +245,62 @@ class _SettingsLogsTabState extends State<SettingsLogsTab> {
                             ),
                           ),
                         )
-                      : ListView.separated(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 10,
-                          ),
-                          itemCount: visible.length,
-                          separatorBuilder: (_, _) => Divider(
-                            height: 1,
-                            color: MaterialTokens.dark.ink
-                                .withValues(alpha: 0.08),
-                          ),
-                          itemBuilder: (context, index) {
-                            final e = visible[index];
-                            final lvColor = _levelColor(tokens, e.level);
-                            return Padding(
-                              padding: const EdgeInsets.symmetric(vertical: 6),
-                              child: SelectableText.rich(
-                                TextSpan(
-                                  style: TextStyle(
-                                    fontSize: 11.5,
-                                    height: 1.45,
-                                    color: MaterialTokens.dark.ink,
-                                  ).withMonoFont(tokens),
-                                  children: [
-                                    TextSpan(
-                                      text: AppLogRepository.formatTimestamp(
-                                        e.at,
+                      : BackToTopHost(
+                          builder: (context, scroll) => ListView.separated(
+                            controller: scroll,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 10,
+                            ),
+                            itemCount: visible.length,
+                            separatorBuilder: (_, _) => Divider(
+                              height: 1,
+                              color: MaterialTokens.dark.ink
+                                  .withValues(alpha: 0.08),
+                            ),
+                            itemBuilder: (context, index) {
+                              final e = visible[index];
+                              final lvColor = _levelColor(tokens, e.level);
+                              return Padding(
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 6),
+                                child: SelectableText.rich(
+                                  TextSpan(
+                                    style: TextStyle(
+                                      fontSize: 11.5,
+                                      height: 1.45,
+                                      color: MaterialTokens.dark.ink,
+                                    ).withMonoFont(tokens),
+                                    children: [
+                                      TextSpan(
+                                        text:
+                                            AppLogRepository.formatTimestamp(
+                                          e.at,
+                                        ),
+                                        style: TextStyle(
+                                          color:
+                                              MaterialTokens.dark.inkMuted,
+                                          fontSize: 10,
+                                        ),
                                       ),
-                                      style: TextStyle(
-                                        color: MaterialTokens.dark.inkMuted,
-                                        fontSize: 10,
+                                      const TextSpan(text: '\n'),
+                                      TextSpan(
+                                        text: e.level.label,
+                                        style: TextStyle(
+                                          color: lvColor,
+                                          fontWeight: FontWeight.w700,
+                                        ),
                                       ),
-                                    ),
-                                    const TextSpan(text: '\n'),
-                                    TextSpan(
-                                      text: e.level.label,
-                                      style: TextStyle(
-                                        color: lvColor,
-                                        fontWeight: FontWeight.w700,
+                                      TextSpan(
+                                        text:
+                                            ' · ${e.source} · ${e.message}',
                                       ),
-                                    ),
-                                    TextSpan(
-                                      text: ' · ${e.source} · ${e.message}',
-                                    ),
-                                  ],
+                                    ],
+                                  ),
                                 ),
-                              ),
-                            );
-                          },
+                              );
+                            },
+                          ),
                         ),
                 ),
               ),

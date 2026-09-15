@@ -60,6 +60,7 @@ export 'src/update/update_prefs.dart';
 export 'src/update/update_client.dart';
 export 'src/update/update_installer.dart';
 export 'src/update/update_models.dart';
+export 'src/update/changelog_entry.dart';
 export 'src/update/update_notes.dart';
 export 'src/update/update_platform.dart';
 export 'src/update/version_compare.dart';

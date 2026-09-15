@@ -3,6 +3,8 @@ import 'package:design_material/design_material.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../widgets/back_to_top_host.dart';
+
 class SettingsChatDefaultsTab extends StatefulWidget {
   const SettingsChatDefaultsTab({
     super.key,
@@ -161,9 +163,11 @@ class _SettingsChatDefaultsTabState extends State<SettingsChatDefaultsTab> {
   Widget build(BuildContext context) {
     final tokens = materialTokensOf(context);
 
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
-      children: [
+    return BackToTopHost(
+      builder: (context, scroll) => ListView(
+        controller: scroll,
+        padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
+        children: [
         Card(
           child: Padding(
             padding: const EdgeInsets.all(14),
@@ -334,6 +338,7 @@ class _SettingsChatDefaultsTabState extends State<SettingsChatDefaultsTab> {
           style: TextStyle(fontSize: 11, color: tokens.inkMuted),
         ),
       ],
+      ),
     );
   }
 }

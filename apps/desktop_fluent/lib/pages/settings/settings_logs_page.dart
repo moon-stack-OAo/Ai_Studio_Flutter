@@ -3,6 +3,8 @@ import 'package:design_fluent/design_fluent.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter/services.dart';
 
+import '../../widgets/back_to_top_host.dart';
+
 class SettingsLogsPage extends StatefulWidget {
   const SettingsLogsPage({super.key, required this.repository});
 
@@ -170,65 +172,71 @@ class _SettingsLogsPageState extends State<SettingsLogsPage> {
                               ),
                             ),
                           )
-                        : ListView.separated(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 14,
-                              vertical: 10,
-                            ),
-                            itemCount: visible.length,
-                            separatorBuilder: (context, index) => Divider(
-                              style: DividerThemeData(
-                                decoration: BoxDecoration(
-                                  color: tokens.border.withValues(alpha: 0.6),
-                                ),
+                        : BackToTopHost(
+                            builder: (context, scroll) => ListView.separated(
+                              controller: scroll,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 14,
+                                vertical: 10,
                               ),
-                            ),
-                            itemBuilder: (context, index) {
-                              final e = visible[index];
-                              final lvColor = _levelColor(tokens, e.level);
-                              return Padding(
-                                padding:
-                                    const EdgeInsets.symmetric(vertical: 6),
-                                child: SelectableText.rich(
-                                  TextSpan(
-                                    style: TextStyle(
-                                      fontSize: 12.5,
-                                      height: 1.45,
-                                      color: tokens.ink,
-                                    ).withMonoFont(tokens),
-                                    children: [
-                                      TextSpan(
-                                        text: AppLogRepository.formatTimestamp(
-                                          e.at,
-                                        ),
-                                        style: TextStyle(
-                                          color: tokens.inkMuted,
-                                        ).withMonoFont(tokens),
-                                      ),
-                                      TextSpan(
-                                        text: ' · ',
-                                        style: TextStyle(
-                                          color: tokens.inkMuted,
-                                        ),
-                                      ),
-                                      TextSpan(
-                                        text: e.level.label,
-                                        style: TextStyle(
-                                          color: lvColor,
-                                          fontWeight: FontWeight.w700,
-                                        ).withMonoFont(tokens),
-                                      ),
-                                      TextSpan(
-                                        text: ' · ${e.source} · ${e.message}',
-                                        style: TextStyle(
-                                          color: tokens.ink,
-                                        ).withMonoFont(tokens),
-                                      ),
-                                    ],
+                              itemCount: visible.length,
+                              separatorBuilder: (context, index) => Divider(
+                                style: DividerThemeData(
+                                  decoration: BoxDecoration(
+                                    color:
+                                        tokens.border.withValues(alpha: 0.6),
                                   ),
                                 ),
-                              );
-                            },
+                              ),
+                              itemBuilder: (context, index) {
+                                final e = visible[index];
+                                final lvColor = _levelColor(tokens, e.level);
+                                return Padding(
+                                  padding:
+                                      const EdgeInsets.symmetric(vertical: 6),
+                                  child: SelectableText.rich(
+                                    TextSpan(
+                                      style: TextStyle(
+                                        fontSize: 12.5,
+                                        height: 1.45,
+                                        color: tokens.ink,
+                                      ).withMonoFont(tokens),
+                                      children: [
+                                        TextSpan(
+                                          text:
+                                              AppLogRepository.formatTimestamp(
+                                            e.at,
+                                          ),
+                                          style: TextStyle(
+                                            color: tokens.inkMuted,
+                                          ).withMonoFont(tokens),
+                                        ),
+                                        TextSpan(
+                                          text: ' · ',
+                                          style: TextStyle(
+                                            color: tokens.inkMuted,
+                                          ),
+                                        ),
+                                        TextSpan(
+                                          text: e.level.label,
+                                          style: TextStyle(
+                                            color: lvColor,
+                                            fontWeight: FontWeight.w700,
+                                          ).withMonoFont(tokens),
+                                        ),
+                                        TextSpan(
+                                          text:
+                                              ' · ${e.source} · ${e.message}',
+                                          style: TextStyle(
+                                            color: tokens.ink,
+                                          ).withMonoFont(tokens),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
                           ),
                   ),
                 ),

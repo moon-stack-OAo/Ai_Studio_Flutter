@@ -13,7 +13,9 @@ import 'package:path_provider/path_provider.dart';
 import '../../app/theme_controller.dart';
 import '../../update/mobile_update_controller.dart';
 import '../../update/update_prompt_dialog.dart';
+import '../../widgets/back_to_top_host.dart';
 import '../chat/widgets/markdown_host.dart';
+import 'widgets/changelog_section.dart';
 
 class SettingsAboutTab extends StatefulWidget {
   const SettingsAboutTab({
@@ -47,6 +49,8 @@ class _SettingsAboutTabState extends State<SettingsAboutTab> {
   StorageUsageEstimate? _usage;
   bool _usageLoading = true;
   bool _busy = false;
+  String _bundledChangelog = kBundledChangelogMarkdown;
+  bool _changelogLoading = true;
 
   DataBackupService get _backup => widget.dataBackupService;
 
@@ -59,6 +63,7 @@ class _SettingsAboutTabState extends State<SettingsAboutTab> {
     unawaited(_updater.ensurePrefsLoaded());
     _loadPackageInfo();
     _loadUsage();
+    _loadChangelog();
   }
 
   void _onUpdaterChanged() {
@@ -119,6 +124,49 @@ class _SettingsAboutTabState extends State<SettingsAboutTab> {
     final info = _info;
     if (info == null) return '未知';
     return '${info.version}+${info.buildNumber}';
+  }
+
+  String get _semver {
+    final info = _info;
+    if (info == null) return '';
+    return info.version;
+  }
+
+  Future<void> _loadChangelog() async {
+    setState(() => _changelogLoading = true);
+    try {
+      final text = await loadBundledChangelogMarkdown();
+      if (!mounted) return;
+      setState(() {
+        _bundledChangelog = text;
+        _changelogLoading = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _bundledChangelog = kBundledChangelogMarkdown;
+        _changelogLoading = false;
+      });
+    }
+  }
+
+  List<ChangelogEntry> get _changelogEntries {
+    final check = _updater.lastCheck;
+    return resolveChangelogEntries(
+      currentVersion: _semver.isEmpty ? null : _semver,
+      bundledSource: _bundledChangelog,
+      remoteVersion: check?.latestVersion,
+      remoteNotes: check?.notes,
+      remotePubDate: check?.manifest?.pubDate,
+    );
+  }
+
+  Future<void> _onOpenChangelog() async {
+    final section = ChangelogSection(
+      entries: _changelogEntries,
+      currentVersionLabel: _versionLabel,
+    );
+    await section.openFullHistory(context);
   }
 
   void _snack(String message) {
@@ -711,10 +759,13 @@ class _SettingsAboutTabState extends State<SettingsAboutTab> {
     final check = _updater.lastCheck;
     final busy = checking || downloading;
     final notes = prepareUpdateNotes(check?.notes ?? '');
+    final changelogEntries = _changelogEntries;
 
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
-      children: [
+    return BackToTopHost(
+      builder: (context, scroll) => ListView(
+        controller: scroll,
+        padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
+        children: [
         Card(
           child: Padding(
             padding: const EdgeInsets.all(14),
@@ -782,6 +833,12 @@ class _SettingsAboutTabState extends State<SettingsAboutTab> {
                               child: CircularProgressIndicator(strokeWidth: 2),
                             )
                           : const Text('检查更新'),
+                    ),
+                    OutlinedButton(
+                      onPressed: changelogEntries.isEmpty
+                          ? null
+                          : _onOpenChangelog,
+                      child: const Text('查看完整更新日志'),
                     ),
                     OutlinedButton(
                       onPressed: _onOpenLicenses,
@@ -914,6 +971,36 @@ class _SettingsAboutTabState extends State<SettingsAboutTab> {
         ),
         const SizedBox(height: 12),
         Card(
+          child: Padding(
+            padding: const EdgeInsets.all(14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '更新日志',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: tokens.ink,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                if (_changelogLoading)
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 16),
+                    child: Center(child: CircularProgressIndicator()),
+                  )
+                else
+                  ChangelogSection(
+                    entries: changelogEntries,
+                    currentVersionLabel: _versionLabel,
+                  ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
+        Card(
           clipBehavior: Clip.antiAlias,
           child: Column(
             children: [
@@ -945,6 +1032,7 @@ class _SettingsAboutTabState extends State<SettingsAboutTab> {
           ),
         ),
       ],
+      ),
     );
   }
 }

@@ -2,6 +2,7 @@ import 'package:core/core.dart';
 import 'package:design_material/design_material.dart';
 import 'package:flutter/material.dart';
 
+import '../../widgets/back_to_top_host.dart';
 import '../../widgets/filterable_model_picker.dart';
 
 /// M-ProviderForm：提供商编辑 BottomSheet（SET-PROVIDER-EDIT），底栏固定保存/取消。
@@ -379,9 +380,11 @@ class _ProviderEditSheetState extends State<_ProviderEditSheet> {
                 ),
               ),
               Expanded(
-                child: ListView(
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                  children: [
+                child: BackToTopHost(
+                  builder: (context, scroll) => ListView(
+                    controller: scroll,
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                    children: [
                     Text(
                       '基本信息',
                       style: TextStyle(
@@ -579,6 +582,7 @@ class _ProviderEditSheetState extends State<_ProviderEditSheet> {
                       ),
                     ],
                   ],
+                  ),
                 ),
               ),
               Material(

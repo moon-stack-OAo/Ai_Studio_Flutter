@@ -2,6 +2,7 @@ import 'package:design_fluent/design_fluent.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 
 import '../../app/theme_controller.dart';
+import '../../widgets/back_to_top_host.dart';
 
 class SettingsAppearancePage extends StatelessWidget {
   const SettingsAppearancePage({super.key, required this.themeController});
@@ -21,133 +22,136 @@ class SettingsAppearancePage extends StatelessWidget {
         final selected = themeController.preference;
         return ColoredBox(
           color: tokens.canvas,
-          child: ListView(
-            padding: const EdgeInsets.fromLTRB(28, 20, 28, 28),
-            children: [
-              Text(
-                '外观',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w600,
-                  color: tokens.ink,
-                  fontFamily: tokens.fontFamily,
+          child: BackToTopHost(
+            builder: (context, scroll) => ListView(
+              controller: scroll,
+              padding: const EdgeInsets.fromLTRB(28, 20, 28, 28),
+              children: [
+                Text(
+                  '外观',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w600,
+                    color: tokens.ink,
+                    fontFamily: tokens.fontFamily,
+                  ),
                 ),
-              ),
-              SizedBox(height: formGap + 6),
-              Container(
-                padding: EdgeInsets.all(sectionPad),
-                decoration: BoxDecoration(
-                  color: tokens.surface,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: tokens.border),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '主题',
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: tokens.inkSecondary,
-                        fontFamily: tokens.fontFamily,
+                SizedBox(height: formGap + 6),
+                Container(
+                  padding: EdgeInsets.all(sectionPad),
+                  decoration: BoxDecoration(
+                    color: tokens.surface,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: tokens.border),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '主题',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: tokens.inkSecondary,
+                          fontFamily: tokens.fontFamily,
+                        ),
                       ),
-                    ),
-                    SizedBox(height: formGap),
-                    Row(
-                      children: [
-                        for (final pref in ThemePreference.values) ...[
-                          if (pref != ThemePreference.values.first)
-                            const SizedBox(width: 8),
-                          Expanded(
-                            child: _ThemeSegButton(
-                              label: pref.label,
-                              selected: selected == pref,
-                              onPressed: () =>
-                                  themeController.setPreference(pref),
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-              SizedBox(height: formGap + 2),
-              Container(
-                padding: EdgeInsets.all(sectionPad),
-                decoration: BoxDecoration(
-                  color: tokens.surface,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: tokens.border),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '字号与密度',
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: tokens.inkSecondary,
-                        fontFamily: tokens.fontFamily,
-                      ),
-                    ),
-                    SizedBox(height: formGap),
-                    _LabeledField(
-                      label: '字号',
-                      child: ComboBox<AppFontScale>(
-                        value: themeController.fontScale,
-                        isExpanded: true,
-                        items: [
-                          for (final scale in AppFontScale.values)
-                            ComboBoxItem(
-                              value: scale,
-                              child: Text(scale.label),
-                            ),
-                        ],
-                        onChanged: (v) {
-                          if (v != null) themeController.setFontScale(v);
-                        },
-                      ),
-                    ),
-                    SizedBox(height: formGap),
-                    _LabeledField(
-                      label: '密度',
-                      child: ComboBox<UiDensity>(
-                        value: themeController.density,
-                        isExpanded: true,
-                        items: [
-                          for (final dens in UiDensity.values)
-                            ComboBoxItem(
-                              value: dens,
-                              child: Text(
-                                dens == UiDensity.comfortable
-                                    ? '${dens.label}（默认）'
-                                    : dens.label,
+                      SizedBox(height: formGap),
+                      Row(
+                        children: [
+                          for (final pref in ThemePreference.values) ...[
+                            if (pref != ThemePreference.values.first)
+                              const SizedBox(width: 8),
+                            Expanded(
+                              child: _ThemeSegButton(
+                                label: pref.label,
+                                selected: selected == pref,
+                                onPressed: () =>
+                                    themeController.setPreference(pref),
                               ),
                             ),
+                          ],
                         ],
-                        onChanged: (v) {
-                          if (v != null) themeController.setDensity(v);
-                        },
                       ),
-                    ),
-                    SizedBox(height: formGap - 2),
-                    Text(
-                      '舒适：列表与窗格更疏；紧凑：会话行、Composer 与设置侧栏更紧。桌面默认舒适。',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: tokens.inkMuted,
-                        fontFamily: tokens.fontFamily,
-                      ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
-            ],
+                SizedBox(height: formGap + 2),
+                Container(
+                  padding: EdgeInsets.all(sectionPad),
+                  decoration: BoxDecoration(
+                    color: tokens.surface,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: tokens.border),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '字号与密度',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: tokens.inkSecondary,
+                          fontFamily: tokens.fontFamily,
+                        ),
+                      ),
+                      SizedBox(height: formGap),
+                      _LabeledField(
+                        label: '字号',
+                        child: ComboBox<AppFontScale>(
+                          value: themeController.fontScale,
+                          isExpanded: true,
+                          items: [
+                            for (final scale in AppFontScale.values)
+                              ComboBoxItem(
+                                value: scale,
+                                child: Text(scale.label),
+                              ),
+                          ],
+                          onChanged: (v) {
+                            if (v != null) themeController.setFontScale(v);
+                          },
+                        ),
+                      ),
+                      SizedBox(height: formGap),
+                      _LabeledField(
+                        label: '密度',
+                        child: ComboBox<UiDensity>(
+                          value: themeController.density,
+                          isExpanded: true,
+                          items: [
+                            for (final dens in UiDensity.values)
+                              ComboBoxItem(
+                                value: dens,
+                                child: Text(
+                                  dens == UiDensity.comfortable
+                                      ? '${dens.label}（默认）'
+                                      : dens.label,
+                                ),
+                              ),
+                          ],
+                          onChanged: (v) {
+                            if (v != null) themeController.setDensity(v);
+                          },
+                        ),
+                      ),
+                      SizedBox(height: formGap - 2),
+                      Text(
+                        '舒适：列表与窗格更疏；紧凑：会话行、Composer 与设置侧栏更紧。桌面默认舒适。',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: tokens.inkMuted,
+                          fontFamily: tokens.fontFamily,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
         );
       },

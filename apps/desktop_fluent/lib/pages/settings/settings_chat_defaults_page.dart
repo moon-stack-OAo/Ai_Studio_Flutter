@@ -2,6 +2,8 @@ import 'package:core/core.dart';
 import 'package:design_fluent/design_fluent.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 
+import '../../widgets/back_to_top_host.dart';
+
 class SettingsChatDefaultsPage extends StatefulWidget {
   const SettingsChatDefaultsPage({
     super.key,
@@ -163,9 +165,11 @@ class _SettingsChatDefaultsPageState extends State<SettingsChatDefaultsPage> {
     final tokens = fluentTokensOf(context);
     return ColoredBox(
       color: tokens.canvas,
-      child: ListView(
-        padding: const EdgeInsets.fromLTRB(28, 20, 28, 28),
-        children: [
+      child: BackToTopHost(
+        builder: (context, scroll) => ListView(
+          controller: scroll,
+          padding: const EdgeInsets.fromLTRB(28, 20, 28, 28),
+          children: [
           Text(
             '对话默认',
             style: TextStyle(
@@ -336,6 +340,7 @@ class _SettingsChatDefaultsPageState extends State<SettingsChatDefaultsPage> {
             ],
           ),
         ],
+        ),
       ),
     );
   }

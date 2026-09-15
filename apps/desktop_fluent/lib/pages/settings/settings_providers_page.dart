@@ -2,6 +2,7 @@ import 'package:core/core.dart';
 import 'package:design_fluent/design_fluent.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 
+import '../../widgets/back_to_top_host.dart';
 import '../../widgets/filterable_model_picker.dart';
 import '../../widgets/empty_illustrations.dart';
 import '../../widgets/fluent_empty_states.dart';
@@ -383,20 +384,24 @@ class _SettingsProvidersPageState extends State<SettingsProvidersPage> {
                             illustration:
                                 const FluentEmptyIllustration.noProviders(),
                           )
-                        : ListView.separated(
-                            padding: const EdgeInsets.fromLTRB(10, 0, 10, 16),
-                            itemCount: providers.length,
-                            separatorBuilder: (_, _) =>
-                                const SizedBox(height: 6),
-                            itemBuilder: (context, index) {
-                              final p = providers[index];
-                              final active = p.id == _selectedId;
-                              return _ProviderListTile(
-                                provider: p,
-                                selected: active,
-                                onPressed: () => _selectProvider(p.id),
-                              );
-                            },
+                        : BackToTopHost(
+                            builder: (context, scroll) => ListView.separated(
+                              controller: scroll,
+                              padding:
+                                  const EdgeInsets.fromLTRB(10, 0, 10, 16),
+                              itemCount: providers.length,
+                              separatorBuilder: (_, _) =>
+                                  const SizedBox(height: 6),
+                              itemBuilder: (context, index) {
+                                final p = providers[index];
+                                final active = p.id == _selectedId;
+                                return _ProviderListTile(
+                                  provider: p,
+                                  selected: active,
+                                  onPressed: () => _selectProvider(p.id),
+                                );
+                              },
+                            ),
                           ),
                   ),
                 ],
@@ -645,9 +650,11 @@ class _ProviderForm extends StatelessWidget {
   Widget build(BuildContext context) {
     return ColoredBox(
       color: tokens.surface,
-      child: ListView(
-        padding: const EdgeInsets.fromLTRB(28, 20, 28, 28),
-        children: [
+      child: BackToTopHost(
+        builder: (context, scroll) => ListView(
+          controller: scroll,
+          padding: const EdgeInsets.fromLTRB(28, 20, 28, 28),
+          children: [
           Text(
             '编辑提供商',
             style: TextStyle(
@@ -842,6 +849,7 @@ class _ProviderForm extends StatelessWidget {
             ),
           ],
         ],
+        ),
       ),
     );
   }

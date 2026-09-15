@@ -2,6 +2,7 @@ import 'package:core/core.dart';
 import 'package:design_material/design_material.dart';
 import 'package:flutter/material.dart';
 
+import '../../widgets/back_to_top_host.dart';
 import '../../widgets/empty_illustrations.dart';
 import '../../widgets/material_empty_states.dart';
 import 'provider_edit_sheet.dart';
@@ -122,9 +123,11 @@ class _SettingsProvidersTabState extends State<SettingsProvidersTab> {
     final canEdit = selected != null;
     final canDelete = selected != null && !selected.builtin;
 
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
-      children: [
+    return BackToTopHost(
+      builder: (context, scroll) => ListView(
+        controller: scroll,
+        padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
+        children: [
         Text(
           '点选切换当前提供商；可编辑或删除所选（内置不可删）',
           style: TextStyle(fontSize: 12, color: tokens.inkMuted),
@@ -189,6 +192,7 @@ class _SettingsProvidersTabState extends State<SettingsProvidersTab> {
           ),
         ),
       ],
+      ),
     );
   }
 }

@@ -11,7 +11,9 @@ import 'package:package_info_plus/package_info_plus.dart';
 import '../../app/theme_controller.dart';
 import '../../update/update_controller.dart';
 import '../../update/update_prompt_dialog.dart';
+import '../../widgets/back_to_top_host.dart';
 import '../chat/widgets/markdown_host.dart';
+import 'widgets/changelog_section.dart';
 
 class SettingsAboutPage extends StatefulWidget {
   const SettingsAboutPage({
@@ -43,6 +45,8 @@ class _SettingsAboutPageState extends State<SettingsAboutPage> {
   StorageUsageEstimate? _usage;
   bool _usageLoading = true;
   bool _busy = false;
+  String _bundledChangelog = kBundledChangelogMarkdown;
+  bool _changelogLoading = true;
 
   AppearanceRepository get _repo => widget.appearanceRepository;
   DataBackupService get _backup => widget.dataBackupService;
@@ -55,6 +59,7 @@ class _SettingsAboutPageState extends State<SettingsAboutPage> {
     _updater?.addListener(_onUpdaterChanged);
     _loadPackageInfo();
     _loadUsage();
+    _loadChangelog();
     _updater?.ensureCurrentVersion();
   }
 
@@ -129,6 +134,49 @@ class _SettingsAboutPageState extends State<SettingsAboutPage> {
     final info = _info;
     if (info == null) return '未知';
     return '${info.version}+${info.buildNumber}';
+  }
+
+  String get _semver {
+    final info = _info;
+    if (info == null) return '';
+    return info.version;
+  }
+
+  Future<void> _loadChangelog() async {
+    setState(() => _changelogLoading = true);
+    try {
+      final text = await loadBundledChangelogMarkdown();
+      if (!mounted) return;
+      setState(() {
+        _bundledChangelog = text;
+        _changelogLoading = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _bundledChangelog = kBundledChangelogMarkdown;
+        _changelogLoading = false;
+      });
+    }
+  }
+
+  List<ChangelogEntry> get _changelogEntries {
+    final check = _updater?.lastCheck;
+    return resolveChangelogEntries(
+      currentVersion: _semver.isEmpty ? null : _semver,
+      bundledSource: _bundledChangelog,
+      remoteVersion: check?.latestVersion,
+      remoteNotes: check?.notes,
+      remotePubDate: check?.manifest?.pubDate,
+    );
+  }
+
+  Future<void> _onOpenChangelog() async {
+    final section = ChangelogSection(
+      entries: _changelogEntries,
+      currentVersionLabel: _versionLabel,
+    );
+    await section.openFullHistory(context);
   }
 
   void _showInfoBar(String message, InfoBarSeverity severity) {
@@ -693,12 +741,15 @@ class _SettingsAboutPageState extends State<SettingsAboutPage> {
     final autoCheck = updater?.autoCheckUpdate ?? true;
     final configured = updater != null && updater.isConfigured;
     final statusPill = _updateStatusPill(tokens, updater);
+    final changelogEntries = _changelogEntries;
 
     return ColoredBox(
       color: tokens.canvas,
-      child: ListView(
-        padding: const EdgeInsets.fromLTRB(28, 16, 28, 16),
-        children: [
+      child: BackToTopHost(
+        builder: (context, scroll) => ListView(
+          controller: scroll,
+          padding: const EdgeInsets.fromLTRB(28, 16, 28, 16),
+          children: [
           Text(
             '关于与更新',
             style: TextStyle(
@@ -762,6 +813,13 @@ class _SettingsAboutPageState extends State<SettingsAboutPage> {
                     ),
                     const Spacer(),
                     Button(
+                      onPressed: changelogEntries.isEmpty
+                          ? null
+                          : _onOpenChangelog,
+                      child: const Text('打开更新日志'),
+                    ),
+                    const SizedBox(width: 8),
+                    Button(
                       onPressed: _onOpenLicenses,
                       child: const Text('开源许可'),
                     ),
@@ -801,6 +859,19 @@ class _SettingsAboutPageState extends State<SettingsAboutPage> {
                 ],
               ],
             ),
+          ),
+          const SizedBox(height: 10),
+          _SectionCard(
+            title: '更新日志',
+            child: _changelogLoading
+                ? const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 12),
+                    child: Center(child: ProgressRing()),
+                  )
+                : ChangelogSection(
+                    entries: changelogEntries,
+                    currentVersionLabel: _versionLabel,
+                  ),
           ),
           const SizedBox(height: 10),
           _SectionCard(
@@ -894,6 +965,7 @@ class _SettingsAboutPageState extends State<SettingsAboutPage> {
             ),
           ),
         ],
+        ),
       ),
     );
   }

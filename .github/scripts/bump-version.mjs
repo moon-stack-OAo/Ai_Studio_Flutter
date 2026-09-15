@@ -11,6 +11,7 @@
  * 约定：build number 须单调递增；已发 1.0.1+2 起下一版用 Unix 秒。
  * 本脚本只改文件，不 commit / tag / push。
  */
+import { spawnSync } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
 
@@ -137,7 +138,19 @@ function main() {
     console.log('（dry-run，未写入文件）')
   } else {
     console.log(`已写入 version: ${nextValue}`)
-    console.log('下一步：更新 CHANGELOG → commit → tag v' + version + ' → push')
+    // 关于页从 core asset 读 CHANGELOG；升版时一并同步，避免漏拷。
+    const syncScript = path.join(root, '.github/scripts/sync-changelog-asset.mjs')
+    if (fs.existsSync(syncScript)) {
+      const r = spawnSync(process.execPath, [syncScript], {
+        cwd: root,
+        stdio: 'inherit',
+      })
+      if (r.status !== 0) {
+        console.error('sync-changelog-asset 失败；请手动: node .github/scripts/sync-changelog-asset.mjs')
+        process.exit(r.status ?? 1)
+      }
+    }
+    console.log('下一步：更新 CHANGELOG（若未改）→ sync-changelog-asset → commit → tag v' + version + ' → push')
   }
 }
 
