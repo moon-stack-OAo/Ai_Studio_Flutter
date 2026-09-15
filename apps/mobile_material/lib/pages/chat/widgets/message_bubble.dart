@@ -75,8 +75,11 @@ class MessageBubble extends StatelessWidget {
     await ImageLightbox.show(
       context,
       ref: refs[start],
+      refs: refs,
+      initialIndex: start,
       source: ImageLightboxSource.attachment,
       loadBytes: () => _loadAttachmentBytes(refs[start]),
+      loadBytesFor: _loadAttachmentBytes,
     );
   }
 

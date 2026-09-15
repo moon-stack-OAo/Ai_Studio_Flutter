@@ -173,11 +173,23 @@ class _ImagePageState extends State<ImagePage> {
     await ImageLightbox.show(
       context,
       ref: ref,
+      refs: item.images,
+      initialIndex: index,
       source: ImageLightboxSource.result,
       loadBytes: () => widget.sessionRepository.readImageBytes(ref),
-      onSaveAlbum: () => _onSaveAlbum(item, index, ref),
-      onShare: () => _onShare(item, index, ref),
-      onUseAsReference: () => _onUseAsReference(item, index, ref),
+      loadBytesFor: widget.sessionRepository.readImageBytes,
+      onSaveAlbum: (current) {
+        final i = item.images.indexWhere((e) => e.src == current.src);
+        _onSaveAlbum(item, i < 0 ? index : i, current);
+      },
+      onShare: (current) {
+        final i = item.images.indexWhere((e) => e.src == current.src);
+        _onShare(item, i < 0 ? index : i, current);
+      },
+      onUseAsReference: (current) {
+        final i = item.images.indexWhere((e) => e.src == current.src);
+        _onUseAsReference(item, i < 0 ? index : i, current);
+      },
     );
   }
 
@@ -189,8 +201,11 @@ class _ImagePageState extends State<ImagePage> {
     await ImageLightbox.show(
       context,
       ref: ref,
+      refs: item.referenceImages,
+      initialIndex: index,
       source: ImageLightboxSource.reference,
       loadBytes: () => widget.sessionRepository.readImageBytes(ref),
+      loadBytesFor: widget.sessionRepository.readImageBytes,
     );
   }
 

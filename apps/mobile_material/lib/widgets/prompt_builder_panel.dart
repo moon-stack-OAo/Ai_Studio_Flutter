@@ -328,6 +328,7 @@ class _PromptBuilderPanelState extends State<PromptBuilderPanel> {
         child: ConstrainedBox(
           constraints: const BoxConstraints(minHeight: 48, maxHeight: 88),
           child: SingleChildScrollView(
+            padding: const EdgeInsets.only(right: 8),
             child: Text(
               body,
               style: TextStyle(
@@ -353,7 +354,7 @@ class _PromptBuilderPanelState extends State<PromptBuilderPanel> {
           ? null
           : _runEnhance,
       style: kPromptToolRowBtnStyle,
-      child: Text(_enhancing ? '取消' : 'AI 润色'),
+      child: Text(_enhancing ? '取消' : '✨ AI 润色'),
     );
 
     return Row(
@@ -487,6 +488,7 @@ class _PromptBuilderPanelState extends State<PromptBuilderPanel> {
         const SizedBox(height: gap),
         Expanded(
           child: SingleChildScrollView(
+            padding: const EdgeInsets.only(right: 8),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [

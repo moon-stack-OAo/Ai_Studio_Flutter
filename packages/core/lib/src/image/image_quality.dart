@@ -9,7 +9,7 @@ class ImageQualityOption {
   final String value;
 }
 
-/// 标准 / 高清 / 极致 → medium / high / low 不匹配 API；与现网一致用 low/medium/high。
+/// UI 文案：低 / 标准 / 高；API `quality`：low / medium / high（不再使用「高清 / 极致」）。
 const List<ImageQualityOption> imageQualityOptions = [
   ImageQualityOption(label: '低', value: 'low'),
   ImageQualityOption(label: '标准', value: 'medium'),

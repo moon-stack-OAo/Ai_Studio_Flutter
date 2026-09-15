@@ -328,6 +328,7 @@ class _PromptBuilderPanelState extends State<PromptBuilderPanel> {
       child: ConstrainedBox(
         constraints: const BoxConstraints(minHeight: 48, maxHeight: 96),
         child: SingleChildScrollView(
+          padding: const EdgeInsets.only(right: 8),
           child: Text(
             body,
             style: TextStyle(
@@ -505,7 +506,10 @@ class _PromptBuilderPanelState extends State<PromptBuilderPanel> {
         _buildTopSection(tokens, gap),
         SizedBox(height: gap),
         Expanded(
-          child: SingleChildScrollView(child: chipBody),
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.only(right: 8),
+            child: chipBody,
+          ),
         ),
         SizedBox(height: gap),
         Container(height: 1, color: tokens.border),

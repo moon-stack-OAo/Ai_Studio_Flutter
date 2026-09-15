@@ -193,9 +193,12 @@ class _VideoPageState extends State<VideoPage> {
     await ImageLightbox.show(
       context,
       ref: ref,
+      refs: item.referenceImages,
+      initialIndex: index,
       source: ImageLightboxSource.reference,
       loadBytes: () =>
           widget.sessionRepository.readReferenceImageBytes(ref),
+      loadBytesFor: widget.sessionRepository.readReferenceImageBytes,
     );
   }
 

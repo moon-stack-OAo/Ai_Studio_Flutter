@@ -68,20 +68,25 @@ class _PromptAssistSheetState extends State<PromptAssistSheet> {
   String? _enhancedPreview;
   http.Client? _enhanceHttp;
   late String _workingPrompt;
+  late final TextEditingController _draftCtrl;
   String? _selectedPresetId;
   /// 模板上区预览局部切换：0=草稿，1=润色。
   int _previewTab = 0;
   String _enhanceSkillId = defaultPromptEnhanceSkill.id;
 
+  static const _draftPlaceholder = '在此编辑草稿，或从模板 / 结构化拼出…';
+
   @override
   void initState() {
     super.initState();
     _workingPrompt = widget.draftPrompt;
+    _draftCtrl = TextEditingController(text: widget.draftPrompt);
   }
 
   @override
   void dispose() {
     _enhanceHttp?.close();
+    _draftCtrl.dispose();
     super.dispose();
   }
 
@@ -97,6 +102,19 @@ class _PromptAssistSheetState extends State<PromptAssistSheet> {
       _workingPrompt = text;
       _selectedPresetId = presetId;
       _clearEnhanceAndShowDraft();
+    });
+    _draftCtrl.value = TextEditingValue(
+      text: text,
+      selection: TextSelection.collapsed(offset: text.length),
+    );
+  }
+
+  void _onDraftEdited(String value) {
+    setState(() {
+      _workingPrompt = value;
+      _selectedPresetId = null;
+      _enhancedPreview = null;
+      _enhanceError = null;
     });
   }
 
@@ -314,6 +332,7 @@ class _PromptAssistSheetState extends State<PromptAssistSheet> {
           // OD ~72px；触控略放宽，避免再挤没模板列表。
           constraints: const BoxConstraints(minHeight: 48, maxHeight: 88),
           child: SingleChildScrollView(
+            padding: const EdgeInsets.only(right: 8),
             child: Text(
               body,
               style: TextStyle(
@@ -323,6 +342,54 @@ class _PromptAssistSheetState extends State<PromptAssistSheet> {
                 fontFamily: tokens.fontFamily,
               ),
             ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _draftEditor(MaterialTokens tokens) {
+    return ConstrainedBox(
+      constraints: const BoxConstraints(minHeight: 48, maxHeight: 88),
+      child: TextField(
+        controller: _draftCtrl,
+        onChanged: _enhancing ? null : _onDraftEdited,
+        enabled: !_enhancing,
+        maxLines: null,
+        minLines: 3,
+        style: TextStyle(
+          fontSize: 13,
+          height: 1.45,
+          color: tokens.inkSecondary,
+          fontFamily: tokens.fontFamily,
+        ),
+        decoration: InputDecoration(
+          hintText: _draftPlaceholder,
+          hintStyle: TextStyle(
+            fontSize: 13,
+            height: 1.45,
+            color: tokens.inkMuted,
+            fontFamily: tokens.fontFamily,
+          ),
+          isDense: true,
+          filled: true,
+          fillColor: tokens.surfaceMuted,
+          contentPadding: const EdgeInsets.fromLTRB(12, 8, 20, 8),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide(color: tokens.border),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide(color: tokens.border),
+          ),
+          disabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide(color: tokens.border),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide(color: tokens.primary),
           ),
         ),
       ),
@@ -397,7 +464,7 @@ class _PromptAssistSheetState extends State<PromptAssistSheet> {
                 ? null
                 : _runEnhance,
             style: kPromptToolRowBtnStyle,
-            child: Text(_enhancing ? '取消' : 'AI 润色'),
+            child: Text(_enhancing ? '取消' : '✨ AI 润色'),
           ),
         if (canEnhance && !_enhancing) ...[
           const SizedBox(width: 8),
@@ -419,12 +486,9 @@ class _PromptAssistSheetState extends State<PromptAssistSheet> {
     final hasWorking = _workingPrompt.trim().isNotEmpty;
     final showingPolish = _previewTab == 1;
     final polishEmpty = _enhancedPreview == null;
-    final previewBody = showingPolish
-        ? (polishEmpty
-            ? (_enhancing ? '正在润色…' : '暂无润色结果，可先在「草稿」点 AI 润色')
-            : _enhancedPreview!)
-        : (hasWorking ? _workingPrompt : '从下方选模板，或点「随机」');
-    final previewEmpty = showingPolish ? polishEmpty : !hasWorking;
+    final polishBody = polishEmpty
+        ? (_enhancing ? '正在润色…' : '暂无润色结果，可先在「草稿」点 AI 润色')
+        : _enhancedPreview!;
 
     // 上区非 flex；模板 ListView Expanded 吃剩余高度（对齐 OD tpl-list）。
     return Column(
@@ -439,11 +503,14 @@ class _PromptAssistSheetState extends State<PromptAssistSheet> {
           ),
         ),
         const SizedBox(height: 6),
-        _previewCard(
-          tokens: tokens,
-          body: previewBody,
-          empty: previewEmpty && !_enhancing,
-        ),
+        if (showingPolish)
+          _previewCard(
+            tokens: tokens,
+            body: polishBody,
+            empty: polishEmpty && !_enhancing,
+          )
+        else
+          _draftEditor(tokens),
         if (canEnhance) ...[
           const SizedBox(height: 8),
           PromptEnhanceSkillSelector(
@@ -501,6 +568,7 @@ class _PromptAssistSheetState extends State<PromptAssistSheet> {
         const SizedBox(height: 8),
         Expanded(
           child: ListView.separated(
+            padding: const EdgeInsets.only(right: 8),
             itemCount: presets.length,
             separatorBuilder: (context, index) => const SizedBox(height: 8),
             itemBuilder: (context, index) {

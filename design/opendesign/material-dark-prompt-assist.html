@@ -84,6 +84,10 @@ a.nav-item{text-decoration:none;color:inherit}
 .preview-text{min-height:48px;max-height:72px;overflow:auto;padding:8px 12px;font-size:13px;line-height:1.45;color:var(--ink);white-space:pre-wrap}
 .preview-text .muted{color:var(--ink-muted)}
 .preview-text .streaming{border-right:2px solid var(--primary);padding-right:2px;animation:blink 1s step-end infinite}
+.preview-draft{display:none;box-sizing:border-box;width:100%;min-height:48px;max-height:72px;overflow:auto;padding:8px 12px;border:0;border-radius:0;background:transparent;font:inherit;font-size:13px;line-height:1.45;color:var(--ink);resize:none}
+.preview-draft::placeholder{color:var(--ink-muted)}
+.preview-draft.show{display:block}
+.preview-text.hidden{display:none}
 @keyframes blink{50%{border-color:transparent}}
 
 .style-row,.refine-row{display:flex;flex-direction:column;gap:4px;flex-shrink:0}
@@ -177,6 +181,7 @@ a.back{left:18px} a.theme-switch{left:110px} a.jump{left:210px}
             <button type="button" data-od-id="prompt-assist-tab-draft" data-tab="draft">草稿</button>
             <button type="button" class="active" data-od-id="prompt-assist-tab-enhanced" data-tab="enhanced">润色</button>
           </div>
+          <textarea class="preview-draft" data-od-id="prompt-assist-draft" id="pa-draft" rows="3" placeholder="在此编辑草稿，或从模板 / 结构化拼出…" aria-label="草稿"></textarea>
           <div class="preview-text" data-od-id="prompt-assist-preview" id="pa-preview">近黑 IDE 工作区，冷蓝焦点环勾勒选中控件，低对比边框与细分割线，桌面生图参数窗格氛围，克制、无商标、无霓虹堆叠，适合产品说明配图。</div>
         </div>
 
@@ -258,7 +263,7 @@ a.back{left:18px} a.theme-switch{left:110px} a.jump{left:210px}
           <button class="text-btn" type="button" id="pa-clear">清空</button>
           <button class="outline-btn" type="button" data-od-id="prompt-assist-btn-fill">填入</button>
           <div class="spacer"></div>
-          <button class="filled-btn" type="button" data-od-id="prompt-assist-btn-enhance" id="pa-enhance">AI 润色</button>
+          <button class="filled-btn" type="button" data-od-id="prompt-assist-btn-enhance" id="pa-enhance">✨ AI 润色</button>
           <button class="filled-btn danger" type="button" data-od-id="prompt-assist-btn-cancel" id="pa-cancel" hidden>取消</button>
           <button class="filled-btn" type="button" data-od-id="prompt-assist-btn-apply" id="pa-apply">应用润色</button>
         </div>
@@ -277,6 +282,7 @@ a.back{left:18px} a.theme-switch{left:110px} a.jump{left:210px}
   var enhanced = '近黑 IDE 工作区，冷蓝焦点环勾勒选中控件，低对比边框与细分割线，桌面生图参数窗格氛围，克制、无商标、无霓虹堆叠，适合产品说明配图。';
   var streaming = '近黑 IDE 工作区，冷蓝焦点环勾勒选中控件，低对比边框';
   var preview = document.getElementById('pa-preview');
+  var draftEl = document.getElementById('pa-draft');
   var refine = document.getElementById('pa-refine');
   var progress = document.getElementById('pa-progress');
   var enhanceBtn = document.getElementById('pa-enhance');
@@ -284,10 +290,16 @@ a.back{left:18px} a.theme-switch{left:110px} a.jump{left:210px}
   var applyBtn = document.getElementById('pa-apply');
   var activeTab = 'enhanced';
   var state = 'done';
+  draftEl.value = draft;
 
   function paint() {
-    if (activeTab === 'draft') {
-      preview.innerHTML = state === 'empty' ? '<span class="muted">在此编辑草稿，或从模板 / 结构化拼出…</span>' : draft;
+    var showDraft = activeTab === 'draft';
+    draftEl.classList.toggle('show', showDraft);
+    preview.classList.toggle('hidden', showDraft);
+    draftEl.disabled = state === 'running';
+    if (showDraft) {
+      if (state === 'empty') draftEl.value = '';
+      else if (!draftEl.value) draftEl.value = draft;
     } else if (state === 'running') {
       preview.innerHTML = '<span class="streaming">' + streaming + '</span>';
     } else if (state === 'empty') {

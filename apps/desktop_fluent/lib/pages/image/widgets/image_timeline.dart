@@ -34,7 +34,7 @@ class ImageTimeline extends StatefulWidget {
   /// 预览本回合参考图（`IMG-TURN-REF`）；与结果图分轨。
   final void Function(ImageItem item, int index, ImageRef ref)?
       onPreviewReference;
-  /// `IMG-RERUN`：用此提示重跑（回填 Composer）。
+  /// `IMG-RERUN`：重新填写（回填 Composer）。
   final void Function(ImageItem item)? onRerun;
   final bool rerunEnabled;
   final String emptyHint;
@@ -213,14 +213,14 @@ class _TurnCard extends StatelessWidget {
     }
     return Button(
       onPressed: rerunEnabled ? () => onRerun!(item) : null,
-      child: const Text('用此提示重跑'),
+      child: const Text('重新填写'),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final rerunBtn =
-        item.status == ImageItemStatus.error ? _rerunBtn() : null;
+    final isError = item.status == ImageItemStatus.error;
+    final rerunBtn = isError ? _rerunBtn() : null;
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: Column(
@@ -232,7 +232,8 @@ class _TurnCard extends StatelessWidget {
             header:
                 '你 · 回合 $turnIndex · ${_clock(item.createdAt)}'
                 '${item.mode == ImageGenMode.edit ? ' · 图生图' : ''}'
-                '${item.n > 1 ? ' · ${item.n}张' : ''}',
+                '${item.n > 1 ? ' · ${item.n}张' : ''}'
+                '${isError ? ' · 失败' : ''}',
             referenceImages: item.referenceImages,
             loadBytes: loadBytes,
             onPreviewReference: onPreviewReference == null
@@ -241,16 +242,35 @@ class _TurnCard extends StatelessWidget {
                     onPreviewReference!(item, index, ref),
           ),
           const SizedBox(height: 12),
-          if (item.status == ImageItemStatus.error) ...[
-            InfoBar(
-              title: Text(item.errorMessage ?? '生成失败'),
-              severity: InfoBarSeverity.error,
-            ),
-            if (rerunBtn != null) ...[
-              const SizedBox(height: 8),
-              Align(alignment: Alignment.centerLeft, child: rerunBtn),
-            ],
-          ] else if (item.status == ImageItemStatus.loading)
+          if (isError)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                color: Color.lerp(tokens.danger, tokens.surface, 0.92),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: Color.lerp(tokens.danger, tokens.border, 0.6)!,
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    item.errorMessage ?? '生成失败',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: tokens.danger,
+                      fontFamily: tokens.fontFamily,
+                    ),
+                  ),
+                  if (rerunBtn != null) ...[
+                    const SizedBox(height: 8),
+                    rerunBtn,
+                  ],
+                ],
+              ),
+            )
+          else if (item.status == ImageItemStatus.loading)
             _AdaptiveGrid(
               tokens: tokens,
               count: item.n.clamp(1, 4),
@@ -392,10 +412,60 @@ class _HoverCard extends StatefulWidget {
 }
 
 class _HoverCardState extends State<_HoverCard> {
+  final FlyoutController _flyout = FlyoutController();
   bool _hover = false;
   bool _focused = false;
 
   bool get _showTools => _hover || _focused;
+
+  @override
+  void dispose() {
+    _flyout.dispose();
+    super.dispose();
+  }
+
+  Future<void> _showContextMenu(Offset globalPosition) async {
+    final navBox =
+        Navigator.of(context).context.findRenderObject() as RenderBox?;
+    if (navBox == null) return;
+    final position = navBox.globalToLocal(globalPosition);
+    await _flyout.showFlyout<void>(
+      position: position,
+      barrierDismissible: true,
+      dismissWithEsc: true,
+      builder: (ctx) {
+        return MenuFlyout(
+          items: [
+            MenuFlyoutItem(
+              leading: const Icon(FluentIcons.full_screen, size: 14),
+              text: const Text('预览'),
+              onPressed: () {
+                Navigator.of(ctx).pop();
+                widget.onPreview();
+              },
+            ),
+            MenuFlyoutItem(
+              leading: const Icon(FluentIcons.save_as, size: 14),
+              text: const Text('另存为'),
+              onPressed: () {
+                Navigator.of(ctx).pop();
+                widget.onSave();
+              },
+            ),
+            if (widget.onUseAsReference != null)
+              MenuFlyoutItem(
+                leading: const Icon(FluentIcons.photo2_add, size: 14),
+                text: const Text('作参考'),
+                onPressed: () {
+                  Navigator.of(ctx).pop();
+                  widget.onUseAsReference!();
+                },
+              ),
+          ],
+        );
+      },
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -414,76 +484,81 @@ class _HoverCardState extends State<_HoverCard> {
       child: MouseRegion(
         onEnter: (_) => setState(() => _hover = true),
         onExit: (_) => setState(() => _hover = false),
-        child: Semantics(
-          button: true,
-          label: '预览第$n张',
-          child: GestureDetector(
-            onTap: widget.onPreview,
-            child: SizedBox(
-              width: widget.size,
-              height: widget.size,
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  ExcludeSemantics(
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(10),
-                      child: Container(
-                        color: tokens.surfaceMuted,
-                        foregroundDecoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(
-                            color: _focused ? tokens.primary : tokens.border,
-                            width: _focused ? 1.5 : 1,
+        child: FlyoutTarget(
+          controller: _flyout,
+          child: Semantics(
+            button: true,
+            label: '预览第$n张',
+            child: GestureDetector(
+              onTap: widget.onPreview,
+              onSecondaryTapUp: (details) =>
+                  _showContextMenu(details.globalPosition),
+              child: SizedBox(
+                width: widget.size,
+                height: widget.size,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    ExcludeSemantics(
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(10),
+                        child: Container(
+                          color: tokens.surfaceMuted,
+                          foregroundDecoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                              color: _focused ? tokens.primary : tokens.border,
+                              width: _focused ? 1.5 : 1,
+                            ),
+                          ),
+                          child: _ThumbImage(
+                            ref: widget.ref,
+                            loadBytes: widget.loadBytes,
                           ),
                         ),
-                        child: _ThumbImage(
-                          ref: widget.ref,
-                          loadBytes: widget.loadBytes,
-                        ),
                       ),
                     ),
-                  ),
-                  Positioned(
-                    left: 8,
-                    right: 8,
-                    bottom: 8,
-                    child: AnimatedOpacity(
-                      opacity: _showTools ? 1 : 0,
-                      duration: FluentMotion.micro,
-                      curve: FluentMotion.standard,
-                      child: IgnorePointer(
-                        ignoring: !_showTools,
-                        child: Row(
-                          children: [
-                            _ToolBtn(
-                              label: '预览',
-                              semanticLabel: '预览第$n张',
-                              tokens: tokens,
-                              onPressed: widget.onPreview,
-                            ),
-                            const SizedBox(width: 4),
-                            _ToolBtn(
-                              label: '另存为',
-                              semanticLabel: '另存第$n张',
-                              tokens: tokens,
-                              onPressed: widget.onSave,
-                            ),
-                            if (widget.onUseAsReference != null) ...[
+                    Positioned(
+                      left: 8,
+                      right: 8,
+                      bottom: 8,
+                      child: AnimatedOpacity(
+                        opacity: _showTools ? 1 : 0,
+                        duration: FluentMotion.micro,
+                        curve: FluentMotion.standard,
+                        child: IgnorePointer(
+                          ignoring: !_showTools,
+                          child: Row(
+                            children: [
+                              _ToolBtn(
+                                label: '预览',
+                                semanticLabel: '预览第$n张',
+                                tokens: tokens,
+                                onPressed: widget.onPreview,
+                              ),
                               const SizedBox(width: 4),
                               _ToolBtn(
-                                label: '作参考',
-                                semanticLabel: '第$n张设为参考',
+                                label: '另存为',
+                                semanticLabel: '另存第$n张',
                                 tokens: tokens,
-                                onPressed: widget.onUseAsReference!,
+                                onPressed: widget.onSave,
                               ),
+                              if (widget.onUseAsReference != null) ...[
+                                const SizedBox(width: 4),
+                                _ToolBtn(
+                                  label: '作参考',
+                                  semanticLabel: '第$n张设为参考',
+                                  tokens: tokens,
+                                  onPressed: widget.onUseAsReference!,
+                                ),
+                              ],
                             ],
-                          ],
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),

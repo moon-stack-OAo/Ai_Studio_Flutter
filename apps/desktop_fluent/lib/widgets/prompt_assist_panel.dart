@@ -87,20 +87,25 @@ class _PromptAssistPanelState extends State<PromptAssistPanel> {
   String? _enhancedPreview;
   http.Client? _enhanceHttp;
   late String _workingPrompt;
+  late final TextEditingController _draftCtrl;
   String? _selectedPresetId;
   /// 模板上区预览局部切换：0=草稿，1=润色。
   int _previewTab = 0;
   String _enhanceSkillId = defaultPromptEnhanceSkill.id;
 
+  static const _draftPlaceholder = '在此编辑草稿，或从模板 / 结构化拼出…';
+
   @override
   void initState() {
     super.initState();
     _workingPrompt = widget.draftPrompt;
+    _draftCtrl = TextEditingController(text: widget.draftPrompt);
   }
 
   @override
   void dispose() {
     _enhanceHttp?.close();
+    _draftCtrl.dispose();
     super.dispose();
   }
 
@@ -116,6 +121,19 @@ class _PromptAssistPanelState extends State<PromptAssistPanel> {
       _workingPrompt = text;
       _selectedPresetId = presetId;
       _clearEnhanceAndShowDraft();
+    });
+    _draftCtrl.value = TextEditingValue(
+      text: text,
+      selection: TextSelection.collapsed(offset: text.length),
+    );
+  }
+
+  void _onDraftEdited(String value) {
+    setState(() {
+      _workingPrompt = value;
+      _selectedPresetId = null;
+      _enhancedPreview = null;
+      _enhanceError = null;
     });
   }
 
@@ -363,6 +381,7 @@ class _PromptAssistPanelState extends State<PromptAssistPanel> {
         // OD preview-text max-height ~96px。
         constraints: const BoxConstraints(minHeight: 48, maxHeight: 96),
         child: SingleChildScrollView(
+          padding: const EdgeInsets.only(right: 8),
           child: Text(
             body,
             style: TextStyle(
@@ -372,6 +391,33 @@ class _PromptAssistPanelState extends State<PromptAssistPanel> {
               fontFamily: tokens.fontFamily,
             ),
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _draftEditor(FluentTokens tokens) {
+    return ConstrainedBox(
+      constraints: const BoxConstraints(minHeight: 48, maxHeight: 96),
+      child: TextBox(
+        controller: _draftCtrl,
+        onChanged: _enhancing ? null : _onDraftEdited,
+        enabled: !_enhancing,
+        maxLines: null,
+        minLines: 3,
+        padding: const EdgeInsets.fromLTRB(10, 6, 18, 6),
+        placeholder: _draftPlaceholder,
+        placeholderStyle: TextStyle(
+          fontSize: 13,
+          height: 1.5,
+          color: tokens.inkMuted,
+          fontFamily: tokens.fontFamily,
+        ),
+        style: TextStyle(
+          fontSize: 13,
+          height: 1.5,
+          color: tokens.inkSecondary,
+          fontFamily: tokens.fontFamily,
         ),
       ),
     );
@@ -463,7 +509,7 @@ class _PromptAssistPanelState extends State<PromptAssistPanel> {
                     )
                   : _enhanceBtnStyle(tokens),
               child: Text(
-                _enhancing ? '取消' : 'AI 润色',
+                _enhancing ? '取消' : '✨ AI 润色',
                 style: TextStyle(fontSize: 12, fontFamily: tokens.fontFamily),
               ),
             ),
@@ -492,12 +538,9 @@ class _PromptAssistPanelState extends State<PromptAssistPanel> {
     final hasWorking = _workingPrompt.trim().isNotEmpty;
     final showingPolish = _previewTab == 1;
     final polishEmpty = _enhancedPreview == null;
-    final previewBody = showingPolish
-        ? (polishEmpty
-            ? (_enhancing ? '正在润色…' : '暂无润色结果，可先在「草稿」点 AI 润色')
-            : _enhancedPreview!)
-        : (hasWorking ? _workingPrompt : '从下方选模板，或点「随机」');
-    final previewEmpty = showingPolish ? polishEmpty : !hasWorking;
+    final polishBody = polishEmpty
+        ? (_enhancing ? '正在润色…' : '暂无润色结果，可先在「草稿」点 AI 润色')
+        : _enhancedPreview!;
 
     // 上区非 flex（预览/风格/迭代）；模板列表 Expanded 吃剩余高度。
     return Column(
@@ -512,11 +555,14 @@ class _PromptAssistPanelState extends State<PromptAssistPanel> {
           ),
         ),
         const SizedBox(height: 6),
-        _previewCard(
-          tokens: tokens,
-          body: previewBody,
-          empty: previewEmpty && !_enhancing,
-        ),
+        if (showingPolish)
+          _previewCard(
+            tokens: tokens,
+            body: polishBody,
+            empty: polishEmpty && !_enhancing,
+          )
+        else
+          _draftEditor(tokens),
         if (canEnhance) ...[
           const SizedBox(height: 8),
           PromptEnhanceSkillSelector(
@@ -561,6 +607,7 @@ class _PromptAssistPanelState extends State<PromptAssistPanel> {
         const SizedBox(height: 8),
         Expanded(
           child: ListView.separated(
+            padding: const EdgeInsets.only(right: 8),
             itemCount: presets.length,
             separatorBuilder: (context, index) => const SizedBox(height: 6),
             itemBuilder: (context, index) {

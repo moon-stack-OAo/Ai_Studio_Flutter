@@ -89,6 +89,7 @@
       display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px;
       padding: 3px; border-radius: 8px; background: var(--canvas); border: 1px solid var(--border);
     }
+    .seg.seg-4 { grid-template-columns: repeat(4, 1fr); }
     .seg button {
       height: 28px; border: 0; border-radius: 6px; background: transparent;
       color: var(--ink-secondary); font-size: 11px; cursor: pointer;
@@ -217,6 +218,19 @@
       background: rgba(20,20,20,.88); color: var(--ink); font-size: 11px; cursor: pointer;
     }
     .tool:hover { border-color: var(--primary); color: #93c5fd; }
+    .field-hint { font-size: 10px; color: var(--ink-muted); margin-top: 4px; line-height: 1.35; }
+    .error-block {
+      border: 1px solid color-mix(in oklch, var(--danger) 40%, var(--border));
+      background: color-mix(in oklch, var(--danger) 8%, var(--surface));
+      border-radius: 8px; padding: 10px 12px; font-size: 12px; color: var(--danger);
+      display: flex; flex-direction: column; gap: 8px; align-items: flex-start;
+    }
+    .rerun-btn {
+      height: 28px; padding: 0 10px; border-radius: 6px; border: 1px solid var(--border);
+      background: var(--surface); color: var(--ink-secondary); font-size: 11px; cursor: pointer;
+    }
+    .rerun-btn:hover { border-color: var(--primary); color: #93c5fd; }
+    .ctx-hint { font-size: 10px; color: var(--ink-muted); margin-top: 6px; }
     .status-line {
       display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--ink-muted);
     }
@@ -286,11 +300,21 @@
           </div>
           <div class="field">
             <label>数量</label>
-            <div class="seg" data-od-id="img-count">
+            <div class="seg seg-4" data-od-id="img-count">
               <button type="button">1</button>
               <button type="button" class="active">2</button>
+              <button type="button">3</button>
               <button type="button">4</button>
             </div>
+          </div>
+          <div class="field" data-od-id="img-size">
+            <label>尺寸 <span class="badge-id">按模型显隐</span></label>
+            <div class="chips">
+              <button class="chip active" type="button">1024×1024</button>
+              <button class="chip" type="button">1792×1024</button>
+              <button class="chip" type="button">1024×1792</button>
+            </div>
+            <p class="field-hint">无 size 能力的模型隐藏本行 · IMG-PARAMS</p>
           </div>
           <div class="field">
             <label>比例</label>
@@ -304,9 +328,9 @@
           <div class="field">
             <label>质量</label>
             <div class="seg">
-              <button type="button">标准</button>
-              <button type="button" class="active">高清</button>
-              <button type="button">极致</button>
+              <button type="button">低</button>
+              <button type="button" class="active">标准</button>
+              <button type="button">高</button>
             </div>
           </div>
           <div class="field" data-od-id="f-prompt-box">
@@ -364,11 +388,12 @@
                 <div class="art"></div>
                 <div class="tools" data-od-id="f-img-actions">
                   <button class="tool" type="button">预览</button>
-                  <button class="tool" type="button">下载</button>
+                  <button class="tool" type="button">另存为</button>
                   <button class="tool" type="button">作参考</button>
                 </div>
               </div>
             </div>
+            <p class="ctx-hint">悬停工具条 · 右键 MenuFlyout（预览 / 另存为 / 作参考）· IMG-ACTIONS</p>
           </article>
 
           <div class="time-split"><span>今天 11:08</span></div>
@@ -395,24 +420,37 @@
                 <div class="art" style="background:radial-gradient(circle at 40% 60%, rgba(59,130,246,.22), transparent 40%),linear-gradient(200deg,#16161a,#0c0c0f);"></div>
                 <div class="tools">
                   <button class="tool" type="button">预览</button>
-                  <button class="tool" type="button">下载</button>
+                  <button class="tool" type="button">另存为</button>
                 </div>
               </div>
             </div>
           </article>
 
           <div class="time-split"><span>昨天 21:46</span></div>
+          <article class="turn" data-od-id="img-turn-fail">
+            <div class="prompt-bubble">
+              <div class="meta">你 · 回合 3 · 昨天 21:46 · 失败</div>
+              极简侧栏导航剪影，低对比分割线，无商标
+            </div>
+            <div class="error-block" data-od-id="img-rerun">
+              <span>上游超时 · 生成失败</span>
+              <button class="rerun-btn" type="button">重新填写</button>
+              <span class="badge-id" style="margin-left:0">IMG-RERUN · 回填不自动提交 · 忙态禁用</span>
+            </div>
+          </article>
+
+          <div class="time-split"><span>昨天 18:20</span></div>
           <article class="turn" data-od-id="img-turn-3">
             <div class="prompt-bubble">
-              <div class="meta">你 · 回合 3 · 昨天 21:46</div>
-              极简侧栏导航剪影，低对比分割线，无商标
+              <div class="meta">你 · 回合 4 · 昨天 18:20</div>
+              近黑 IDE 剪影，冷蓝焦点环，无商标
             </div>
             <div class="grid">
               <div class="card" data-od-id="img-slot-6">
                 <div class="art" style="background:linear-gradient(125deg,#1c2433 0%,#0a0a0a 55%,#141820 100%);"></div>
                 <div class="tools">
                   <button class="tool" type="button">预览</button>
-                  <button class="tool" type="button">下载</button>
+                  <button class="tool" type="button">另存为</button>
                 </div>
               </div>
             </div>
@@ -422,6 +460,7 @@
     </div>
   </div>
   <a class="back" href="index.html">← 总览</a>
-  <div class="corner-tag">Fluent Dark · IMG-PARAMS / IMG-TIMELINE</div>
+  <a class="back" style="left:110px" href="fluent-light-image.html">浅色</a>
+  <div class="corner-tag">Fluent Dark · IMG-PARAMS / IMG-TIMELINE / IMG-RERUN</div>
 </body>
 </html>

@@ -35,6 +35,19 @@ body{font-family:var(--font);background:var(--page-bg);color:var(--ink);min-heig
 .bar>i{display:block;height:100%;width:62%;background:var(--primary)}
 .meta{font-size:12px;color:var(--muted);margin-top:6px}
 .badge{display:inline-block;font-size:9px;font-family:var(--mono);border:1px dashed var(--border);padding:1px 5px;border-radius:3px;color:var(--muted);margin-left:4px}
+.assist{height:40px;width:100%;margin:0 0 8px;border-radius:12px;border:1px solid var(--border);background:transparent;color:var(--ink2);font-size:13px;font-weight:600;cursor:pointer;font-family:inherit}
+.assist:hover{background:var(--elev);color:var(--ink)}
+.ref-box{border:1px dashed var(--border);border-radius:12px;padding:12px;background:var(--elev);text-align:center;color:var(--muted);font-size:12px}
+.ref-box strong{display:block;color:var(--ink2);margin-bottom:4px;font-weight:600}
+.field-hint{font-size:10px;color:var(--muted);margin-top:4px;line-height:1.35}
+.time-split{display:flex;align-items:center;gap:10px;margin:4px 0 8px;color:var(--muted);font-size:11px}
+.time-split::before,.time-split::after{content:"";flex:1;height:1px;background:linear-gradient(90deg,transparent,var(--border),transparent)}
+.time-split span{white-space:nowrap;padding:2px 8px;border-radius:999px;border:1px solid var(--border);background:var(--surface);font-variant-numeric:tabular-nums}
+.error-block{border:1px solid color-mix(in oklch,#ef4444 40%,var(--border));background:color-mix(in oklch,#ef4444 10%,var(--surface));border-radius:12px;padding:10px 12px;font-size:13px;color:#f87171;display:flex;flex-direction:column;gap:8px;align-items:flex-start}
+.rerun-btn{min-height:40px;padding:0 14px;border-radius:999px;border:1px solid var(--border);background:var(--surface);color:var(--ink2);font-size:13px;font-weight:650;cursor:pointer;font-family:inherit}
+.rerun-btn:hover{border-color:var(--primary);color:#93c5fd}
+.thumb.ok{background:radial-gradient(circle at 35% 30%,color-mix(in oklch,var(--primary) 35%,transparent),transparent 48%),linear-gradient(145deg,#2a2a30,#121218);color:var(--ink2)}
+.lightbox-hint{font-size:11px;color:var(--muted);margin-top:8px;line-height:1.4}
 /* IMG-TURN-REF：meta 通栏；下方左缩略 + 右提示词 */
 .prompt-bubble{background:var(--elev);border:1px solid var(--border);border-radius:12px;padding:10px 12px;margin-bottom:10px}
 .prompt-bubble .m{font-size:11px;color:var(--muted);margin-bottom:6px}
@@ -84,19 +97,27 @@ a.back{position:fixed;left:18px;bottom:14px;z-index:20;font-size:12px;color:var(
   </header>
   <div class="main">
     <div class="card" data-od-id="m-image-params">
-  <div class="label">参数 · M-ImageParams</div>
+  <div class="label">参数 · M-ImageParams · IMG-PARAMS</div>
   <div class="field"><label>模型</label><select class="select"><option>gpt-image-1</option><option>grok-image</option></select></div>
   <div class="grid">
-    <div class="field"><label>尺寸</label><select class="select"><option>1024×1024</option><option>1792×1024</option></select></div>
-    <div class="field"><label>数量</label><select class="select"><option>1</option><option>2</option><option>4</option></select></div>
+    <div class="field"><label>尺寸 <span class="badge">按模型显隐</span></label><select class="select"><option>1024×1024</option><option>1792×1024</option><option>1024×1792</option></select></div>
+    <div class="field"><label>数量</label><select class="select"><option>1</option><option selected>2</option><option>3</option><option>4</option></select></div>
+  </div>
+  <div class="field"><label>质量（可选）</label><select class="select"><option>低</option><option selected>标准</option><option>高</option></select></div>
+  <div class="field" data-od-id="m-ref-image">
+    <label>参考图 <span class="badge">M-RefImage · IMG-REF</span></label>
+    <div class="ref-box"><strong>点选相册 / 文件</strong>支持 PNG / JPEG · 可清除</div>
   </div>
   <div class="field"><label>提示词 · M-PromptBox</label><textarea class="textarea">近黑 IDE 工作区，冷蓝强调，清晰层级，无商标</textarea></div>
+  <button class="assist" type="button" data-od-id="m-prompt-assist">提示词辅助 · M-PromptAssist</button>
   <button class="btn stop" type="button">停止生成 · M-GenPrimary</button>
 </div>
+
+<div class="time-split"><span>今天 14:32</span></div>
 <div class="card" data-od-id="m-image-timeline">
   <div class="label">时间线 · M-ImageTimeline</div>
   <div class="prompt-bubble" data-od-id="m-turn-ref-thumbs">
-    <div class="m">你 · 图生图 <span class="badge">IMG-TURN-REF</span></div>
+    <div class="m">你 · 回合 1 · 14:32 · 图生图 <span class="badge">IMG-TURN-REF</span></div>
     <div class="body">
       <div class="turn-ref-thumbs" title="点击预览参考图">
         <div class="turn-ref-thumb" role="img" aria-label="参考图缩略"></div>
@@ -106,10 +127,24 @@ a.back{position:fixed;left:18px;bottom:14px;z-index:20;font-size:12px;color:var(
   </div>
   <div class="grid">
     <div class="thumb">图 1 · 生成中</div>
-    <div class="thumb">图 2</div>
-    <div class="thumb">+</div>
+    <div class="thumb ok">图 2</div>
   </div>
-  <p class="meta">长按：下载 / 存相册 / 用作参考 · IMG-ACTIONS</p>
+  <p class="meta">长按：预览 / 存相册 / 分享 / 用作参考 · IMG-ACTIONS</p>
+  <p class="lightbox-hint">灯箱 · M-Lightbox：全屏滑动切换 · IMG-LIGHTBOX</p>
+</div>
+
+<div class="time-split"><span>昨天 21:46</span></div>
+<div class="card" data-od-id="m-image-fail">
+  <div class="label">失败回合</div>
+  <div class="prompt-bubble">
+    <div class="m">你 · 回合 2 · 昨天 21:46 · 失败</div>
+    <div class="body"><div class="prompt-text">极简侧栏导航剪影，低对比分割线，无商标</div></div>
+  </div>
+  <div class="error-block" data-od-id="img-rerun">
+    <span>上游超时 · 生成失败</span>
+    <button class="rerun-btn" type="button">重新填写</button>
+    <span class="badge" style="margin-left:0">IMG-RERUN · 回填不自动提交 · 忙态禁用</span>
+  </div>
 </div>
   </div>
   <nav class="navbar" aria-label="主导航">
@@ -122,5 +157,5 @@ a.back{position:fixed;left:18px;bottom:14px;z-index:20;font-size:12px;color:var(
 </div>
 <a class="back" href="index.html">← 总览</a>
 <a class="back" style="left:110px" href="material-light-image.html">浅色</a>
-<div class="corner">Material dark · image</div>
+<div class="corner">Material dark · IMG-RERUN / IMG-REF</div>
 </body></html>

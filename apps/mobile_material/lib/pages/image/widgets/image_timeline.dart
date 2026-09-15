@@ -36,7 +36,7 @@ class ImageTimeline extends StatefulWidget {
   /// 预览本回合参考图（`IMG-TURN-REF`）；与结果图分轨。
   final void Function(ImageItem item, int index, ImageRef ref)?
       onPreviewReference;
-  /// `IMG-RERUN`：用此提示重跑（回填 Composer）。
+  /// `IMG-RERUN`：重新填写（回填 Composer）。
   final void Function(ImageItem item)? onRerun;
   final bool rerunEnabled;
   final String emptyHint;
@@ -176,78 +176,174 @@ class ImageTimelineTurn extends StatelessWidget {
     }
     return OutlinedButton(
       onPressed: rerunEnabled ? () => onRerun!(item) : null,
-      child: const Text('用此提示重跑'),
+      child: const Text('重新填写'),
     );
   }
 
   @override
   Widget build(BuildContext context) {
     final tokens = materialTokensOf(context);
-    final rerunBtn =
-        item.status == ImageItemStatus.error ? _rerunBtn() : null;
-    return Card(
-      margin: EdgeInsets.zero,
-      color: tokens.surface,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(14),
-        side: BorderSide(color: tokens.border),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            _UserPromptBubble(
-              prompt: item.prompt,
-              header:
-                  '你 · 回合 $turnIndex · ${_timeLabel(item.createdAt)}'
-                  '${item.mode == ImageGenMode.edit ? ' · 图生图' : ' · 文生图'}'
-                  '${item.n > 1 ? ' · ${item.n}张' : ''}',
-              referenceImages: item.referenceImages,
-              loadBytes: loadBytes,
-              onPreviewReference: onPreviewReference == null
-                  ? null
-                  : (index, ref) =>
-                      onPreviewReference!(item, index, ref),
-            ),
-            const SizedBox(height: 10),
-            if (item.status == ImageItemStatus.error) ...[
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: tokens.danger.withValues(alpha: 0.08),
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(
-                    color: tokens.danger.withValues(alpha: 0.35),
-                  ),
-                ),
-                child: Text(
-                  item.errorMessage ?? '生成失败',
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: tokens.danger,
-                    fontFamily: tokens.fontFamily,
-                  ),
-                ),
-              ),
-              if (rerunBtn != null) ...[
-                const SizedBox(height: 8),
-                Align(alignment: Alignment.centerLeft, child: rerunBtn),
-              ],
-            ] else if (item.status == ImageItemStatus.loading)
-              _LoadingGrid(count: item.n.clamp(1, 4), tokens: tokens)
-            else
-              _ResultGrid(
-                item: item,
-                tokens: tokens,
-                loadBytes: loadBytes,
-                onPreview: onPreview,
-                onSaveAlbum: onSaveAlbum,
-                onShare: onShare,
-                onUseAsReference: onUseAsReference,
-              ),
-          ],
+    final isError = item.status == ImageItemStatus.error;
+    final rerunBtn = isError ? _rerunBtn() : null;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _TimeSplit(
+          label: formatTimeSplitLabel(item.createdAt),
+          tokens: tokens,
         ),
+        Card(
+          margin: EdgeInsets.zero,
+          color: tokens.surface,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+            side: BorderSide(color: tokens.border),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _UserPromptBubble(
+                  prompt: item.prompt,
+                  header:
+                      '你 · 回合 $turnIndex · ${_timeLabel(item.createdAt)}'
+                      '${item.mode == ImageGenMode.edit ? ' · 图生图' : ' · 文生图'}'
+                      '${item.n > 1 ? ' · ${item.n}张' : ''}',
+                  referenceImages: item.referenceImages,
+                  loadBytes: loadBytes,
+                  onPreviewReference: onPreviewReference == null
+                      ? null
+                      : (index, ref) =>
+                          onPreviewReference!(item, index, ref),
+                ),
+                const SizedBox(height: 10),
+                if (isError)
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: tokens.danger.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                        color: tokens.danger.withValues(alpha: 0.35),
+                      ),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          item.errorMessage ?? '生成失败',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: tokens.danger,
+                            fontFamily: tokens.fontFamily,
+                          ),
+                        ),
+                        if (rerunBtn != null) ...[
+                          const SizedBox(height: 8),
+                          rerunBtn,
+                        ],
+                      ],
+                    ),
+                  )
+                else if (item.status == ImageItemStatus.loading)
+                  _LoadingGrid(count: item.n.clamp(1, 4), tokens: tokens)
+                else
+                  _ResultGrid(
+                    item: item,
+                    tokens: tokens,
+                    loadBytes: loadBytes,
+                    onPreview: onPreview,
+                    onSaveAlbum: onSaveAlbum,
+                    onShare: onShare,
+                    onUseAsReference: onUseAsReference,
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// 今天/昨天 + HH:mm；更早则月日。
+String formatTimeSplitLabel(int ms) {
+  if (ms <= 0) return '';
+  final dt = DateTime.fromMillisecondsSinceEpoch(ms);
+  final now = DateTime.now();
+  final today = DateTime(now.year, now.month, now.day);
+  final day = DateTime(dt.year, dt.month, dt.day);
+  final hh = dt.hour.toString().padLeft(2, '0');
+  final mm = dt.minute.toString().padLeft(2, '0');
+  final clock = '$hh:$mm';
+  if (day == today) return '今天 $clock';
+  if (day == today.subtract(const Duration(days: 1))) return '昨天 $clock';
+  return '${dt.month}/${dt.day} $clock';
+}
+
+class _TimeSplit extends StatelessWidget {
+  const _TimeSplit({required this.label, required this.tokens});
+
+  final String label;
+  final MaterialTokens tokens;
+
+  @override
+  Widget build(BuildContext context) {
+    if (label.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(0, 4, 0, 10),
+      child: Row(
+        children: [
+          Expanded(
+            child: Container(
+              height: 1,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    tokens.border.withValues(alpha: 0),
+                    tokens.border,
+                    tokens.border.withValues(alpha: 0),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+              decoration: BoxDecoration(
+                color: tokens.surface,
+                borderRadius: BorderRadius.circular(999),
+                border: Border.all(color: tokens.border),
+              ),
+              child: Text(
+                label,
+                style: TextStyle(
+                  fontSize: 11,
+                  color: tokens.inkMuted,
+                  fontFamily: tokens.fontFamily,
+                  fontFeatures: const [FontFeature.tabularFigures()],
+                ),
+              ),
+            ),
+          ),
+          Expanded(
+            child: Container(
+              height: 1,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    tokens.border.withValues(alpha: 0),
+                    tokens.border,
+                    tokens.border.withValues(alpha: 0),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
