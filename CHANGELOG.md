@@ -16,13 +16,23 @@
 - **`SET-ABOUT` 多版本折叠更新日志**：双端关于页按 Keep a Changelog 展示多版本折叠行（版本 · 日期 · 当前/最新 pill）；默认全折叠；Fluent ContentDialog / Material BottomSheet 查看完整历史；完整历史弹层右下角「回到顶部」浮钮；core 解析 + **`packages/core/assets/CHANGELOG.md`**（`sync-changelog-asset.mjs` / `bump-version` 同步根目录 CHANGELOG；可并入检查到的远端 notes）；历史浏览不影响更新态
 - **设置页「回到顶部」浮层**：双端各设置可滚动页（含日志列表、提供商编辑）滚过阈值后右下角圆形上箭头，Tooltip「回到顶部」
 - **提示词 AI 润色（`IMG-PROMPT` / `VID-PROMPT-REF`）**：辅助面板润色风格（均衡 / 精简 / 电影感 / 写实 / 保真润色）；流式预览；取消清空半成品；已有结果可换风格再跑；快捷迭代「再短一点」「更电影感」「少加点戏」（`refineEnhancedPrompt`）；仍用当前对话模型，只输出提示词正文
+- **`IMG-LIGHTBOX` 滑动多图（Material）**：全屏灯箱 `PageView` 左右滑切换同列表多图；打开可定位初始 index；标题 `预览（当前/总数）`；生图结果/参考、对话附图调用传入完整列表（对齐规格「全屏 + 滑动切换」）
+- **Material 生图时间分割**：时间线回合上方「今天 / 昨天 / M/D HH:mm」，对齐 Fluent `IMG-TIMELINE` 可读分隔
 
 ### Changed
 
 - **提示词辅助 · 模板草稿可编辑**：上区「草稿」由只读预览改为多行输入（placeholder 对齐 OD）；选模板 /「随机」仍写入并切回草稿；手改清除模板选中与润色结果；润色中禁用；「润色」Tab 仍只读
+- **提示词辅助 · `✨ AI 润色`**：双端模板/结构化按钮恢复火花前缀（取消态仍为「取消」）；OD `*-prompt-assist` 同步
 - **`IMG-RERUN` 失败动作文案**：生图时间线失败回合按钮由「用此提示重跑」改为「重新填写」（回填 Composer，不自动提交），以免与「重试 / 立即再生成」混淆；`VID-RERUN` 仍为「用此提示重跑」
+- **Fluent 生图失败态对齐 OD**：失败回合 meta 追加「· 失败」；一体 error-block（文案 +「重新填写」同块）；结果卡补右键 MenuFlyout（预览 / 另存为 / 作参考）
 - **`IMG-SESSION` 产品决策（2026-09-15）**：生图多会话 UI **仅 Material**（列表层）；Fluent 桌面为**单活跃会话**、不提供会话列表窗格；core 多会话 API 保留供 Material / 备份，不以双端列表 UI 为验收条件
+- **生图质量档文案**：UI 统一为「低 / 标准 / 高」（API `low` / `medium` / `high`）；OD 生图主稿与 `DESIGN.md` 去掉「高清 / 极致」示意
+- **生图 OD 主稿回写**：Fluent / Material × 亮暗补失败回合与「重新填写」、数量 1–4、尺寸/参考图/辅助/质量示意等，对齐实现与规格
 - **更新说明 Markdown 紧凑样式**：双端 `MarkdownHost(compact)` 与更新确认弹窗 changelog 区对齐 OD（语义化标题/列表，无字面 `##`）；Material 更新弹窗疏密度微调
+
+### Fixed
+
+- **提示词辅助滚动条挡内容**：双端模板列表 / 润色预览 / 结构化 Chip / 草稿输入右侧预留约 8px，避免细滚动条压住文字
 
 ---
 
