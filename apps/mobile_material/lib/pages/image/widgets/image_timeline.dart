@@ -22,8 +22,10 @@ class ImageTimeline extends StatefulWidget {
     this.onPreviewReference,
     this.onRerun,
     this.rerunEnabled = true,
-    this.emptyHint = '还没有生成结果',
+    this.emptyHint = '还没有生成记录',
     this.emptySubtitle = '在上方填写提示词后生成。',
+    this.emptyActionLabel,
+    this.onEmptyAction,
   });
 
   final List<ImageItem> items;
@@ -41,6 +43,8 @@ class ImageTimeline extends StatefulWidget {
   final bool rerunEnabled;
   final String emptyHint;
   final String? emptySubtitle;
+  final String? emptyActionLabel;
+  final VoidCallback? onEmptyAction;
 
   @override
   State<ImageTimeline> createState() => _ImageTimelineState();
@@ -101,6 +105,8 @@ class _ImageTimelineState extends State<ImageTimeline> {
         hint: widget.emptyHint,
         subtitle: widget.emptySubtitle,
         illustration: const MaterialEmptyIllustration.noImages(),
+        secondaryActionLabel: widget.emptyActionLabel,
+        onSecondaryAction: widget.onEmptyAction,
       );
     }
 

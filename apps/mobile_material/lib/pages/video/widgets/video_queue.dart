@@ -31,7 +31,11 @@ class VideoQueue extends StatefulWidget {
     this.loadReferenceBytes,
     this.onPreviewReference,
     this.emptyHint = '还没有视频任务',
-    this.emptySubtitle = '在上方填写提示词后创建任务。',
+    this.emptySubtitle = '填写上方参数后创建任务，队列将在此展示进度。',
+    this.emptyActionLabel,
+    this.onEmptyAction,
+    this.emptySecondaryActionLabel,
+    this.onEmptySecondaryAction,
   });
 
   final List<VideoItem> items;
@@ -54,6 +58,10 @@ class VideoQueue extends StatefulWidget {
       onPreviewReference;
   final String emptyHint;
   final String? emptySubtitle;
+  final String? emptyActionLabel;
+  final VoidCallback? onEmptyAction;
+  final String? emptySecondaryActionLabel;
+  final VoidCallback? onEmptySecondaryAction;
 
   @override
   State<VideoQueue> createState() => _VideoQueueState();
@@ -80,6 +88,10 @@ class _VideoQueueState extends State<VideoQueue> {
         hint: widget.emptyHint,
         subtitle: widget.emptySubtitle,
         illustration: const MaterialEmptyIllustration.noVideos(),
+        actionLabel: widget.emptyActionLabel,
+        onAction: widget.onEmptyAction,
+        secondaryActionLabel: widget.emptySecondaryActionLabel,
+        onSecondaryAction: widget.onEmptySecondaryAction,
       );
     }
 

@@ -35,6 +35,7 @@ class ImageComposer extends StatefulWidget {
     this.onClearRef,
     this.onPickModel,
     this.modelPickerEnabled = true,
+    this.promptFocusNode,
   });
 
   final String prompt;
@@ -64,6 +65,7 @@ class ImageComposer extends StatefulWidget {
   final VoidCallback? onClearRef;
   final VoidCallback? onPickModel;
   final bool modelPickerEnabled;
+  final FocusNode? promptFocusNode;
 
   @override
   State<ImageComposer> createState() => _ImageComposerState();
@@ -71,12 +73,16 @@ class ImageComposer extends StatefulWidget {
 
 class _ImageComposerState extends State<ImageComposer> {
   late final TextEditingController _promptCtrl;
+  late final FocusNode _promptFocus;
+  bool _ownsFocus = false;
   bool _expanded = true;
 
   @override
   void initState() {
     super.initState();
     _promptCtrl = TextEditingController(text: widget.prompt);
+    _ownsFocus = widget.promptFocusNode == null;
+    _promptFocus = widget.promptFocusNode ?? FocusNode();
   }
 
   @override
@@ -93,6 +99,7 @@ class _ImageComposerState extends State<ImageComposer> {
   @override
   void dispose() {
     _promptCtrl.dispose();
+    if (_ownsFocus) _promptFocus.dispose();
     super.dispose();
   }
 
@@ -305,6 +312,7 @@ class _ImageComposerState extends State<ImageComposer> {
                     label: '提示词',
                     child: TextField(
                       controller: _promptCtrl,
+                      focusNode: _promptFocus,
                       onChanged:
                           widget.generating ? null : widget.onPromptChanged,
                       enabled: !widget.generating,

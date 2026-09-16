@@ -181,8 +181,8 @@ class _ChatPageState extends State<ChatPage> {
                           recallEnabled: !streamingHere,
                           onRecallUser: (id) =>
                               _controller.recallUserMessage(id),
-                          emptyHint: '还没有消息',
-                          emptySubtitle: '选择左侧会话，或在下方输入第一条消息开始对话。',
+                          emptyHint: '开始第一条对话',
+                          emptySubtitle: '当前会话还没有消息，在下方输入即可开始。',
                         ),
                       ),
                       Composer(

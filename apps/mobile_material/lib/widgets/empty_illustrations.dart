@@ -157,18 +157,19 @@ class _MaterialEmptyPainter extends CustomPainter {
     Paint fillPaint,
     Paint accentFill,
   ) {
-    canvas.drawCircle(const Offset(48, 48), 28, fillPaint);
-    canvas.drawCircle(const Offset(48, 48), 28, strokePaint);
-    canvas.drawCircle(const Offset(48, 48), 10, accentFill);
-    canvas.drawCircle(const Offset(48, 48), 10, accentStroke);
-    canvas.drawLine(const Offset(48, 20), const Offset(48, 28), strokePaint);
-    canvas.drawLine(const Offset(48, 68), const Offset(48, 76), strokePaint);
-    canvas.drawLine(const Offset(20, 48), const Offset(28, 48), strokePaint);
-    canvas.drawLine(const Offset(68, 48), const Offset(76, 48), strokePaint);
-    canvas.drawLine(const Offset(28, 28), const Offset(34, 34), strokePaint);
-    canvas.drawLine(const Offset(62, 62), const Offset(68, 68), strokePaint);
-    canvas.drawLine(const Offset(68, 28), const Offset(62, 34), strokePaint);
-    canvas.drawLine(const Offset(34, 62), const Offset(28, 68), strokePaint);
+    // OD Material: looser radius card + two lines + badge plus.
+    final card = RRect.fromRectAndRadius(
+      const Rect.fromLTWH(20, 24, 56, 48),
+      const Radius.circular(12),
+    );
+    canvas.drawRRect(card, fillPaint);
+    canvas.drawRRect(card, strokePaint);
+    canvas.drawLine(const Offset(33, 42), const Offset(63, 42), strokePaint);
+    canvas.drawLine(const Offset(33, 52), const Offset(52, 52), strokePaint);
+    canvas.drawCircle(const Offset(70, 30), 11, accentFill);
+    canvas.drawCircle(const Offset(70, 30), 11, accentStroke);
+    canvas.drawLine(const Offset(70, 26), const Offset(70, 34), accentStroke);
+    canvas.drawLine(const Offset(66, 30), const Offset(74, 30), accentStroke);
   }
 
   void _paintNoMessages(
@@ -177,25 +178,24 @@ class _MaterialEmptyPainter extends CustomPainter {
     Paint accentStroke,
     Paint fillPaint,
   ) {
-    final bubble = RRect.fromRectAndRadius(
-      const Rect.fromLTWH(16, 20, 48, 34),
-      const Radius.circular(16),
+    // OD: stacked docs + center plus; Material rx looser.
+    final back = RRect.fromRectAndRadius(
+      const Rect.fromLTWH(18, 22, 44, 52),
+      const Radius.circular(10),
     );
-    canvas.drawRRect(bubble, fillPaint);
-    canvas.drawRRect(bubble, strokePaint);
-    final tail = Path()
-      ..moveTo(28, 54)
-      ..lineTo(24, 66)
-      ..lineTo(40, 54);
-    canvas.drawPath(tail, strokePaint);
-
-    final reply = RRect.fromRectAndRadius(
-      const Rect.fromLTWH(36, 48, 44, 28),
-      const Radius.circular(14),
+    canvas.drawRRect(back, fillPaint);
+    canvas.drawRRect(back, strokePaint);
+    canvas.drawLine(const Offset(26, 35), const Offset(52, 35), strokePaint);
+    canvas.drawLine(const Offset(26, 44), const Offset(46, 44), strokePaint);
+    canvas.drawLine(const Offset(26, 52), const Offset(50, 52), strokePaint);
+    final front = RRect.fromRectAndRadius(
+      const Rect.fromLTWH(48, 30, 30, 40),
+      const Radius.circular(10),
     );
-    canvas.drawRRect(reply, accentStroke);
-    canvas.drawLine(const Offset(46, 58), const Offset(66, 58), accentStroke);
-    canvas.drawLine(const Offset(46, 64), const Offset(58, 64), accentStroke);
+    canvas.drawRRect(front, fillPaint);
+    canvas.drawRRect(front, accentStroke);
+    canvas.drawLine(const Offset(57, 48), const Offset(70, 48), accentStroke);
+    canvas.drawLine(const Offset(63, 42), const Offset(63, 54), accentStroke);
   }
 
   void _paintNoImages(

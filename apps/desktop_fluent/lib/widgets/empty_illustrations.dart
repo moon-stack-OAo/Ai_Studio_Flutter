@@ -133,35 +133,19 @@ class _FluentEmptyPainter extends CustomPainter {
     Paint accentStroke,
     Paint fillPaint,
   ) {
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(
-        const Rect.fromLTWH(22, 28, 52, 40),
-        const Radius.circular(6),
-      ),
-      fillPaint,
+    // OD: rect card + two lines + top-right badge with plus (viewBox 88→96).
+    final card = RRect.fromRectAndRadius(
+      const Rect.fromLTWH(20, 24, 56, 48),
+      const Radius.circular(8),
     );
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(
-        const Rect.fromLTWH(22, 28, 52, 40),
-        const Radius.circular(6),
-      ),
-      strokePaint,
-    );
-    canvas.drawCircle(const Offset(38, 48), 5, accentStroke);
-    canvas.drawLine(const Offset(43, 48), const Offset(58, 48), accentStroke);
-    canvas.drawLine(const Offset(52, 48), const Offset(52, 42), accentStroke);
-    canvas.drawLine(const Offset(56, 48), const Offset(56, 44), accentStroke);
-    final spark = Path()
-      ..moveTo(68, 22)
-      ..lineTo(70, 28)
-      ..lineTo(76, 30)
-      ..lineTo(70, 32)
-      ..lineTo(68, 38)
-      ..lineTo(66, 32)
-      ..lineTo(60, 30)
-      ..lineTo(66, 28)
-      ..close();
-    canvas.drawPath(spark, accentStroke);
+    canvas.drawRRect(card, fillPaint);
+    canvas.drawRRect(card, strokePaint);
+    canvas.drawLine(const Offset(33, 42), const Offset(63, 42), strokePaint);
+    canvas.drawLine(const Offset(33, 52), const Offset(52, 52), strokePaint);
+    canvas.drawCircle(const Offset(70, 30), 11, fillPaint);
+    canvas.drawCircle(const Offset(70, 30), 11, accentStroke);
+    canvas.drawLine(const Offset(70, 26), const Offset(70, 34), accentStroke);
+    canvas.drawLine(const Offset(66, 30), const Offset(74, 30), accentStroke);
   }
 
   void _paintNoMessages(
@@ -170,37 +154,24 @@ class _FluentEmptyPainter extends CustomPainter {
     Paint accentStroke,
     Paint fillPaint,
   ) {
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(
-        const Rect.fromLTWH(18, 22, 42, 28),
-        const Radius.circular(5),
-      ),
-      fillPaint,
+    // OD: stacked docs + center plus (viewBox 88→96).
+    final back = RRect.fromRectAndRadius(
+      const Rect.fromLTWH(18, 22, 44, 52),
+      const Radius.circular(6),
     );
-    final left = Path()
-      ..moveTo(18, 22)
-      ..lineTo(60, 22)
-      ..lineTo(60, 44)
-      ..lineTo(32, 44)
-      ..lineTo(24, 52)
-      ..lineTo(24, 44)
-      ..lineTo(18, 44)
-      ..close();
-    canvas.drawPath(left, strokePaint);
-    canvas.drawLine(const Offset(26, 32), const Offset(48, 32), strokePaint);
-    canvas.drawLine(const Offset(26, 38), const Offset(40, 38), strokePaint);
-
-    final right = Path()
-      ..moveTo(40, 40)
-      ..lineTo(78, 40)
-      ..lineTo(78, 62)
-      ..lineTo(72, 62)
-      ..lineTo(72, 70)
-      ..lineTo(64, 62)
-      ..lineTo(40, 62)
-      ..close();
-    canvas.drawPath(right, accentStroke);
-    canvas.drawLine(const Offset(48, 50), const Offset(70, 50), accentStroke);
+    canvas.drawRRect(back, fillPaint);
+    canvas.drawRRect(back, strokePaint);
+    canvas.drawLine(const Offset(26, 35), const Offset(52, 35), strokePaint);
+    canvas.drawLine(const Offset(26, 44), const Offset(46, 44), strokePaint);
+    canvas.drawLine(const Offset(26, 52), const Offset(50, 52), strokePaint);
+    final front = RRect.fromRectAndRadius(
+      const Rect.fromLTWH(48, 30, 30, 40),
+      const Radius.circular(6),
+    );
+    canvas.drawRRect(front, fillPaint);
+    canvas.drawRRect(front, accentStroke);
+    canvas.drawLine(const Offset(57, 48), const Offset(70, 48), accentStroke);
+    canvas.drawLine(const Offset(63, 42), const Offset(63, 54), accentStroke);
   }
 
   void _paintNoImages(

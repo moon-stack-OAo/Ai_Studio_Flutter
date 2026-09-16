@@ -47,10 +47,11 @@ void main() {
   });
 
   group('resolveEnhanceSystemPrompt', () {
-    test('图像 / 视频基座含保真与结构要点', () {
+    test('图像 / 视频基座含保真、强化与结构要点', () {
       final image = resolveEnhanceSystemPrompt(PromptDomain.image, null);
       expect(image, contains('图像生成提示词优化助手'));
       expect(image, contains('保真'));
+      expect(image, contains('补全并强化'));
       expect(image, contains('主体 → 场景 → 构图'));
       expect(image, contains('禁止空洞堆砌'));
       expect(image, contains('只输出优化后提示词正文'));
@@ -60,6 +61,7 @@ void main() {
 
       final video = resolveEnhanceSystemPrompt(PromptDomain.video, null);
       expect(video, contains('视频生成提示词优化助手'));
+      expect(video, contains('补全并强化'));
       expect(video, contains('镜头运动/节奏'));
       expect(video, contains('润色风格=均衡'));
     });

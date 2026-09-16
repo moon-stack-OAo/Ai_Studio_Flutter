@@ -31,8 +31,7 @@ class VideoQueue extends StatefulWidget {
     this.loadReferenceBytes,
     this.onPreviewReference,
     this.emptyHint = '还没有视频任务',
-    this.emptySubtitle =
-        '在右侧填写提示词与参数后创建；恢复未完成走命令栏。',
+    this.emptySubtitle = '在右侧填写提示词并创建任务后，将出现在此队列。',
   });
 
   final List<VideoItem> items;

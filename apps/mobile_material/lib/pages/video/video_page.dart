@@ -49,6 +49,7 @@ class VideoPage extends StatefulWidget {
 class _VideoPageState extends State<VideoPage> {
   late final VideoController _controller;
   final ScrollController _scroll = ScrollController();
+  final FocusNode _promptFocus = FocusNode();
   String? _lastBanner;
   String? _lastInfo;
   int _lastItemCount = 0;
@@ -70,6 +71,21 @@ class _VideoPageState extends State<VideoPage> {
       if (!mounted) return;
       _controller.startAutoResumeIfNeeded();
       _maybeScrollToBottom();
+    });
+  }
+
+  void _focusPrompt() {
+    if (!_scroll.hasClients) {
+      _promptFocus.requestFocus();
+      return;
+    }
+    _scroll.animateTo(
+      0,
+      duration: MaterialMotion.micro,
+      curve: MaterialMotion.standard,
+    );
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _promptFocus.requestFocus();
     });
   }
 
@@ -142,6 +158,7 @@ class _VideoPageState extends State<VideoPage> {
     _controller.removeListener(_onControllerChanged);
     _controller.dispose();
     _scroll.dispose();
+    _promptFocus.dispose();
     super.dispose();
   }
 
@@ -324,7 +341,7 @@ class _VideoPageState extends State<VideoPage> {
           return MaterialFeatureEmpty(
             appBarTitle: '生视频',
             title: '尚未配置视频模型',
-            message: '前往设置添加 API Key 并选择视频模型后，即可创建文生视频任务。',
+            message: '前往设置添加视频模型与密钥后，即可创建生成任务。',
             actionLabel: '去设置',
             onAction: widget.onOpenProviders,
             illustration: const MaterialEmptyIllustration.noProvider(),
@@ -420,6 +437,7 @@ class _VideoPageState extends State<VideoPage> {
                       sliver: SliverToBoxAdapter(
                         child: VideoComposer(
                           prompt: _controller.promptDraft,
+                          promptFocusNode: _promptFocus,
                           onPromptChanged: _controller.setPromptDraft,
                           duration: _controller.duration,
                           onDurationChanged: _controller.setDuration,
@@ -469,6 +487,16 @@ class _VideoPageState extends State<VideoPage> {
                       sliver: SliverToBoxAdapter(
                         child: VideoQueue(
                           items: items,
+                          emptyActionLabel: '创建任务',
+                          onEmptyAction: () {
+                            if (_controller.canGenerate) {
+                              _controller.generate();
+                            } else {
+                              _focusPrompt();
+                            }
+                          },
+                          emptySecondaryActionLabel: '先写提示词',
+                          onEmptySecondaryAction: _focusPrompt,
                           posterService: widget.videoPosterService,
                           loadReferenceBytes: widget
                               .sessionRepository.readReferenceImageBytes,

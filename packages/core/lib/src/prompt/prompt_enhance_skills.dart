@@ -32,8 +32,8 @@ const PromptEnhanceSkill promptEnhanceSkillBalanced = PromptEnhanceSkill(
   id: 'balanced',
   label: '均衡',
   systemExtra:
-      '润色风格=均衡：在忠实原意前提下适度补全缺失的结构要素与可感知细节；'
-      '不要额外编造剧情、角色关系或未提及的道具；密度适中。',
+      '润色风格=均衡：在忠实原意前提下积极补全缺失的结构要素与可感知细节；'
+      '短输入应明显变丰富；不要另起剧情或编造未提及的关键角色关系；密度适中偏充实。',
   temperature: defaultEnhanceTemperature,
   maxTokens: 1024,
 );

@@ -251,8 +251,10 @@ class _ChatPageState extends State<ChatPage> {
                   messages: messages,
                   recallEnabled: !streamingHere,
                   onRecallUser: (id) => _controller.recallUserMessage(id),
-                  emptyHint: '还没有消息',
-                  emptySubtitle: '在下方输入第一条消息，或打开会话列表新建。',
+                  emptyHint: '开始第一条对话',
+                  emptySubtitle: '当前会话还没有消息，在下方输入即可开始。',
+                  emptySecondaryActionLabel: '打开会话列表',
+                  onEmptySecondaryAction: _openSessions,
                 ),
               ),
               Composer(

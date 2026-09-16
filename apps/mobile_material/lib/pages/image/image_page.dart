@@ -48,6 +48,7 @@ class ImagePage extends StatefulWidget {
 class _ImagePageState extends State<ImagePage> {
   late final ImageController _controller;
   final ScrollController _scroll = ScrollController();
+  final FocusNode _promptFocus = FocusNode();
   String? _lastBanner;
   int _lastItemCount = 0;
   String _lastTail = '';
@@ -65,6 +66,21 @@ class _ImagePageState extends State<ImagePage> {
     _controller.addListener(_onControllerChanged);
     widget.sessionRepository.addListener(_onSessionChanged);
     WidgetsBinding.instance.addPostFrameCallback((_) => _maybeScrollToBottom());
+  }
+
+  void _focusPrompt() {
+    if (!_scroll.hasClients) {
+      _promptFocus.requestFocus();
+      return;
+    }
+    _scroll.animateTo(
+      0,
+      duration: MaterialMotion.micro,
+      curve: MaterialMotion.standard,
+    );
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _promptFocus.requestFocus();
+    });
   }
 
   void _onSessionChanged() => _maybeScrollToBottom();
@@ -138,6 +154,7 @@ class _ImagePageState extends State<ImagePage> {
     _controller.removeListener(_onControllerChanged);
     _controller.dispose();
     _scroll.dispose();
+    _promptFocus.dispose();
     super.dispose();
   }
 
@@ -362,7 +379,7 @@ class _ImagePageState extends State<ImagePage> {
           return MaterialFeatureEmpty(
             appBarTitle: '生图',
             title: '尚未配置生图模型',
-            message: '前往设置添加 API Key 并选择生图模型后，即可开始文生图。',
+            message: '前往设置添加可用生图模型与密钥后，即可开始生成。',
             actionLabel: '去设置',
             onAction: widget.onOpenProviders,
             illustration: const MaterialEmptyIllustration.noProvider(),
@@ -452,6 +469,7 @@ class _ImagePageState extends State<ImagePage> {
                       sliver: SliverToBoxAdapter(
                         child: ImageComposer(
                           prompt: _controller.promptDraft,
+                          promptFocusNode: _promptFocus,
                           onPromptChanged: _controller.setPromptDraft,
                           n: _controller.n,
                           onNChanged: _controller.setN,
@@ -507,6 +525,7 @@ class _ImagePageState extends State<ImagePage> {
                           unawaited(_controller.rerunFromItem(item));
                         },
                         rerunEnabled: !widget.generation.busy,
+                        onFocusPrompt: _focusPrompt,
                       ),
                     ),
                   ],
@@ -531,6 +550,7 @@ class _TimelineSliver extends StatelessWidget {
     this.onPreviewReference,
     this.onRerun,
     this.rerunEnabled = true,
+    this.onFocusPrompt,
   });
 
   final List<ImageItem> items;
@@ -544,15 +564,18 @@ class _TimelineSliver extends StatelessWidget {
       onPreviewReference;
   final void Function(ImageItem item)? onRerun;
   final bool rerunEnabled;
+  final VoidCallback? onFocusPrompt;
 
   @override
   Widget build(BuildContext context) {
     if (items.isEmpty) {
-      return const SliverToBoxAdapter(
+      return SliverToBoxAdapter(
         child: MaterialContentEmpty(
-          hint: '还没有生成结果',
+          hint: '还没有生成记录',
           subtitle: '在上方填写提示词后生成。',
-          illustration: MaterialEmptyIllustration.noImages(),
+          illustration: const MaterialEmptyIllustration.noImages(),
+          secondaryActionLabel: onFocusPrompt == null ? null : '填写提示词',
+          onSecondaryAction: onFocusPrompt,
         ),
       );
     }

@@ -36,6 +36,7 @@ class VideoComposer extends StatefulWidget {
     this.onPromptAssist,
     this.onPickModel,
     this.modelPickerEnabled = true,
+    this.promptFocusNode,
   });
 
   final String prompt;
@@ -67,6 +68,7 @@ class VideoComposer extends StatefulWidget {
   final VoidCallback? onPromptAssist;
   final VoidCallback? onPickModel;
   final bool modelPickerEnabled;
+  final FocusNode? promptFocusNode;
 
   @override
   State<VideoComposer> createState() => _VideoComposerState();
@@ -74,12 +76,16 @@ class VideoComposer extends StatefulWidget {
 
 class _VideoComposerState extends State<VideoComposer> {
   late final TextEditingController _promptCtrl;
+  late final FocusNode _promptFocus;
+  bool _ownsFocus = false;
   bool _expanded = true;
 
   @override
   void initState() {
     super.initState();
     _promptCtrl = TextEditingController(text: widget.prompt);
+    _ownsFocus = widget.promptFocusNode == null;
+    _promptFocus = widget.promptFocusNode ?? FocusNode();
   }
 
   @override
@@ -96,6 +102,7 @@ class _VideoComposerState extends State<VideoComposer> {
   @override
   void dispose() {
     _promptCtrl.dispose();
+    if (_ownsFocus) _promptFocus.dispose();
     super.dispose();
   }
 
@@ -329,6 +336,7 @@ class _VideoComposerState extends State<VideoComposer> {
                     label: '提示词',
                     child: TextField(
                       controller: _promptCtrl,
+                      focusNode: _promptFocus,
                       onChanged:
                           widget.generating ? null : widget.onPromptChanged,
                       enabled: !widget.generating,

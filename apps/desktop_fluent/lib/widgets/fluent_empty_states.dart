@@ -154,15 +154,21 @@ class FluentContentEmpty extends StatelessWidget {
     required this.hint,
     this.subtitle,
     this.illustration,
+    this.actionLabel,
+    this.onAction,
   });
 
   final String hint;
   final String? subtitle;
   final Widget? illustration;
+  final String? actionLabel;
+  final VoidCallback? onAction;
 
   @override
   Widget build(BuildContext context) {
     final tokens = fluentTokensOf(context);
+    final showAction =
+        actionLabel != null && actionLabel!.isNotEmpty && onAction != null;
     return Center(
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
@@ -194,6 +200,18 @@ class FluentContentEmpty extends StatelessWidget {
                     height: 1.4,
                     color: tokens.inkMuted,
                     fontFamily: tokens.fontFamily,
+                  ),
+                ),
+              ],
+              if (showAction) ...[
+                const SizedBox(height: 14),
+                Semantics(
+                  button: true,
+                  label: actionLabel,
+                  excludeSemantics: true,
+                  child: FilledButton(
+                    onPressed: onAction,
+                    child: Text(actionLabel!),
                   ),
                 ),
               ],

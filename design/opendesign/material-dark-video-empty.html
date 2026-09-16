@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AI Studio · Material 暗色 · 生视频空态</title>
+  <style>
+    :root {
+      --canvas: #0a0a0a;
+      --surface: #141414;
+      --elev: #1c1c1c;
+      --ink: #fafafa;
+      --ink2: #a1a1aa;
+      --muted: #71717a;
+      --border: #27272a;
+      --primary: #3b82f6;
+      --pressed: #2563eb;
+      --on: #fff;
+      --accent-nav: #3b82f6;
+      --page-bg: #050505;
+      --font: Roboto, "Noto Sans SC", system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+      --mono: ui-monospace, "Roboto Mono", "Noto Sans Mono", "SF Mono", Consolas, monospace;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: var(--font);
+      background: var(--page-bg);
+      color: var(--ink);
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      padding: 24px 16px;
+    }
+    .phone {
+      width: min(390px, 100%);
+      height: min(844px, 92vh);
+      background: var(--canvas);
+      border-radius: 36px;
+      border: 1px solid var(--border);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+      box-shadow: 0 28px 64px rgba(0, 0, 0, 0.55);
+    }
+    .status {
+      height: 44px; padding: 12px 22px 0;
+      display: flex; justify-content: space-between; align-items: center;
+      font-size: 12px; font-weight: 600; background: var(--surface);
+    }
+    .topbar {
+      height: 56px; display: flex; align-items: center; gap: 6px;
+      padding: 0 10px; background: var(--surface); border-bottom: 1px solid var(--border);
+    }
+    .topbar h1 { font-size: 17px; font-weight: 650; letter-spacing: 0; }
+    .sub { font-size: 11px; color: var(--muted); letter-spacing: 0; }
+    .icon-btn {
+      width: 48px; height: 48px; border: 0; border-radius: 24px;
+      background: transparent; color: var(--ink2); display: grid; place-items: center; text-decoration: none;
+    }
+    .icon-btn:hover { background: var(--elev); color: var(--ink); }
+    .icon-btn:focus-visible { outline: 2px solid var(--primary); outline-offset: 1px; }
+    .icon-btn svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+    .badge {
+      display: inline-block; font-size: 9px; font-family: var(--mono);
+      border: 1px dashed #3f3f46; padding: 1px 5px; border-radius: 3px; color: var(--muted); margin-left: 4px;
+    }
+    .state-bar {
+      display: flex; gap: 8px; padding: 10px 12px;
+      border-bottom: 1px solid var(--border); background: var(--surface); overflow-x: auto;
+    }
+    .state-pill {
+      min-height: 48px; padding: 0 14px; border-radius: 999px;
+      border: 1px solid var(--border); background: transparent;
+      font-size: 12px; color: var(--ink2); cursor: pointer; font-family: inherit;
+      white-space: nowrap; letter-spacing: 0;
+    }
+    .state-pill:hover { color: var(--ink); background: color-mix(in oklch, var(--primary) 12%, var(--surface)); }
+    .state-pill.active {
+      background: color-mix(in oklch, var(--primary) 18%, var(--surface));
+      color: var(--primary);
+      border-color: color-mix(in oklch, var(--primary) 40%, var(--border));
+      font-weight: 650;
+    }
+    .state-pill:focus-visible { outline: 2px solid var(--primary); outline-offset: 1px; }
+    .main {
+      flex: 1; overflow: auto; padding: 12px;
+      display: flex; flex-direction: column; gap: 12px;
+    }
+    .card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 16px; padding: 14px;
+    }
+    .label {
+      font-size: 11px; color: var(--muted); font-weight: 650;
+      letter-spacing: .06em; text-transform: uppercase; margin-bottom: 8px;
+    }
+    .field { margin-bottom: 10px; }
+    .field label { display: block; font-size: 12px; color: var(--ink2); margin-bottom: 5px; letter-spacing: 0; }
+    .select, .textarea {
+      width: 100%; border: 1px solid var(--border); border-radius: 12px;
+      background: var(--elev); color: var(--ink); font: inherit; font-size: 14px; padding: 12px;
+    }
+    .textarea { min-height: 88px; resize: vertical; letter-spacing: 0; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .params-disabled { opacity: .55; pointer-events: none; }
+    .empty-panel {
+      flex: 1; display: none; align-items: center; justify-content: center;
+      min-height: 180px;
+    }
+    body[data-state="unconfigured"] .view-unconfigured,
+    body[data-state="empty-queue"] .view-empty-queue { display: flex; }
+    .empty-card {
+      width: 100%; max-width: 300px; text-align: center;
+      padding: 24px 16px; border-radius: 20px;
+      background: var(--surface); border: 1px solid var(--border);
+    }
+    .illu { width: 80px; height: 80px; margin: 0 auto 16px; color: var(--primary); }
+    .empty-card h2 {
+      font-size: 17px; font-weight: 650; letter-spacing: 0;
+      margin-bottom: 8px; line-height: 1.35;
+    }
+    .empty-card p {
+      font-size: 13px; color: var(--muted); line-height: 1.6;
+      margin-bottom: 18px; letter-spacing: 0;
+    }
+    .cta-stack { display: flex; flex-direction: column; gap: 10px; width: 100%; }
+    .btn {
+      min-height: 48px; border: 0; border-radius: 14px;
+      background: var(--primary); color: var(--on);
+      font-weight: 650; font-size: 14px; cursor: pointer; width: 100%;
+      font-family: inherit; letter-spacing: 0; text-decoration: none;
+      display: inline-flex; align-items: center; justify-content: center;
+    }
+    .btn:hover { background: var(--pressed); }
+    .btn:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+    .btn.ghost {
+      background: transparent; color: var(--ink2); border: 1px solid var(--border);
+    }
+    .btn.ghost:hover { color: var(--ink); background: color-mix(in oklch, var(--primary) 10%, var(--surface)); }
+    .btn.disabled {
+      background: color-mix(in oklch, var(--primary) 35%, var(--border));
+      cursor: not-allowed; opacity: .7;
+    }
+    .queue-shell {
+      border: 1px dashed var(--border); border-radius: 16px; padding: 16px;
+      background: color-mix(in oklch, var(--elev) 70%, var(--surface));
+      text-align: center; color: var(--muted); font-size: 13px; letter-spacing: 0;
+    }
+    .navbar {
+      height: 64px; display: grid; grid-template-columns: repeat(4, 1fr);
+      background: var(--surface); border-top: 1px solid var(--border); padding-bottom: 8px;
+    }
+    a.nav-item { text-decoration: none; color: inherit; }
+    .nav-item {
+      border: 0; background: transparent; color: var(--muted);
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 2px; font-size: 11px; min-height: 48px; letter-spacing: 0;
+    }
+    .nav-item svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+    .nav-item.active { color: var(--accent-nav); }
+    .nav-item:focus-visible { outline: 2px solid var(--primary); outline-offset: -4px; }
+    .home {
+      position: absolute; left: 50%; bottom: 6px; transform: translateX(-50%);
+      width: 120px; height: 4px; border-radius: 4px; background: #fafafa; opacity: .25;
+    }
+    a.back {
+      position: fixed; left: 18px; bottom: 14px; z-index: 20;
+      font-size: 12px; color: var(--ink2); text-decoration: none;
+      background: var(--surface); border: 1px solid var(--border); padding: 6px 10px; border-radius: 8px;
+    }
+    a.back:hover { color: var(--ink); }
+    .corner {
+      position: fixed; right: 18px; bottom: 14px; z-index: 20;
+      font-size: 10px; font-family: var(--mono); color: var(--muted);
+      background: var(--surface); border: 1px dashed var(--border); padding: 4px 8px; border-radius: 6px;
+    }
+    * { scrollbar-width: thin; scrollbar-color: color-mix(in oklch, var(--muted) 55%, transparent) transparent; }
+    *::-webkit-scrollbar { width: 6px; height: 6px; }
+    *::-webkit-scrollbar-button { display: none; width: 0; height: 0; }
+    *::-webkit-scrollbar-track { background: transparent; }
+    *::-webkit-scrollbar-thumb {
+      background: color-mix(in oklch, var(--muted) 45%, transparent);
+      border-radius: 999px; border: 1px solid transparent; background-clip: padding-box;
+    }
+    *::-webkit-scrollbar-thumb:hover {
+      background: color-mix(in oklch, var(--muted) 70%, transparent); background-clip: padding-box;
+    }
+    *::-webkit-scrollbar-corner { background: transparent; }
+  </style>
+</head>
+<body data-state="unconfigured">
+  <div class="phone" data-od-id="material-dark-video-empty">
+    <div class="status"><span>9:41</span><span>▌▌▌ · 100%</span></div>
+    <header class="topbar">
+      <a class="icon-btn" href="material-dark-sessions.html" aria-label="会话列表"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></svg></a>
+      <div style="flex:1;min-width:0">
+        <h1>生视频</h1>
+        <div class="sub">M-VideoEmpty · <span class="badge">VID-EMPTY</span></div>
+      </div>
+    </header>
+    <div class="state-bar" data-od-id="m-video-empty-state-bar" role="tablist" aria-label="空态场景">
+      <button type="button" class="state-pill active" data-set="unconfigured" role="tab" aria-selected="true">未配置模型</button>
+      <button type="button" class="state-pill" data-set="empty-queue" role="tab" aria-selected="false">队列空</button>
+    </div>
+    <div class="main">
+      <div class="card params-disabled" data-od-id="m-video-params-shell" aria-disabled="true">
+        <div class="label">Params · Shell</div>
+        <div class="field"><label>模型</label><select class="select" disabled><option>尚未配置</option></select></div>
+        <div class="grid">
+          <div class="field"><label>时长</label><select class="select" disabled><option>5s</option></select></div>
+          <div class="field"><label>比例</label><select class="select" disabled><option>16:9</option></select></div>
+        </div>
+        <div class="field"><label>提示词</label><textarea class="textarea" disabled placeholder="配置完成后在此填写提示词…"></textarea></div>
+        <button class="btn disabled" type="button" disabled>创建任务 · 空态禁用</button>
+      </div>
+      <div class="empty-panel view-unconfigured" data-od-id="m-video-empty-unconfigured">
+        <div class="empty-card">
+          <div class="label">Empty · Model</div>
+          <svg class="illu" viewBox="0 0 80 80" fill="none" aria-hidden="true">
+            <rect x="12" y="22" width="40" height="36" rx="10" stroke="currentColor" stroke-width="2"/>
+            <path d="M52 30l16-8v36l-16-8z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+            <circle cx="58" cy="22" r="9" fill="var(--canvas)" stroke="currentColor" stroke-width="2"/>
+            <path d="M58 18v8M54 22h8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+          <h2>尚未配置视频模型</h2>
+          <p>前往设置添加视频模型与密钥后，即可创建生成任务。</p>
+          <div class="cta-stack">
+            <a class="btn" href="material-dark-settings.html" data-od-id="m-cta-settings">去设置</a>
+          </div>
+        </div>
+      </div>
+      <div class="empty-panel view-empty-queue" data-od-id="m-video-empty-queue">
+        <div class="empty-card">
+          <div class="label">Empty · Queue</div>
+          <svg class="illu" viewBox="0 0 80 80" fill="none" aria-hidden="true">
+            <rect x="18" y="20" width="44" height="40" rx="12" stroke="currentColor" stroke-width="2"/>
+            <path d="M34 36l14 8-14 8V36z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+          </svg>
+          <h2>还没有视频任务</h2>
+          <p>填写上方参数后创建任务，队列将在此展示进度。</p>
+          <div class="cta-stack">
+            <button class="btn" type="button" data-od-id="m-cta-create">创建任务</button>
+            <button class="btn ghost" type="button" data-od-id="m-cta-focus-prompt">先写提示词</button>
+          </div>
+          <div class="queue-shell" style="margin-top:14px" data-od-id="m-video-queue-empty">队列空 · VID-QUEUE</div>
+        </div>
+      </div>
+    </div>
+    <nav class="navbar" aria-label="主导航">
+      <a class="nav-item" href="material-dark-chat.html"><svg viewBox="0 0 24 24"><path d="M4 6h16v10H8l-4 3V6z"/></svg>对话</a>
+      <a class="nav-item" href="material-dark-image.html"><svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="14" rx="2"/><circle cx="9" cy="10" r="1.5"/><path d="M4 16l5-4 4 3 3-2 4 3"/></svg>生图</a>
+      <a class="nav-item active" href="material-dark-video.html" aria-current="page"><svg viewBox="0 0 24 24"><rect x="3" y="6" width="13" height="12" rx="2"/><path d="M16 10l5-3v10l-5-3z"/></svg>生视频</a>
+      <a class="nav-item" href="material-dark-settings.html"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 3v2M12 19v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M3 12h2M19 12h2"/></svg>设置</a>
+    </nav>
+    <div class="home"></div>
+  </div>
+  <a class="back" href="index.html">← 总览</a>
+  <a class="back" style="left:110px" href="material-light-video-empty.html">亮色空态</a>
+  <a class="back" style="left:200px" href="material-dark-video.html">有内容稿</a>
+  <div class="corner">M-VideoEmpty · VID-EMPTY · Dark</div>
+  <script>
+    (function () {
+      var pills = document.querySelectorAll('.state-pill');
+      pills.forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          var s = btn.getAttribute('data-set');
+          document.body.setAttribute('data-state', s);
+          pills.forEach(function (p) {
+            var on = p === btn;
+            p.classList.toggle('active', on);
+            p.setAttribute('aria-selected', on ? 'true' : 'false');
+          });
+        });
+      });
+    })();
+  </script>
+</body>
+</html>

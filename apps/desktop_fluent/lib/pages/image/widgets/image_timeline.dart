@@ -21,7 +21,7 @@ class ImageTimeline extends StatefulWidget {
     this.onPreviewReference,
     this.onRerun,
     this.rerunEnabled = true,
-    this.emptyHint = '还没有生成结果',
+    this.emptyHint = '时间线空',
     this.emptySubtitle = '在右侧参数区填写提示词后生成。',
   });
 

@@ -239,8 +239,10 @@ void main() {
     expect(find.text('去设置'), findsNothing);
     expect(find.text('会话'), findsOneWidget);
     expect(find.text('新对话'), findsWidgets);
-    expect(find.text('还没有消息'), findsOneWidget);
-    expect(find.text('选择左侧会话，或在下方输入第一条消息开始对话。'), findsOneWidget);
+    expect(find.text('开始第一条对话'), findsOneWidget);
+    expect(find.text('当前会话还没有消息，在下方输入即可开始。'), findsOneWidget);
+    // 新建入口在左窗格顶栏；主区空态不再重复「新建会话」CTA（仓库默认已有会话）。
+    expect(find.text('新建会话'), findsNothing);
     expect(find.text('发送'), findsOneWidget);
     expect(find.textContaining('Local · gpt-test'), findsOneWidget);
     expect(find.text('会话参数'), findsOneWidget);

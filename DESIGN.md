@@ -212,7 +212,7 @@ Flutter 落点：`packages/design_fluent` 与 `packages/design_material` 的 `Th
 2. CTA：**添加提供商 / 填写 API Key**
 3. 测试连接 → 拉取模型 → 可发送首条消息
 
-空态需区分：「未配置提供商」与「已配置但无会话」。两套系统可有不同插画与排版，文案语义一致即可。
+空态需区分：「未配置提供商」与「已配置但当前会话无消息」。会话仓库保证至少一条空会话，故主区不以「无会话 / 新建」为主 CTA；新建入口在会话列表顶栏（Fluent）或会话页（Material）。两套系统可有不同插画与排版，文案语义一致即可。
 
 ### 3.2 对话
 
@@ -373,7 +373,7 @@ Flutter 落点：`packages/design_fluent` 与 `packages/design_material` 的 `Th
 | `CHAT-MD`           | Markdown / 代码块 | `F-MarkdownHost`：块级复制在代码框角                                        | `M-MarkdownHost`：同内核；复制入口触控友好                | 渲染中 / 完成                      |
 | `CHAT-MSG-ACTIONS`  | 复制；撤回仅用户末条     | 悬停显按钮 + **右键 MenuFlyout**（用户末条：复制+撤回；助手：仅复制）                      | 长按 BottomSheet（用户末条：复制+撤回；助手：仅复制）            | 用户末条可撤回 / 助手仅复制               |
 | `CHAT-COMPOSER`     | 输入与发送/停止       | `F-Composer`：多行 TextBox；主按钮发送；流式中变停止；Enter 发送（可配）                 | `M-Composer`：TextField + 发送/停止；IME 不挡输入      | 空闲 / 可发送 / 流式中 / 禁用           |
-| `CHAT-EMPTY`        | 未配置 / 无会话空态    | `F-ChatEmpty`：短文案 + 主按钮（去设置 / 新建）                                 | `M-ChatEmpty`：同语义，竖向 CTA                     | 未配置 Key / 无会话                 |
+| `CHAT-EMPTY`        | 未配置 / 当前会话无消息 | `F-ChatEmpty`：未配置→去设置；已配置空会话→短文案引导输入（不主推新建；列表顶栏可新建） | `M-ChatEmpty`：同语义；可附「打开会话列表」               | 未配置 Key / 有会话无消息（仓库保证 ≥1 条会话） |
 | `CHAT-ERROR`        | 发送失败可行动提示      | CommandBar 下 InfoBar 或气泡内错误                                       | Snackbar + 气泡内错误文案                           | 超时 / 取消 / 4xx / 5xx / 不安全 URL |
 | `CHAT-ATTACH`       | **对话附图**（用户消息附带图片） | Composer 附加 + 用户气泡缩略 + 灯箱；多模态 parts 发送                         | 同语义；相册/文件点选                                    | 无图 / 草稿有图 / 已发送可回看 / 入口禁用   |
 

@@ -95,7 +95,7 @@ class MaterialSessionListEmpty extends StatelessWidget {
     super.key,
     required this.onCreate,
     this.title = '暂无会话',
-    this.message = '还没有会话，点下方新建一条开始。',
+    this.message = '还没有会话，新建一条开始。',
     this.actionLabel = '新建会话',
     this.illustration,
   });
@@ -171,16 +171,29 @@ class MaterialContentEmpty extends StatelessWidget {
     this.subtitle,
     this.padding = const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
     this.illustration,
+    this.actionLabel,
+    this.onAction,
+    this.secondaryActionLabel,
+    this.onSecondaryAction,
   });
 
   final String hint;
   final String? subtitle;
   final EdgeInsetsGeometry padding;
   final Widget? illustration;
+  final String? actionLabel;
+  final VoidCallback? onAction;
+  final String? secondaryActionLabel;
+  final VoidCallback? onSecondaryAction;
 
   @override
   Widget build(BuildContext context) {
     final tokens = materialTokensOf(context);
+    final showAction =
+        actionLabel != null && actionLabel!.isNotEmpty && onAction != null;
+    final showSecondary = secondaryActionLabel != null &&
+        secondaryActionLabel!.isNotEmpty &&
+        onSecondaryAction != null;
     return Padding(
       padding: padding,
       child: Center(
@@ -214,6 +227,36 @@ class MaterialContentEmpty extends StatelessWidget {
                     fontFamily: tokens.fontFamily,
                   ),
                 ),
+              ],
+              if (showAction || showSecondary) ...[
+                const SizedBox(height: 16),
+                if (showAction)
+                  Semantics(
+                    button: true,
+                    label: actionLabel,
+                    excludeSemantics: true,
+                    child: FilledButton(
+                      onPressed: onAction,
+                      style: FilledButton.styleFrom(
+                        minimumSize: const Size(160, 44),
+                      ),
+                      child: Text(actionLabel!),
+                    ),
+                  ),
+                if (showAction && showSecondary) const SizedBox(height: 10),
+                if (showSecondary)
+                  Semantics(
+                    button: true,
+                    label: secondaryActionLabel,
+                    excludeSemantics: true,
+                    child: OutlinedButton(
+                      onPressed: onSecondaryAction,
+                      style: OutlinedButton.styleFrom(
+                        minimumSize: const Size(160, 44),
+                      ),
+                      child: Text(secondaryActionLabel!),
+                    ),
+                  ),
               ],
             ],
           ),

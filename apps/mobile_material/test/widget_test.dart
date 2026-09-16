@@ -147,8 +147,11 @@ void main() {
 
     expect(find.text('尚未配置提供商'), findsNothing);
     expect(find.text('去设置'), findsNothing);
-    expect(find.text('还没有消息'), findsOneWidget);
-    expect(find.text('在下方输入第一条消息，或打开会话列表新建。'), findsOneWidget);
+    expect(find.text('开始第一条对话'), findsOneWidget);
+    expect(find.text('当前会话还没有消息，在下方输入即可开始。'), findsOneWidget);
+    // 仓库默认已有会话；主区空态不再推「新建会话」，仅保留打开列表。
+    expect(find.text('新建会话'), findsNothing);
+    expect(find.text('打开会话列表'), findsOneWidget);
     expect(find.byIcon(Icons.send_rounded), findsOneWidget);
     expect(find.textContaining('gpt-test'), findsWidgets);
   });
@@ -200,6 +203,10 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('尚未配置生图模型'), findsOneWidget);
+    expect(
+      find.text('前往设置添加可用生图模型与密钥后，即可开始生成。'),
+      findsOneWidget,
+    );
     expect(find.text('去设置'), findsOneWidget);
   });
 
@@ -246,6 +253,10 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('尚未配置视频模型'), findsOneWidget);
+    expect(
+      find.text('前往设置添加视频模型与密钥后，即可创建生成任务。'),
+      findsOneWidget,
+    );
     expect(find.text('去设置'), findsOneWidget);
   });
 
@@ -280,7 +291,9 @@ void main() {
 
     expect(find.text('尚未配置视频模型'), findsNothing);
     expect(find.text('参数'), findsOneWidget);
-    expect(find.text('创建任务'), findsOneWidget);
+    // Composer 主按钮 + 队列空态 CTA 同文案。
+    expect(find.text('创建任务'), findsWidgets);
+    expect(find.text('还没有视频任务'), findsOneWidget);
     expect(find.textContaining('sora-2'), findsWidgets);
   });
 

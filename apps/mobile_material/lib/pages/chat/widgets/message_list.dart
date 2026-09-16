@@ -14,6 +14,10 @@ class MessageList extends StatefulWidget {
     this.recallEnabled = false,
     this.emptyHint,
     this.emptySubtitle,
+    this.emptyActionLabel,
+    this.onEmptyAction,
+    this.emptySecondaryActionLabel,
+    this.onEmptySecondaryAction,
   });
 
   final List<ChatMessage> messages;
@@ -21,6 +25,10 @@ class MessageList extends StatefulWidget {
   final bool recallEnabled;
   final String? emptyHint;
   final String? emptySubtitle;
+  final String? emptyActionLabel;
+  final VoidCallback? onEmptyAction;
+  final String? emptySecondaryActionLabel;
+  final VoidCallback? onEmptySecondaryAction;
 
   @override
   State<MessageList> createState() => _MessageListState();
@@ -62,9 +70,13 @@ class _MessageListState extends State<MessageList> {
   Widget build(BuildContext context) {
     if (widget.messages.isEmpty) {
       return MaterialContentEmpty(
-        hint: widget.emptyHint ?? '还没有消息',
+        hint: widget.emptyHint ?? '开始第一条对话',
         subtitle: widget.emptySubtitle,
         illustration: const MaterialEmptyIllustration.noMessages(),
+        actionLabel: widget.emptyActionLabel,
+        onAction: widget.onEmptyAction,
+        secondaryActionLabel: widget.emptySecondaryActionLabel,
+        onSecondaryAction: widget.onEmptySecondaryAction,
       );
     }
 
