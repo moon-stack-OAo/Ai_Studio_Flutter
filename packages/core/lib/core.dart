@@ -29,6 +29,7 @@ export 'src/logging/app_log_repository.dart';
 export 'src/logging/app_log_storage.dart';
 export 'src/mcp/mcp_auth.dart';
 export 'src/mcp/mcp_client.dart';
+export 'src/mcp/mcp_config_import.dart';
 export 'src/mcp/mcp_errors.dart';
 export 'src/mcp/mcp_models.dart';
 export 'src/mcp/mcp_openai_tools.dart';

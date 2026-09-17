@@ -17,55 +17,37 @@
 
 > 发版时裁进正式版；以下为当前草稿。
 
-- 关于页更新日志优先看白话摘要，工程细节可再展开
+- 可配置业务 MCP：对话内工具调用需确认，轨迹可折叠查看；备份默认不含 MCP Token
+- 桌面支持本地 stdio，并可粘贴 OpenCode / Cursor 风格 JSON 一键导入；手机仍仅 HTTP
+- 关于页更新日志优先看白话摘要，工程细节可再展开；设置页可一键回到顶部
 - 提示词辅助支持 AI 润色（多种风格）与快捷再改，草稿可直接手改
 - 手机端看图可左右滑动切换同组多图；生图时间线按「今天 / 昨天」分段
-- 生图失败可「重新填写」提示词再改；桌面失败提示与右键操作更清晰
-- 设置页滚远后可一键回到顶部；完整更新日志弹层同样支持
-- 对话已配置时引导直接输入首条消息，不再误推「新建会话」
-- 桌面与手机均可配置业务 MCP，对话中支持工具调用授权与轨迹展示
-- 桌面业务 MCP 支持本地 stdio（启动本机进程）；移动仍仅 HTTP
-- 设置可配业务 MCP；对话内工具需确认；备份默认不含 MCP Token
+- 生图失败可「重新填写」再改；对话已配置时引导直接输入，不再误推「新建会话」
 
 ### Added
 
-- **P6-S2 桌面业务 MCP 本地 stdio**：`desktop_fluent` 注入 `IoProcessHost`；设置页可切换 HTTP/SSE 与本地 stdio（command/args/cwd/env），首次保存/探测确认启动本机进程；列表区分传输标签；移动端不注入 ProcessHost，导入的 stdio Server 提示「仅桌面可用」并禁用探测
-- **P6-S 桌面 stdio MCP 规格（`DESIGN.md` / `SECURITY.md`）**：移动端仍只 HTTP；桌面可选 `transport: stdio`（`command`/`args`/`env`/`cwd`）；core 接口 + 桌面 `ProcessHost` 注入；默认拒绝任意命令、用户确认、退出杀进程、备份 omit env 密钥
-- **MCP Server 默认授权**：设置可先设整 Server 默认策略，再按 tool 覆盖；优先级：单 tool > Server 默认 > 元数据/副作用
-- **MCP 历史工具轮聚合**：会话列表将「调用工具」+ 后续「工具结果」收成一条默认可折叠卡（不再各占一气泡）；进行中 live 轨迹同款聚合；待授权/执行中自动展开
-- **MCP 工具轨迹默认可折叠聚合**：一轮多个 tool 收成「已调用 N 个工具」摘要，点开看明细；待授权/执行中自动展开
-- **MCP 未配置横幅可忽略**：对话页「未配置业务 MCP」提示可关闭并本机记住；启用任一 Server 后恢复提醒资格；缺 tools / 模型不支持仍会提示
-- **P6 OD 原型稿**：`design/opendesign/` 新增 Fluent/Material × 亮暗 `*-settings-mcp.html` / `*-chat-mcp.html`；`index.html`「业务 MCP」分区；设置侧栏/提供商入口互链（本机 OD Local OpenCode `start_run` 生成后回拷仓库）
-- **P6-5 备份/清数据/脱敏收口**：`SET-DATA` 导出默认 omit MCP Bearer（与 API Key 同 `includeSecrets`）；导入合并 MCP 元数据，token 仅 `importSecrets`；清密钥清 MCP secret、清全部/清提供商清 Server 列表；旧备份无 mcp 段兼容；双端关于页文案明示；`DESIGN` §9 / `SECURITY` / `architecture` 同步
-- **P6-4 mobile_material MCP UI**：设置「提供商」Tab 内「管理业务 MCP」子页（Server CRUD、启用、none/bearer、测试连接/刷新 tools、按 tool 授权覆盖）；对话 `CHAT-TOOL-CALL` 轨迹卡与 `CHAT-TOOL-AUTH` AlertDialog；启动 DI 注入 `McpServerRepository` / `HttpSseMcpSessionFactory` / `toolAuthPrompter`；降级横幅可跳转 MCP
-- **P6-3 desktop_fluent MCP UI**：设置侧栏「业务 MCP」（Server CRUD、启用、none/bearer、测试连接/刷新 tools、按 tool 授权覆盖）；对话 `CHAT-TOOL-CALL` 轨迹卡与 `CHAT-TOOL-AUTH` ContentDialog；启动 DI 注入 `McpServerRepository` / `HttpSseMcpSessionFactory` / `toolAuthPrompter`；模型不支持 tools / 未配置 MCP / 未拉 tools 降级横幅
-- **P6-2 MCP Client + Facade 编排（core）**：`HttpSseMcpSession` 对 `baseUrl` POST JSON-RPC（`initialize` / `tools/list` / `tools/call`；JSON 或 SSE 响应）；`none`+`bearer`；`PrefsMcpServerStorage`（prefs 元数据）+ SecretStore（token）；`DefaultToolCallOrchestrator` 串行；`ChatSessionFacade` 注入启用后附带 `tools[]` 并多轮回灌（上限 8）；参数/结果摘要脱敏
-- **P6-1 Chat 协议骨架（core）**：`tools` / `tool_choice` 可选请求；SSE 解析并累积 `delta.tool_calls`；消息模型 `ChatRole.tool` + `ChatToolCall` / `toolCallId`（旧会话兼容）；`buildApiMessages` / 上下文裁剪保留成对 tool 轨迹；`supportsChatTools` 启发式
-- **P6 业务 MCP 规格（`DESIGN.md`）**：受控 MCP Client（双端 HTTP/SSE、自有业务 Server、读写+分级授权）；§5.11 / `CHAT-TOOL-*` / `SET-MCP*` / 分期 P6；**P6-1～P6-5 已落地**
-- **关于页更新日志优先展示「用户摘要」**：章节可含 `### 用户摘要`；core 拆分摘要与工程明细；双端关于页展开版本时优先渲染摘要，明细默认折叠「显示详细变更」
-- **`SET-ABOUT` 多版本折叠更新日志**：双端关于页按 Keep a Changelog 展示多版本折叠行（版本 · 日期 · 当前/最新 pill）；默认全折叠；Fluent ContentDialog / Material BottomSheet 查看完整历史；完整历史弹层右下角「回到顶部」浮钮；core 解析 + **`packages/core/assets/CHANGELOG.md`**（`sync-changelog-asset.mjs` / `bump-version` 同步根目录 CHANGELOG；可并入检查到的远端 notes）；历史浏览不影响更新态
-- **设置页「回到顶部」浮层**：双端各设置可滚动页（含日志列表、提供商编辑）滚过阈值后右下角圆形上箭头，Tooltip「回到顶部」
-- **提示词 AI 润色（`IMG-PROMPT` / `VID-PROMPT-REF`）**：辅助面板润色风格（均衡 / 精简 / 电影感 / 写实 / 保真润色）；流式预览；取消清空半成品；已有结果可换风格再跑；快捷迭代「再短一点」「更电影感」「少加点戏」（`refineEnhancedPrompt`）；仍用当前对话模型，只输出提示词正文
-- **`IMG-LIGHTBOX` 滑动多图（Material）**：全屏灯箱 `PageView` 左右滑切换同列表多图；打开可定位初始 index；标题 `预览（当前/总数）`；生图结果/参考、对话附图调用传入完整列表（对齐规格「全屏 + 滑动切换」）
-- **Material 生图时间分割**：时间线回合上方「今天 / 昨天 / M/D HH:mm」，对齐 Fluent `IMG-TIMELINE` 可读分隔
-- **空态 OD 原型补齐**：Fluent / Material × 亮暗对话 / 生图 / 生视频空态稿（`*-chat-empty` / `*-image-empty` / `*-video-empty`）；总览入口已挂；场景区分「未配置」与「已配置 · 无消息/无历史」
+- **业务 MCP（P6）**：双端受控 Client（HTTP/SSE）+ 分级授权 + 工具轨迹/授权卡；core 协议与 Facade 编排（`tools`/`tool_calls`、串行 call、上限 8）；设置页 Server CRUD / 探测 / 按 tool 覆盖；未配置横幅可忽略；备份默认 omit Bearer、清数据收口 MCP；OD 设置/对话 MCP 稿
+- **桌面 stdio（P6-S）**：`transport: stdio`（command/args/cwd/env）+ `ProcessHost`；保存/探测确认后启动本机进程；移动端不注入、禁用探测；规格与安全约束见 `DESIGN` / `SECURITY`
+- **MCP 配置 JSON 导入**：设置「导入 JSON」；兼容本 App `mcpServers`、OpenCode `mcp`（`type: local` 命令数组）、Cursor `command`/`args`；Bearer 入凭据库；桌面 stdio 二次确认；移动跳过 stdio
+- **MCP 授权与轨迹体验**：Server 默认授权 + 单 tool 覆盖；历史/进行中工具轮聚合为可折叠卡（待授权/执行中自动展开）
+- **关于页更新日志**：多版本折叠 +「用户摘要」优先展示；完整历史弹层「回到顶部」；`packages/core/assets/CHANGELOG.md` 同步
+- **设置页「回到顶部」浮层**：双端各设置可滚动页滚过阈值后右下角上箭头
+- **提示词 AI 润色（`IMG-PROMPT` / `VID-PROMPT-REF`）**：风格 / 流式预览 / 快捷迭代；用当前对话模型只输出提示词正文
+- **`IMG-LIGHTBOX` 滑动多图（Material）**：全屏灯箱左右滑切换同组多图
+- **Material 生图时间分割**：时间线「今天 / 昨天 / M/D HH:mm」
+- **空态 OD 原型补齐**：Fluent / Material × 亮暗对话 / 生图 / 生视频空态稿
 
 ### Changed
 
-- **业务 MCP 规格边界**：原「本期不做 stdio」改为「移动端不做；桌面可选 stdio（P6-S）」；HTTP/SSE 仍为双端主路径（`DESIGN.md` §5.11）
-- **`CHAT-EMPTY` 语义对齐仓库默认会话**：已配置时主区按「当前会话无消息」引导输入；去掉主区「新建会话」CTA（新建仍在会话列表顶栏 / 会话页）；Material 可附「打开会话列表」；`DESIGN.md` §3.1 / 能力表同步
-- **内容空态可挂 CTA**：双端 `*ContentEmpty` 支持主/次操作按钮；消息列表 / 队列等可扩展交互
-- **空态插画精修**：双端 CustomPainter 卡片尺寸、圆角与徽章绘制更统一
-- **Material 生图 / 生视频 Composer**：进入页后自动聚焦提示词输入
-- **提示词辅助 · 模板草稿可编辑**：上区「草稿」由只读预览改为多行输入（placeholder 对齐 OD）；选模板 /「随机」仍写入并切回草稿；手改清除模板选中与润色结果；润色中禁用；「润色」Tab 仍只读
-- **提示词辅助 · `✨ AI 润色`**：双端模板/结构化按钮恢复火花前缀（取消态仍为「取消」）；OD `*-prompt-assist` 同步
-- **`IMG-RERUN` 失败动作文案**：生图时间线失败回合按钮由「用此提示重跑」改为「重新填写」（回填 Composer，不自动提交），以免与「重试 / 立即再生成」混淆；`VID-RERUN` 仍为「用此提示重跑」
-- **Fluent 生图失败态对齐 OD**：失败回合 meta 追加「· 失败」；一体 error-block（文案 +「重新填写」同块）；结果卡补右键 MenuFlyout（预览 / 另存为 / 作参考）
-- **`IMG-SESSION` 产品决策（2026-09-15）**：生图多会话 UI **仅 Material**（列表层）；Fluent 桌面为**单活跃会话**、不提供会话列表窗格；core 多会话 API 保留供 Material / 备份，不以双端列表 UI 为验收条件
-- **生图质量档文案**：UI 统一为「低 / 标准 / 高」（API `low` / `medium` / `high`）；OD 生图主稿与 `DESIGN.md` 去掉「高清 / 极致」示意
-- **生图 OD 主稿回写**：Fluent / Material × 亮暗补失败回合与「重新填写」、数量 1–4、尺寸/参考图/辅助/质量示意等，对齐实现与规格
-- **更新说明 Markdown 紧凑样式**：双端 `MarkdownHost(compact)` 与更新确认弹窗 changelog 区对齐 OD（语义化标题/列表，无字面 `##`）；Material 更新弹窗疏密度微调
-- **提示词润色系统提示**：`prompt_enhance` 完善图像润色约束，提升补全准确性与细节
+- **业务 MCP 规格边界**：原「本期不做 stdio」→「移动端不做；桌面可选 stdio」；HTTP/SSE 仍为双端主路径
+- **`CHAT-EMPTY` 语义**：已配置时引导输入首条消息；主区去掉「新建会话」CTA
+- **内容空态可挂 CTA**；空态插画精修
+- **Material 生图 / 生视频 Composer**：进入页后自动聚焦提示词
+- **提示词辅助**：模板草稿可编辑；`✨ AI 润色` 火花前缀恢复
+- **`IMG-RERUN` 失败文案**：「重新填写」（回填不自动提交）；Fluent 失败态对齐 OD（含右键菜单）
+- **`IMG-SESSION`**：生图多会话 UI 仅 Material；Fluent 单活跃会话
+- **生图质量档文案**：「低 / 标准 / 高」；生图 OD 主稿回写对齐实现
+- **更新说明 Markdown 紧凑样式**；提示词润色系统提示完善
 
 ### Fixed
 

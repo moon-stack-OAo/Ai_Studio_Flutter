@@ -280,6 +280,249 @@ class _SettingsMcpPageState extends State<SettingsMcpPage> {
     _showInfoBar('已添加 MCP Server', InfoBarSeverity.success);
   }
 
+  Future<void> _importJson() async {
+    if (_dirty) {
+      final discard = await _confirmDiscard();
+      if (discard != true) return;
+    }
+    if (!mounted) return;
+
+    final jsonCtrl = TextEditingController();
+    McpConfigImportResult? preview;
+    String? parseHint;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogCtx) {
+        return StatefulBuilder(
+          builder: (ctx, setLocal) {
+            final tokens = fluentTokensOf(ctx);
+            return ContentDialog(
+              constraints: const BoxConstraints(maxWidth: 560, maxHeight: 640),
+              title: const Text('导入 MCP 配置 JSON'),
+              content: SizedBox(
+                width: 520,
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '粘贴本 App 推荐的 mcpServers，或兼容 OpenCode 的 mcp / '
+                        'Cursor 的 mcpServers。Bearer 写入本机凭据库，不会在结果中回显。',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: tokens.inkMuted,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      TextBox(
+                        controller: jsonCtrl,
+                        maxLines: 12,
+                        placeholder:
+                            '{\n  "mcpServers": {\n    "biz": { "url": "https://…" }\n  }\n}',
+                        onChanged: (_) {
+                          if (preview != null || parseHint != null) {
+                            setLocal(() {
+                              preview = null;
+                              parseHint = null;
+                            });
+                          }
+                        },
+                      ),
+                      const SizedBox(height: 10),
+                      Button(
+                        onPressed: () {
+                          final r = parseMcpConfigJson(
+                            jsonCtrl.text,
+                            allowStdio: true,
+                          );
+                          setLocal(() {
+                            preview = r;
+                            if (r.hasErrors) {
+                              parseHint = r.errors.join('；');
+                            } else if (!r.hasEntries && r.skipped.isEmpty) {
+                              parseHint = '没有可导入的 Server';
+                            } else if (!r.hasEntries) {
+                              parseHint =
+                                  '没有可导入项（已跳过 ${r.skipped.length} 个）';
+                            } else {
+                              parseHint = null;
+                            }
+                          });
+                        },
+                        child: const Text('解析预览'),
+                      ),
+                      if (parseHint != null) ...[
+                        const SizedBox(height: 8),
+                        Text(
+                          parseHint!,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: tokens.danger,
+                          ),
+                        ),
+                      ],
+                      if (preview != null && preview!.hasEntries) ...[
+                        const SizedBox(height: 12),
+                        Text(
+                          '将导入 ${preview!.entries.length} 个'
+                          '${preview!.skipped.isNotEmpty ? '，跳过 ${preview!.skipped.length} 个' : ''}：',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            color: tokens.ink,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        for (final e in preview!.entries)
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 4),
+                            child: Text(
+                              _importEntrySummary(e),
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontFamily: 'Consolas',
+                                color: tokens.ink,
+                              ),
+                            ),
+                          ),
+                        if (preview!.skipped.isNotEmpty) ...[
+                          const SizedBox(height: 6),
+                          Text(
+                            '跳过：${preview!.skipped.join('；')}',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: tokens.inkMuted,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+              actions: [
+                Button(
+                  onPressed: () => Navigator.pop(dialogCtx, false),
+                  child: const Text('取消'),
+                ),
+                FilledButton(
+                  onPressed: preview != null && preview!.hasEntries
+                      ? () => Navigator.pop(dialogCtx, true)
+                      : null,
+                  child: const Text('导入'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    final result = preview;
+    jsonCtrl.dispose();
+    if (confirmed != true || result == null || !result.hasEntries) return;
+    if (!mounted) return;
+
+    final hasStdio = result.entries.any(
+      (e) => e.draft.transport == McpTransport.stdio,
+    );
+    if (hasStdio) {
+      final lines = result.entries
+          .where((e) => e.draft.transport == McpTransport.stdio)
+          .map((e) {
+        final d = e.draft;
+        final cmd = d.command ?? '';
+        final line = d.args.isEmpty ? cmd : '$cmd ${d.args.join(' ')}';
+        return '· ${e.name}：$line';
+      }).join('\n');
+      final ok = await showFluentConfirmDialog(
+        context: context,
+        title: '确认启动本机进程？',
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              '导入配置含本地 stdio，将允许本应用按配置启动本机进程（仅桌面）：',
+            ),
+            const SizedBox(height: 10),
+            SelectableText(
+              lines,
+              style: const TextStyle(fontFamily: 'Consolas', fontSize: 12),
+            ),
+            const SizedBox(height: 10),
+            const Text('请确认命令来源可信。取消则不会导入。'),
+          ],
+        ),
+        cancelLabel: '取消',
+        confirmLabel: '确认并导入',
+        isDestructive: true,
+        constraints: const BoxConstraints(maxWidth: 520),
+      );
+      if (!ok || !mounted) return;
+    }
+
+    final existingNames =
+        _repo.servers.map((s) => s.displayName).toList(growable: true);
+    var imported = 0;
+    String? lastId;
+    for (final e in result.entries) {
+      final displayName =
+          uniqueMcpImportDisplayName(e.draft.displayName, existingNames);
+      existingNames.add(displayName);
+      final d = e.draft;
+      final token = e.bearerToken?.trim();
+      final id = await _repo.add(
+        displayName: displayName,
+        baseUrl: d.baseUrl,
+        transport: d.transport,
+        command: d.command,
+        args: d.args,
+        env: d.env,
+        cwd: d.cwd,
+        authKind: token != null && token.isNotEmpty
+            ? McpAuthKind.bearer
+            : d.authKind,
+        bearerToken: token,
+        enabled: d.enabled,
+      );
+      lastId = id;
+      imported++;
+    }
+
+    if (lastId != null) {
+      setState(() => _selectedId = lastId);
+      await _loadFormFromSelected();
+    } else if (mounted) {
+      setState(() {});
+    }
+
+    final skipN = result.skipped.length;
+    final msg = skipN > 0
+        ? '已导入 $imported 个，跳过 $skipN 个'
+        : '已导入 $imported 个 MCP Server';
+    _showInfoBar(msg, InfoBarSeverity.success);
+  }
+
+  static String _importEntrySummary(McpConfigImportEntry e) {
+    final d = e.draft;
+    if (d.transport == McpTransport.stdio) {
+      final cmd = d.command ?? '';
+      final line = d.args.isEmpty ? cmd : '$cmd ${d.args.join(' ')}';
+      final clipped =
+          line.length > 72 ? '${line.substring(0, 72)}…' : line;
+      return '· ${e.name} · stdio · $clipped';
+    }
+    final url = d.baseUrl.length > 64
+        ? '${d.baseUrl.substring(0, 64)}…'
+        : d.baseUrl;
+    final auth = e.bearerToken != null && e.bearerToken!.isNotEmpty
+        ? ' · Bearer'
+        : '';
+    return '· ${e.name} · http · $url$auth';
+  }
+
   Future<bool> _save() async {
     final current = _selected;
     if (current == null) return false;
@@ -570,6 +813,11 @@ class _SettingsMcpPageState extends State<SettingsMcpPage> {
                             ),
                           ),
                         ),
+                        Button(
+                          onPressed: _importJson,
+                          child: const Text('导入 JSON'),
+                        ),
+                        const SizedBox(width: 8),
                         FilledButton(
                           onPressed: _addServer,
                           child: const Text('添加 Server'),

@@ -64,6 +64,150 @@ class _SettingsMcpPageState extends State<SettingsMcpPage> {
     if (mounted) setState(() {});
   }
 
+  Future<void> _importJson() async {
+    final jsonCtrl = TextEditingController();
+    McpConfigImportResult? preview;
+    String? parseHint;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogCtx) {
+        return StatefulBuilder(
+          builder: (ctx, setLocal) {
+            return AlertDialog(
+              title: const Text('导入 MCP 配置 JSON'),
+              content: SizedBox(
+                width: double.maxFinite,
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '粘贴 mcpServers / OpenCode mcp。移动端仅导入 HTTP；stdio 会跳过。',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Theme.of(ctx).colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      TextField(
+                        controller: jsonCtrl,
+                        maxLines: 10,
+                        decoration: const InputDecoration(
+                          hintText: '{ "mcpServers": { … } }',
+                          border: OutlineInputBorder(),
+                        ),
+                        onChanged: (_) {
+                          if (preview != null || parseHint != null) {
+                            setLocal(() {
+                              preview = null;
+                              parseHint = null;
+                            });
+                          }
+                        },
+                      ),
+                      const SizedBox(height: 8),
+                      OutlinedButton(
+                        onPressed: () {
+                          final r = parseMcpConfigJson(
+                            jsonCtrl.text,
+                            allowStdio: false,
+                          );
+                          setLocal(() {
+                            preview = r;
+                            if (r.hasErrors) {
+                              parseHint = r.errors.join('；');
+                            } else if (!r.hasEntries) {
+                              parseHint = r.skipped.isEmpty
+                                  ? '没有可导入的 Server'
+                                  : '没有可导入项（已跳过 ${r.skipped.length} 个；stdio 仅桌面）';
+                            } else {
+                              parseHint = null;
+                            }
+                          });
+                        },
+                        child: const Text('解析预览'),
+                      ),
+                      if (parseHint != null) ...[
+                        const SizedBox(height: 8),
+                        Text(
+                          parseHint!,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Theme.of(ctx).colorScheme.error,
+                          ),
+                        ),
+                      ],
+                      if (preview != null && preview!.hasEntries) ...[
+                        const SizedBox(height: 10),
+                        Text(
+                          '将导入 ${preview!.entries.length} 个'
+                          '${preview!.skipped.isNotEmpty ? '，跳过 ${preview!.skipped.length} 个' : ''}',
+                          style: const TextStyle(fontWeight: FontWeight.w600),
+                        ),
+                        for (final e in preview!.entries)
+                          Text(
+                            '· ${e.name} · ${e.draft.baseUrl}',
+                            style: const TextStyle(fontSize: 12),
+                          ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogCtx, false),
+                  child: const Text('取消'),
+                ),
+                FilledButton(
+                  onPressed: preview != null && preview!.hasEntries
+                      ? () => Navigator.pop(dialogCtx, true)
+                      : null,
+                  child: const Text('导入'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    final result = preview;
+    jsonCtrl.dispose();
+    if (confirmed != true || result == null || !result.hasEntries) return;
+    if (!mounted) return;
+
+    final existingNames =
+        _repo.servers.map((s) => s.displayName).toList(growable: true);
+    var imported = 0;
+    for (final e in result.entries) {
+      final displayName =
+          uniqueMcpImportDisplayName(e.draft.displayName, existingNames);
+      existingNames.add(displayName);
+      final d = e.draft;
+      final token = e.bearerToken?.trim();
+      await _repo.add(
+        displayName: displayName,
+        baseUrl: d.baseUrl,
+        transport: McpTransport.http,
+        authKind: token != null && token.isNotEmpty
+            ? McpAuthKind.bearer
+            : d.authKind,
+        bearerToken: token,
+        enabled: d.enabled,
+      );
+      imported++;
+    }
+    if (!mounted) return;
+    final skipN = result.skipped.length;
+    _snack(
+      skipN > 0 ? '已导入 $imported 个，跳过 $skipN 个' : '已导入 $imported 个 MCP Server',
+    );
+    setState(() {});
+  }
+
   Future<void> _openEditor(String id) async {
     await showMcpEditSheet(
       context: context,
@@ -137,6 +281,16 @@ class _SettingsMcpPageState extends State<SettingsMcpPage> {
               onPressed: _addServer,
               icon: const Icon(Icons.add),
               label: const Text('添加 Server'),
+              style: OutlinedButton.styleFrom(
+                minimumSize: const Size.fromHeight(44),
+                side: BorderSide(color: tokens.border),
+              ),
+            ),
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+              onPressed: _importJson,
+              icon: const Icon(Icons.upload_file_outlined),
+              label: const Text('导入 JSON'),
               style: OutlinedButton.styleFrom(
                 minimumSize: const Size.fromHeight(44),
                 side: BorderSide(color: tokens.border),

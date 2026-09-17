@@ -2,17 +2,17 @@
 
 产品设计规格（四端目标）。用于重构选型、原型对照与实现验收；实现细节见 [`docs/architecture.md`](./docs/architecture.md)。
 
-| 项     | 值                                                                                              |
-|-------|------------------------------------------------------------------------------------------------|
-| 产品    | AI Studio                                                                                      |
-| 定位    | 本地多模态 AI 客户端（密钥与会话仅存本机，无自建后端托管）                                                                |
-| 目标平台  | **Windows · macOS · Android · iOS**                                                            |
-| UI 策略 | **两套独立设计系统**：桌面 **Fluent** · 移动 **Material 3**（Android / iOS 共用 Material）                      |
-| 色彩气质  | **亮色仿 Claude**（暖奶油纸感）· **暗色仿 Cursor**（冷灰 IDE 感）                                                |
+| 项     | 值                                                                                                                            |
+|-------|------------------------------------------------------------------------------------------------------------------------------|
+| 产品    | AI Studio                                                                                                                    |
+| 定位    | 本地多模态 AI 客户端（密钥与会话仅存本机，无自建后端托管）                                                                                              |
+| 目标平台  | **Windows · macOS · Android · iOS**                                                                                          |
+| UI 策略 | **两套独立设计系统**：桌面 **Fluent** · 移动 **Material 3**（Android / iOS 共用 Material）                                                    |
+| 色彩气质  | **亮色仿 Claude**（暖奶油纸感）· **暗色仿 Cursor**（冷灰 IDE 感）                                                                              |
 | 文档状态  | Draft · 方向已决（Q1–Q3/Q5）；**P0–P5 已落地**；**P6 业务 MCP：P6-1～P6-5 已落地**；**P6-S 桌面 stdio 为规格增强项（未实现）**；P3 含 a11y 全路径自证（非第三方 WCAG 认证） |
-| 实现栈   | **Flutter 新仓库**：`D:\Moon\tools\Ai_Studio_Flutter`                                              |
-| 分发更新  | **不上架应用商店**；延续现网直链自动更新（桌面清单 + Android 侧载清单）                                                    |
-| 关联    | 现网 Vue/Tauri 仅作能力规格与更新协议参考                                                                     |
+| 实现栈   | **Flutter 新仓库**：`D:\Moon\tools\Ai_Studio_Flutter`                                                                            |
+| 分发更新  | **不上架应用商店**；延续现网直链自动更新（桌面清单 + Android 侧载清单）                                                                                  |
+| 关联    | 现网 Vue/Tauri 仅作能力规格与更新协议参考                                                                                                   |
 
 ---
 
@@ -45,14 +45,14 @@
 
 ### 1.3 设计原则
 
-| 原则             | 说明                                                                   |
-|----------------|----------------------------------------------------------------------|
-| 本地优先           | 配置、密钥、会话、媒体缓存均在本机；安全模型见 `SECURITY.md`                                |
-| **能力对等、UI 独立** | 四端功能清单对齐（**例外**：stdio MCP 仅桌面）；Fluent / Material 各自完整，不要求布局或组件一一对应 |
-| 提供商可扩展         | OpenAI / xAI / OpenAI 兼容；新兼容源优先「自定义」                                 |
-| 生成可中断          | 对话 / 生图 / 生视频均有进行中态与停止 / 取消；MCP 工具调用同属可取消链路                          |
+| 原则             | 说明                                                                                      |
+|----------------|-----------------------------------------------------------------------------------------|
+| 本地优先           | 配置、密钥、会话、媒体缓存均在本机；安全模型见 `SECURITY.md`                                                   |
+| **能力对等、UI 独立** | 四端功能清单对齐（**例外**：stdio MCP 仅桌面）；Fluent / Material 各自完整，不要求布局或组件一一对应                      |
+| 提供商可扩展         | OpenAI / xAI / OpenAI 兼容；新兼容源优先「自定义」                                                    |
+| 生成可中断          | 对话 / 生图 / 生视频均有进行中态与停止 / 取消；MCP 工具调用同属可取消链路                                             |
 | **工具默认不信任**    | MCP tool 须过策略与授权；写操作默认每次确认；出站 URL 走 `url_safety`；桌面 stdio 命令须用户显式确认（§8 / `SECURITY.md`） |
-| 平台礼貌           | Fluent 侧遵循桌面窗口 / 托盘 / 键盘；Material 侧遵循返回栈、安全区、相册与系统分享                 |
+| 平台礼貌           | Fluent 侧遵循桌面窗口 / 托盘 / 键盘；Material 侧遵循返回栈、安全区、相册与系统分享                                    |
 
 ---
 
@@ -501,20 +501,20 @@ Flutter 落点：`packages/design_fluent` 与 `packages/design_material` 的 `Th
 
 ### 5.7 设置
 
-| 能力 ID                | 职责                                               | Fluent（F）                                                                                    | Material（M）                                                               | 关键状态                                              |
-|----------------------|--------------------------------------------------|----------------------------------------------------------------------------------------------|---------------------------------------------------------------------------|---------------------------------------------------|
-| `SET-SHELL`          | 设置信息架构                                           | `F-Settings`：侧栏 + 右页（提供商 / **业务 MCP** / 对话默认 / 外观 / 日志 / 关于）                                 | `M-Settings`：Tab（提供商 / 对话 / 外观 / 日志 / 关于；**业务 MCP** 在提供商 Tab 内入口，不另开 Tab） | —                                                 |
-| `SET-PROVIDERS`      | 提供商列表 CRUD                                       | `F-ProvidersList`：列表点选 + 右侧表单                                                                | `M-ProvidersList`：列表点选切换；「编辑所选」打开 BottomSheet                             | 空 / 有项                                            |
-| `SET-PROVIDER-EDIT`  | Base URL、Key、类型、测试连接、拉模型、**分能力模型**               | `F-ProviderForm`：分区表单；**对话 / 生图 / 视频** 各一 **可搜索下拉**（选项=拉取结果；输入=过滤，对齐现网 `filterable` + `tag`） | `M-ProviderForm`：BottomSheet；分区表单；**底栏固定**保存/取消                           | 未拉取 / 拉取中 / 成功 / 失败；Key 掩码；视频可「不使用」留空             |
-| `SET-CHAT-DEFAULTS`  | 温度、系统提示、Max Tokens、超时、上下文裁剪                      | `F-ChatDefaults`                                                                             | `M-ChatDefaults`                                                          | 校验错误                                              |
-| `SET-APPEARANCE`     | 主题、字号、密度                                         | `F-Appearance`：主题仅浅/深并联动对侧稿；字号五档；密度=Fluent 疏密                                                | `M-Appearance`：同上；密度=触控疏密                                                 | **light / dark**（无跟随系统）                           |
-| `SET-LOGS`           | **运行日志**（必有）                                     | `F-Logs`：筛选级别/来源、搜索、复制可见、清空；控制台列表最新在上                                                        | `M-Logs`：同能力，触控工具栏更紧凑                                                     | 空 / 有数据 / 过滤后空；时间 `YYYY-MM-DD HH:mm:ss`           |
-| `SET-ABOUT`          | 版本、检查更新、开源说明、**第三方播放/编解码库许可**、数据清理、**多版本折叠更新日志** | `F-About`：自动检查开关、状态 pill、页内折叠 changelog +「打开更新日志」ContentDialog、更新按钮、第三方声明入口；**内嵌关闭行为**       | `M-About`：同上（无关闭行为；完整历史用 BottomSheet）                                     | 检查中 / 有更新 / 已最新 / 失败；可跳过版本；历史浏览 ≠ 有更新态            |
-| `SET-DATA`           | 导入导出、清数据                                         | Dialog 确认                                                                                    | Dialog / 确认 sheet                                                         | 危险操作二次确认                                          |
-| `SET-CLOSE-BEHAVIOR` | 关闭行为                                             | **仅 Fluent** `F-CloseBehavior`，**嵌在关于页**（非独立分类）                                              | —                                                                         | Ask / Quit / Tray                                 |
-| `SET-MCP`            | **业务 MCP Server 配置**（P6）                         | `F-McpList`：列表 + 右侧/子弹表单；可放在设置侧栏「提供商」旁分区或子页（不另开主导航）                                          | `M-McpList`：设置内入口 → 列表/表单 sheet 或子页                                       | 空 / 有项 / 探测中 / 错误                                 |
-| `SET-MCP-EDIT`       | Server 编辑：传输（http/stdio）、URL 或 command/args、启用、鉴权、策略覆盖、拉 tools | `F-McpForm`：分区表单 + 测试连接 + tools 表；**stdio 表单项仅桌面** | `M-McpForm`：BottomSheet / 子页；底栏保存；**仅 HTTP** | 未探测 / 探测中 / tools 已缓存 / 失败；stdio 未确认 |
-| `SET-MCP-POLICY`     | Server 默认授权 + 按 tool 覆盖                          | 表单「默认授权」下拉 + 表内按 tool 覆盖                                                                     | 同语义；触控友好                                                                  | deny / confirm_always / confirm_once / auto_allow |
+| 能力 ID                | 职责                                                             | Fluent（F）                                                                                    | Material（M）                                                               | 关键状态                                              |
+|----------------------|----------------------------------------------------------------|----------------------------------------------------------------------------------------------|---------------------------------------------------------------------------|---------------------------------------------------|
+| `SET-SHELL`          | 设置信息架构                                                         | `F-Settings`：侧栏 + 右页（提供商 / **业务 MCP** / 对话默认 / 外观 / 日志 / 关于）                                 | `M-Settings`：Tab（提供商 / 对话 / 外观 / 日志 / 关于；**业务 MCP** 在提供商 Tab 内入口，不另开 Tab） | —                                                 |
+| `SET-PROVIDERS`      | 提供商列表 CRUD                                                     | `F-ProvidersList`：列表点选 + 右侧表单                                                                | `M-ProvidersList`：列表点选切换；「编辑所选」打开 BottomSheet                             | 空 / 有项                                            |
+| `SET-PROVIDER-EDIT`  | Base URL、Key、类型、测试连接、拉模型、**分能力模型**                             | `F-ProviderForm`：分区表单；**对话 / 生图 / 视频** 各一 **可搜索下拉**（选项=拉取结果；输入=过滤，对齐现网 `filterable` + `tag`） | `M-ProviderForm`：BottomSheet；分区表单；**底栏固定**保存/取消                           | 未拉取 / 拉取中 / 成功 / 失败；Key 掩码；视频可「不使用」留空             |
+| `SET-CHAT-DEFAULTS`  | 温度、系统提示、Max Tokens、超时、上下文裁剪                                    | `F-ChatDefaults`                                                                             | `M-ChatDefaults`                                                          | 校验错误                                              |
+| `SET-APPEARANCE`     | 主题、字号、密度                                                       | `F-Appearance`：主题仅浅/深并联动对侧稿；字号五档；密度=Fluent 疏密                                                | `M-Appearance`：同上；密度=触控疏密                                                 | **light / dark**（无跟随系统）                           |
+| `SET-LOGS`           | **运行日志**（必有）                                                   | `F-Logs`：筛选级别/来源、搜索、复制可见、清空；控制台列表最新在上                                                        | `M-Logs`：同能力，触控工具栏更紧凑                                                     | 空 / 有数据 / 过滤后空；时间 `YYYY-MM-DD HH:mm:ss`           |
+| `SET-ABOUT`          | 版本、检查更新、开源说明、**第三方播放/编解码库许可**、数据清理、**多版本折叠更新日志**               | `F-About`：自动检查开关、状态 pill、页内折叠 changelog +「打开更新日志」ContentDialog、更新按钮、第三方声明入口；**内嵌关闭行为**       | `M-About`：同上（无关闭行为；完整历史用 BottomSheet）                                     | 检查中 / 有更新 / 已最新 / 失败；可跳过版本；历史浏览 ≠ 有更新态            |
+| `SET-DATA`           | 导入导出、清数据                                                       | Dialog 确认                                                                                    | Dialog / 确认 sheet                                                         | 危险操作二次确认                                          |
+| `SET-CLOSE-BEHAVIOR` | 关闭行为                                                           | **仅 Fluent** `F-CloseBehavior`，**嵌在关于页**（非独立分类）                                              | —                                                                         | Ask / Quit / Tray                                 |
+| `SET-MCP`            | **业务 MCP Server 配置**（P6）                                       | `F-McpList`：列表 + 右侧/子弹表单；可放在设置侧栏「提供商」旁分区或子页（不另开主导航）                                          | `M-McpList`：设置内入口 → 列表/表单 sheet 或子页                                       | 空 / 有项 / 探测中 / 错误                                 |
+| `SET-MCP-EDIT`       | Server 编辑：传输（http/stdio）、URL 或 command/args、启用、鉴权、策略覆盖、拉 tools | `F-McpForm`：分区表单 + 测试连接 + tools 表；**stdio 表单项仅桌面**                                           | `M-McpForm`：BottomSheet / 子页；底栏保存；**仅 HTTP**                              | 未探测 / 探测中 / tools 已缓存 / 失败；stdio 未确认              |
+| `SET-MCP-POLICY`     | Server 默认授权 + 按 tool 覆盖                                        | 表单「默认授权」下拉 + 表内按 tool 覆盖                                                                     | 同语义；触控友好                                                                  | deny / confirm_always / confirm_once / auto_allow |
 
 **字号五档（`SET-APPEARANCE`，已决）**：更小 · 较小 · **标准（默认）** · 较大 · 更大。
 
@@ -574,25 +574,25 @@ Flutter 落点：`packages/design_fluent` 与 `packages/design_material` 的 `Th
 
 #### 5.11.1 目标与范围
 
-| 项         | 定案                                                                                          |
-|-----------|---------------------------------------------------------------------------------------------|
+| 项         | 定案                                                                                         |
+|-----------|--------------------------------------------------------------------------------------------|
 | 端         | HTTP/SSE：**桌面 + 移动能力对等**（同一套 `packages/core` 逻辑；UI 分端）；stdio：**仅 Windows / macOS**（能力可不对等） |
-| 传输        | **HTTP/SSE**（或官方等价的流式 HTTP transport）**双端必有**；**stdio 仅桌面可选**（见 §5.11.5 / §5.11.8 / P6-S）     |
-| Server 来源 | 用户配置的**业务 Server**（自建 / 内网 / 受控公网 / 桌面本地命令）；非应用内置市场目录                                        |
-| 首批场景      | 自定义业务 tool（查询 + 写入）；具体 tool 名由业务 Server 的 `tools/list` 决定                                   |
-| 对话集成      | 仅挂在**对话**链路；生图 / 生视频**不**经 MCP 编排（本期）                                                       |
-| 提供商前提     | 活跃对话模型须支持 OpenAI 兼容 `tools` / `tool_calls`；不支持则关闭 MCP 并向用户说明                                |
+| 传输        | **HTTP/SSE**（或官方等价的流式 HTTP transport）**双端必有**；**stdio 仅桌面可选**（见 §5.11.5 / §5.11.8 / P6-S）  |
+| Server 来源 | 用户配置的**业务 Server**（自建 / 内网 / 受控公网 / 桌面本地命令）；非应用内置市场目录                                      |
+| 首批场景      | 自定义业务 tool（查询 + 写入）；具体 tool 名由业务 Server 的 `tools/list` 决定                                  |
+| 对话集成      | 仅挂在**对话**链路；生图 / 生视频**不**经 MCP 编排（本期）                                                      |
+| 提供商前提     | 活跃对话模型须支持 OpenAI 兼容 `tools` / `tool_calls`；不支持则关闭 MCP 并向用户说明                               |
 
 #### 5.11.2 能力表
 
-| 能力 ID                                         | 职责                      | Fluent（F）             | Material（M） | 关键状态                      |
-|-----------------------------------------------|-------------------------|-----------------------|-------------|---------------------------|
+| 能力 ID                                         | 职责                      | Fluent（F）                         | Material（M）                 | 关键状态                      |
+|-----------------------------------------------|-------------------------|-----------------------------------|-----------------------------|---------------------------|
 | `MCP-SESSION`                                 | 连接 Server、缓存 tools、健康探测 | 无独立壳；设置与对话共用 core；HTTP 或（桌面）stdio | 同（**仅 HTTP**；无 ProcessHost） | 未配置 / 已启用 / 探测中 / 就绪 / 错误 |
-| `MCP-TOOLS-LIST`                              | `tools/list` 刷新与本地缓存    | 设置表内列表                                     | 同语义（仅 HTTP Server）           | 空 / 有缓存 / 刷新中 / 失败        |
-| `MCP-TOOL-CALL`                               | `tools/call` 执行、超时、取消   | 由 `CHAT-TOOL-CALL` 呈现                        | 同                               | 排队 / 执行中 / 成功 / 失败 / 取消   |
-| `CHAT-TOOL-CALL`                              | 聊天区工具轨迹气泡               | 见 §5.4                | 见 §5.4      | 见 §5.4                    |
-| `CHAT-TOOL-AUTH`                              | 分级授权确认                  | 见 §5.4                | 见 §5.4      | 见 §5.4                    |
-| `SET-MCP` / `SET-MCP-EDIT` / `SET-MCP-POLICY` | Server 与策略配置            | 见 §5.7                | 见 §5.7      | 见 §5.7                    |
+| `MCP-TOOLS-LIST`                              | `tools/list` 刷新与本地缓存    | 设置表内列表                            | 同语义（仅 HTTP Server）          | 空 / 有缓存 / 刷新中 / 失败        |
+| `MCP-TOOL-CALL`                               | `tools/call` 执行、超时、取消   | 由 `CHAT-TOOL-CALL` 呈现             | 同                           | 排队 / 执行中 / 成功 / 失败 / 取消   |
+| `CHAT-TOOL-CALL`                              | 聊天区工具轨迹气泡               | 见 §5.4                            | 见 §5.4                      | 见 §5.4                    |
+| `CHAT-TOOL-AUTH`                              | 分级授权确认                  | 见 §5.4                            | 见 §5.4                      | 见 §5.4                    |
+| `SET-MCP` / `SET-MCP-EDIT` / `SET-MCP-POLICY` | Server 与策略配置            | 见 §5.7                            | 见 §5.7                      | 见 §5.7                    |
 
 #### 5.11.3 协议与编排（core）
 
@@ -612,14 +612,14 @@ Flutter 落点：`packages/design_fluent` 与 `packages/design_material` 的 `Th
    → 直至无 tool_calls 或达回合上限 / 用户停止
 ```
 
-| 约束   | 说明                                                                                                                                                          |
-|------|-------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| 挂载点  | `ChatSessionFacade` 主编排；`OpenAiCompatibleChatClient` + `SseLineParser` 扩展 `tools` / `tool_calls`；`packages/core/lib/src/mcp/`（含 `HttpSseMcpSession`；P6-S 另见下） |
-| 消息模型 | 扩展 `ChatRole` / 元数据以承载 `tool_call_id`、tool 名、参数摘要、结果摘要；旧会话无字段 → 兼容为空                                                                                      |
-| 取消   | 与现有 `GenerationRuntime` 对齐：停止中取消进行中的 HTTP / stdio call，并中止后续 tool 循环                                                                                      |
-| 回合上限 | 单次用户发送触发的 tool 循环须有硬上限（建议默认 **8** 次 call，可配置；防死循环）                                                                                                        |
-| 超时   | 单次 `tools/call` 默认超时（建议 **30s**，可按 Server 覆盖）；超时记失败并可重试一次（策略可配）                                                                                           |
-| stdio | **P6-S**：`StdioMcpSession` 接口在 core；真正 `Process.start` 仅经 `ProcessHost`，由 `apps/desktop_fluent` 注入；`apps/mobile_material` **不**注入（见 §5.11.8）                   |
+| 约束    | 说明                                                                                                                                                            |
+|-------|---------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| 挂载点   | `ChatSessionFacade` 主编排；`OpenAiCompatibleChatClient` + `SseLineParser` 扩展 `tools` / `tool_calls`；`packages/core/lib/src/mcp/`（含 `HttpSseMcpSession`；P6-S 另见下） |
+| 消息模型  | 扩展 `ChatRole` / 元数据以承载 `tool_call_id`、tool 名、参数摘要、结果摘要；旧会话无字段 → 兼容为空                                                                                          |
+| 取消    | 与现有 `GenerationRuntime` 对齐：停止中取消进行中的 HTTP / stdio call，并中止后续 tool 循环                                                                                          |
+| 回合上限  | 单次用户发送触发的 tool 循环须有硬上限（建议默认 **8** 次 call，可配置；防死循环）                                                                                                            |
+| 超时    | 单次 `tools/call` 默认超时（建议 **30s**，可按 Server 覆盖）；超时记失败并可重试一次（策略可配）                                                                                               |
+| stdio | **P6-S**：`StdioMcpSession` 接口在 core；真正 `Process.start` 仅经 `ProcessHost`，由 `apps/desktop_fluent` 注入；`apps/mobile_material` **不**注入（见 §5.11.8）                  |
 
 #### 5.11.4 分级授权（已决方向）
 
@@ -636,30 +636,57 @@ Flutter 落点：`packages/design_fluent` 与 `packages/design_material` 的 `Th
 
 #### 5.11.5 Server 配置模型（逻辑字段）
 
-| 字段                          | 说明                                                                                          |
-|-----------------------------|---------------------------------------------------------------------------------------------|
-| `id` / `displayName`        | 稳定 id；UI 显示名                                                                                |
-| `transport`                 | `http` \| `stdio`；**默认 `http`**；`stdio` **仅桌面**可选；移动端配置若含 `stdio` 须拒绝或降级提示（不可用）              |
+| 字段                          | 说明                                                                                         |
+|-----------------------------|--------------------------------------------------------------------------------------------|
+| `id` / `displayName`        | 稳定 id；UI 显示名                                                                               |
+| `transport`                 | `http` \| `stdio`；**默认 `http`**；`stdio` **仅桌面**可选；移动端配置若含 `stdio` 须拒绝或降级提示（不可用）            |
 | `baseUrl`                   | **`transport=http`**：MCP HTTP/SSE 入口；保存与请求前走 `url_safety`（可叠加 MCP host 白名单，见 Q9）；stdio 时忽略 |
 | `command`                   | **`transport=stdio`**：可执行文件路径或命令名（如 `node`）；须用户显式添加/导入并确认；**默认拒绝任意命令**                     |
 | `args`                      | **`transport=stdio`**：参数列表（如脚本路径）；与 `command` 一并展示供确认                                      |
-| `env`                       | **`transport=stdio`**：额外环境变量（可选）；含密钥的值须入 `SecretStore` 或等价脱敏存储，**禁止**默认备份明文                 |
-| `cwd`                       | **`transport=stdio`**：工作目录（可选）                                                              |
-| `enabled`                   | 总开关；关闭则不向模型暴露该 Server 的 tools                                                               |
-| `authKind`                  | `none` \| `bearer`（HTTP 首期实现）；`oauth` **接口预留、本期不做**；stdio 通常 `none`                         |
-| `authSecretRef`             | 指向 `SecretStore` 的引用；**禁止**把 token / env 密钥写入会话 JSON / 默认备份明文                                |
-| `defaultToolPolicy`         | 本 Server 默认授权级别；空=按副作用/元数据                                                                  |
-| `toolPolicyOverrides`       | `toolName → 级别`（覆盖默认）                                                                       |
-| `toolsCache`                | 最近一次 `tools/list` 结果（名、描述、`sideEffect` 提示、输入 schema 摘要）                                     |
-| `lastProbeAt` / `lastError` | 连通性与错误摘要（无密钥）                                                                               |
+| `env`                       | **`transport=stdio`**：额外环境变量（可选）；含密钥的值须入 `SecretStore` 或等价脱敏存储，**禁止**默认备份明文                |
+| `cwd`                       | **`transport=stdio`**：工作目录（可选）                                                             |
+| `enabled`                   | 总开关；关闭则不向模型暴露该 Server 的 tools                                                              |
+| `authKind`                  | `none` \| `bearer`（HTTP 首期实现）；`oauth` **接口预留、本期不做**；stdio 通常 `none`                        |
+| `authSecretRef`             | 指向 `SecretStore` 的引用；**禁止**把 token / env 密钥写入会话 JSON / 默认备份明文                              |
+| `defaultToolPolicy`         | 本 Server 默认授权级别；空=按副作用/元数据                                                                 |
+| `toolPolicyOverrides`       | `toolName → 级别`（覆盖默认）                                                                      |
+| `toolsCache`                | 最近一次 `tools/list` 结果（名、描述、`sideEffect` 提示、输入 schema 摘要）                                    |
+| `lastProbeAt` / `lastError` | 连通性与错误摘要（无密钥）                                                                              |
 
-**外部配置映射意图**（导入 UI 可后置；规格先对齐字段语义）：
+**外部配置导入**（设置「导入 JSON」；core `parseMcpConfigJson`）：
 
-| 来源 | 示例片段 | 映射到本模型 |
-|------|----------|--------------|
+**本 App 推荐**（`mcpServers`，可多 server）：
+
+```json
+{
+  "mcpServers": {
+    "dbx": {
+      "transport": "stdio",
+      "command": "node",
+      "args": [
+        "server.js"
+      ],
+      "env": {},
+      "cwd": null
+    },
+    "biz": {
+      "transport": "http",
+      "url": "https://mcp.example.com/mcp",
+      "headers": {
+        "Authorization": "Bearer TOKEN"
+      }
+    }
+  }
+}
+```
+
+字段别名：`url`/`baseUrl`→`baseUrl`；`transport`=`http|sse|stdio|local`（`local`→stdio）；无 transport 时有 `command`→stdio、有 url→http。顶层键兼容 `mcp` / `mcpServers` / `servers`。Bearer 从 `headers.Authorization` 抽出写入 SecretStore；stdio 仅桌面确认后导入，移动端 `allowStdio=false` 跳过。
+
+| 来源       | 示例片段                                                                   | 映射到本模型                                                    |
+|----------|------------------------------------------------------------------------|-----------------------------------------------------------|
 | OpenCode | `{ mcp: { name: { type: "local", command: ["node", "script.js"] } } }` | `transport=stdio`；`command`=首元；`args`=其余；`displayName`←键名 |
-| OpenCode | `{ type: "remote", url: "…" }`（若有） | `transport=http`；`baseUrl`←`url` |
-| Cursor | `mcpServers.<name>.command` / `args` / `env` | 同 stdio 字段；`cwd` 若有则写入 |
+| OpenCode | `{ type: "remote", url: "…" }`（若有）                                     | `transport=http`；`baseUrl`←`url`                          |
+| Cursor   | `mcpServers.<name>.command` / `args` / `env`                           | 同 stdio 字段；`cwd` 若有则写入                                    |
 
 #### 5.11.6 业务 Server 约定（对协作方）
 
@@ -682,11 +709,11 @@ Flutter 落点：`packages/design_fluent` 与 `packages/design_material` 的 `Th
 
 #### 5.11.8 包边界
 
-| 可放 `packages/core`                                                                 | 不可放                                              |
-|------------------------------------------------------------------------------------|--------------------------------------------------|
-| MCP Client 接口与编排、`HttpSseMcpSession`、`StdioMcpSession`（接口/协议层）、AuthProvider、ToolPolicy、Orchestrator、配置存储、与 chat 的 tool 消息模型 | Fluent / Material 授权 Dialog、设置页 Widget           |
-| SafeHttp 调用、错误码与用户可读文案键；`ProcessHost` **抽象接口**（无具体 `dart:io` Process 绑定亦可）         | 某一端私有的「MCP 业务页面」却把协议堆在 app                       |
-|                                                                                    | **`Process.start` / 具体进程实现**：仅 `apps/desktop_fluent` 经 `ProcessHost` 注入；**mobile 不注入** |
+| 可放 `packages/core`                                                                                                          | 不可放                                                                                    |
+|-----------------------------------------------------------------------------------------------------------------------------|----------------------------------------------------------------------------------------|
+| MCP Client 接口与编排、`HttpSseMcpSession`、`StdioMcpSession`（接口/协议层）、AuthProvider、ToolPolicy、Orchestrator、配置存储、与 chat 的 tool 消息模型 | Fluent / Material 授权 Dialog、设置页 Widget                                                 |
+| SafeHttp 调用、错误码与用户可读文案键；`ProcessHost` **抽象接口**（无具体 `dart:io` Process 绑定亦可）                                                  | 某一端私有的「MCP 业务页面」却把协议堆在 app                                                             |
+|                                                                                                                             | **`Process.start` / 具体进程实现**：仅 `apps/desktop_fluent` 经 `ProcessHost` 注入；**mobile 不注入** |
 
 双端 UI **各自**实现 `CHAT-TOOL-*` 与 `SET-MCP-*`；禁止抽「换皮通用授权组件」跨 `design_*` 互引。移动端设置**不提供** stdio 表单；若备份导入含 `transport=stdio` 项，移动端标记不可用并提示「仅桌面支持」。
 
@@ -700,7 +727,7 @@ Flutter 落点：`packages/design_fluent` 与 `packages/design_material` 的 `Th
 - 生图 / 生视频经 MCP 编排
 - Resources / Prompts 全量 MCP 面（首期只做 **Tools**；Resources 可后置）
 - 无提供商 tools 能力时的本地「伪 tool」模拟器
-- OpenCode / Cursor 配置**一键导入 UI**（字段映射见 §5.11.5；实现可后置）
+- （已支持）OpenCode / Cursor / 本 App `mcpServers` **JSON 一键导入**（§5.11.5）；插件市场式远程目录仍不做
 
 ---
 
@@ -819,7 +846,7 @@ Flutter 落点：`packages/design_fluent` 与 `packages/design_material` 的 `Th
 4. **P6-3（desktop_fluent）**：**已落地** — 设置侧栏「业务 MCP」（`SET-MCP*`）；对话 `CHAT-TOOL-CALL` 轨迹卡 + `CHAT-TOOL-AUTH` ContentDialog；Facade DI（prefs/SecretStore/`HttpSseMcpSessionFactory`/`toolAuthPrompter`）；降级横幅。
 5. **P6-4（mobile_material）**：**已落地** — 设置「提供商」Tab 内「管理业务 MCP」子页（`SET-MCP*`）；对话 `CHAT-TOOL-CALL` 轨迹卡 + `CHAT-TOOL-AUTH` AlertDialog；Facade DI 同构；降级横幅可跳转 MCP。
 6. **P6-5（收口）**：**已落地** — `SET-DATA` 备份默认 omit MCP Bearer（`includeSecrets` 显式含 token）；导入合并 MCP 元数据、secrets 仅 `importSecrets`；清密钥清 MCP secret、清全部/清提供商清 Server 列表；旧备份无 mcp 段兼容；日志/轨迹脱敏复核；`architecture` 补 MCP 落点。OD 大改不做（本收口）。
-7. **P6-S（桌面 stdio · 增强项）**：**规格已写入 §5.11；实现未开始** — `transport: http|stdio`；stdio 字段 `command`/`args`/`env`/`cwd?`；core `StdioMcpSession` + `ProcessHost` 抽象；`Process.start` 仅 `apps/desktop_fluent` 注入；mobile 不注入；默认拒绝任意命令、用户确认、退出杀进程、备份 omit env 密钥；OpenCode `type: local` / Cursor `mcpServers` 映射意图（导入 UI 可后置）。
+7. **P6-S（桌面 stdio · 增强项）**：**规格已写入 §5.11；P6-S2 已落地 stdio UI/注入；配置 JSON 导入已落地** — `transport: http|stdio`；stdio 字段 `command`/`args`/`env`/`cwd?`；core `StdioMcpSession` + `ProcessHost`；桌面注入；mobile 不注入；默认拒绝任意命令、用户确认、退出杀进程、备份 omit env 密钥；OpenCode / Cursor / 本 App `mcpServers` **JSON 一键导入**（§5.11.5）。
 
 **验收（P6 主路径）**：
 
@@ -840,11 +867,11 @@ Flutter 落点：`packages/design_fluent` 与 `packages/design_material` 的 `Th
 |--------------------------------------------------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | §5.3–5.7 壳 / 对话 / 生图 / 生视频 / 设置                                                      | 双端 ✅（含 `SHELL-BRAND-INTRO`；Material `NAV-BACK`：`BackHost` / `M-BackHost`）                                                                                                                                                                                                                              |
 | §5.8 反馈与系统力                                                                          | ✅（含 Material `SYS-SHARE`）；`FB-UPDATE`：冷启动/托盘弹窗 + 设置 NEW 角标 + 关于页/自动检查开关；跳过版本与静默失败降噪                                                                                                                                                                                                                    |
-| §5.11 业务 MCP                                                                         | **P6-1～P6-5（HTTP）已落地 ✅**；**P6-S 桌面 stdio：规格已决、实现未开始**                                                                                                                                                                                                                                                |
+| §5.11 业务 MCP                                                                         | **P6-1～P6-5（HTTP）已落地 ✅**；**P6-S 桌面 stdio：规格已决、实现未开始**                                                                                                                                                                                                                                                  |
 | 易漏项                                                                                  | 耗时自适应、用户末条撤回、回合时间分隔、IME 藏底栏、关闭嵌关于、三模型可搜索、托盘三态均已落地                                                                                                                                                                                                                                                      |
 | P4 `VID-PLAYER` / `VID-QUEUE` 封面 / `*-TURN-REF`                                      | **`VID-PLAYER` 音量+真全屏已落地**；**`VID-QUEUE` 封面已落地**；**`*-TURN-REF` 已落地**（资产持久化 + 双端气泡缩略）                                                                                                                                                                                                                  |
 | P5 `CHAT-ATTACH`                                                                     | **已落地 ✅**（P5-1～P5-5：core · desktop · mobile · 禁用/清理/备份 · 文档+测试闸门）                                                                                                                                                                                                                                      |
-| P6 业务 MCP                                                                            | **P6-1✅ P6-2✅ P6-3✅ P6-4✅ P6-5✅**（HTTP 主路径）；**P6-S 桌面 stdio 规格增强（未实现）**；OAuth / host 白名单 / OD 大改后置                                                                                                                                                                                               |
+| P6 业务 MCP                                                                            | **P6-1✅ P6-2✅ P6-3✅ P6-4✅ P6-5✅**（HTTP 主路径）；**P6-S 桌面 stdio 规格增强（未实现）**；OAuth / host 白名单 / OD 大改后置                                                                                                                                                                                                     |
 | 体验债 `VID-RERUN` / 播放失败态 / 缓冲加载态 / 音量跨启动持久化 / transport / 灯箱来源 / 空态覆盖 / 短动效 / 密度字号极端档 | **`VID-RERUN` 已落地**；**播放失败/弱网提示+重试已落地**（E2）；**缓冲/加载态对齐已落地**（E3）；**音量跨启动持久化已落地**（E4：`core.video_playback.v1`）；**桌面 transport 回归通过**（E5：与 OD 单行语义一致，无代码改）；**灯箱来源角标已落地**（E6：参考/结果）；**空态覆盖面审计+补缺已落地**（E7）；**短动效一致性已落地**（E8：主路径对齐 `design_*` motion）；**密度/字号极端档已抽检+微调**（E9：底栏随字号抬高；Composer/会话顶栏/设置分段去过死高度） |
 
 ---
@@ -922,65 +949,65 @@ packages/design_material/
 
 ## 13. 修订记录
 
-| 日期         | 说明                                                                                                                                                                                                     |
-|------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| 2026-09-04 | 初稿：四端、分端气质、桌面 MVP、双端对照原型                                                                                                                                                                               |
-| 2026-09-04 | **独立设计系统**：Fluent ∪ Material；能力对等 UI 不对齐；iOS 跟 Material；禁止换皮冒充                                                                                                                                         |
-| 2026-09-04 | 补齐 §5 双系统组件规格表（壳/对话/生图/生视频/设置/反馈）及现网映射、原型标注约定                                                                                                                                                          |
-| 2026-09-04 | 色彩气质：**亮色仿 Claude**、**暗色仿 Cursor**；写入 token 起点与原型色板约束                                                                                                                                                  |
-| 2026-09-04 | **已决**：Flutter → `D:\Moon\tools\Ai_Studio_Flutter`；不上架；直链/侧载自动更新；OpenDesign 跳过 collect_brief                                                                                                           |
-| 2026-09-04 | 对齐原型审稿：设置五分类/五 Tab；日志必有；关闭行为并入关于；提供商三模型；字号五档；生图/视频回合分隔；OpenDesign 清单与联动约定                                                                                                                              |
-| 2026-09-04 | **字体栈按设计系统拆分**（§2.2.2）：Fluent=Segoe 系；Material=Roboto/Noto；系统字体、不内嵌专有字库；原型 HTML 已分栈                                                                                                                    |
-| 2026-09-04 | 提供商模型：拉取后 **可搜索下拉** 点选；输入=搜索过滤，对齐现网 `filterable` + `tag`                                                                                                                                               |
-| 2026-09-04 | 主题：**仅浅色 / 深色**，去掉「跟随系统」                                                                                                                                                                               |
-| 2026-09-04 | Logo：从现网 `src-tauri/icons` 拷入 `design/brand/`；原型标题栏改用 `assets/logo.png`；Windows `app_icon.ico` 已替换                                                                                                     |
-| 2026-09-04 | 各端图标批量生成：Windows ICO · macOS AppIcon · iOS AppIcon（desktop+mobile）· Android mipmap（mobile+desktop scaffold）均基于 `design/brand/icon.png`                                                                 |
-| 2026-09-04 | 审稿修补：§2.1 分层图对齐 `design_*`/`apps/*`；端矩阵 iOS/Android 分发与「不上架」一致；文档状态标注关键已决；补 `docs/architecture.md` 与 `SECURITY.md` 占位                                                                                  |
-| 2026-09-07 | **实现对照**：P0–P2 主路径已满足；`SYS-SHARE` 列入 P3；§9 标注分期状态并补 §9.1；文档状态更新                                                                                                                                        |
-| 2026-09-07 | Material `SYS-SHARE`：`share_plus` + 生图/生视频分享入口落地；§5.8 / §9 / Changelog 同步                                                                                                                              |
-| 2026-09-07 | P3 空态/动效部分落地：未配置 vs 无数据语义对齐；壳切换/灯箱/列表短动效；§9 标注                                                                                                                                                         |
-| 2026-09-07 | P3 无障碍部分落地：主路径 Semantics/tooltip/焦点；Windows ExcludeSemantics 仅 debug；§7 备注                                                                                                                             |
-| 2026-09-07 | P3 无障碍全路径自证：双端补语义/触控48/liveRegion/对比度 token；§7.1 自证清单；不宣称第三方认证                                                                                                                                         |
-| 2026-09-07 | P3 主题/密度部分落地：`scrim`、InfoBar/Snackbar token、密度作用到会话/Composer/设置；空态 `illustration` 插槽                                                                                                                   |
-| 2026-09-07 | P3 空态插画落地：双端 CustomPainter 简易线稿接入 `illustration`；§9 标注                                                                                                                                                 |
-| 2026-09-08 | `VID-QUEUE`：双端任务队列增加按状态筛选（全部 / 生成中 / 待恢复 / 已完成 / 失败 / 已放弃）                                                                                                                                             |
-| 2026-09-08 | Material 根页返回：`NAV-BACK` 增加「再按一次退出」确认（约 2s），确认后进最近任务、不清数据；键盘可见时优先收 IME                                                                                                                                 |
-| 2026-09-11 | **P4 规格**：`VID-PLAYER` 音量+真全屏；`VID-QUEUE` 成功项封面；新增 `IMG-TURN-REF` / `VID-TURN-REF`（用户气泡参考图）；§3.3–3.4 / §5.5–5.6 / §9 P4；CHAT 附图不做                                                                      |
-| 2026-09-11 | **P4 实现**：`VID-PLAYER` 音量（静音+0–100）+ 真全屏（桌面系统全屏 / 移动沉浸）；音量不跨启动持久化                                                                                                                                      |
-| 2026-09-11 | **P4 实现**：`VID-QUEUE` 成功项封面（CDN poster → 本机抽帧缓存 → 占位；点击等同播放；`SET-DATA` 可清）                                                                                                                             |
-| 2026-09-11 | **P4 实现**：IMG-TURN-REF / VID-TURN-REF（`referenceImages` 落盘 + 双端用户气泡缩略/灯箱；旧无图回合兼容）                                                                                                                      |
-| 2026-09-11 | **`*-TURN-REF` 布局**：气泡改为 meta 通栏 + **左缩略 / 右提示词**（对齐 OD）；双端落地                                                                                                                                          |
-| 2026-09-11 | **`SHELL-SINGLE`**：桌面单实例（次进程唤起已有窗/托盘恢复）；§5.3 / §9 P4b；移动不做；`desktop_fluent` 已落地（`flutter_single_instance`）                                                                                             |
-| 2026-09-14 | **体验债规格**：`VID-RERUN`（用此提示重跑，回填提示词+参考图、不自动提交）；`VID-PLAYER` 音量**跨启动持久化**已决；§5.6 / §9.1                                                                                                                  |
-| 2026-09-14 | **P5 `CHAT-ATTACH`**：对话气泡附图规格写入 §5.4 / §9；与 `*-TURN-REF` 分轨                                                                                                                                            |
-| 2026-09-14 | **P5 细则**：最多 4 张 · MIME png/jpeg/webp · ≤4MiB · 视觉模型启发式 · `chat_image_cache` 分轨 · 有图可空文 · 灯箱角标「附图」                                                                                                     |
-| 2026-09-14 | **P5-1 core**：`attachments` + `persistAttachments` + vision 启发式 + multimodal parts + 备份 omit                                                                                                           |
-| 2026-09-14 | **P5-2 desktop_fluent**：Composer 附加/拖放/草稿缩略；有图可空文；气泡缩略 + 灯箱「附图」                                                                                                                                        |
-| 2026-09-14 | **P5-3 mobile_material**：Composer 相册附加/草稿缩略；有图可空文；气泡缩略 + 灯箱「附图」；双端能力对等                                                                                                                                 |
-| 2026-09-14 | **P5-4 收口**：禁用提示/清理/备份核对；补非 vision 守门与 replaceAll/clearAll 清盘测；移动禁用文案 widget 测                                                                                                                         |
-| 2026-09-14 | **P5-5 文档对照 + 测试闸门**：§5.4 / §9 / §9.1 标已落地；CHANGELOG / architecture 同步；analyze + chat/attach 相关 test                                                                                                   |
-| 2026-09-14 | **体验债落地**：`VID-RERUN` 双端队列/播放器「用此提示重跑」（回填提示词+参数+可读参考图；不自动提交；忙态禁用）                                                                                                                                      |
-| 2026-09-14 | **体验债落地**：`VID-PLAYER` 播放失败/弱网提示统一（`VideoPlaybackErrors` + 四处播放壳「重试」；§5.6）                                                                                                                             |
-| 2026-09-14 | **体验债落地**：`VID-PLAYER` 缓冲/加载态对齐（E3：封面占位+loading / keepFrame / buffering；§5.6）                                                                                                                          |
-| 2026-09-14 | **体验债落地**：`VID-PLAYER` 音量跨启动持久化（E4：`core.video_playback.v1` volume+muted；双端开播前 load / 拖动 debounce；§5.6）                                                                                                |
-| 2026-09-14 | **体验债回归**：桌面 `VID-PLAYER` transport（E5）对照 OD 抽检通过——内嵌/弹窗单行含全屏；动作区不重复全屏；全屏壳 Esc/退出；无代码改                                                                                                                 |
-| 2026-09-14 | **体验债落地**：灯箱来源可区分（E6：双端「参考」/「结果」角标；`*-TURN-REF` 与结果时间线）                                                                                                                                                |
-| 2026-09-14 | **体验债落地**：空态覆盖面（E7：审计补缺；桌面提供商 CTA「添加提供商」+ 详情未选中插画空态；§3.1 / `CHAT-EMPTY`）                                                                                                                               |
-| 2026-09-14 | **体验债落地**：短动效一致性（E8：主路径对齐 `FluentMotion` / `MaterialMotion`；可打断、无超长挡操作）                                                                                                                                |
-| 2026-09-14 | **`CHAT-ATTACH`**：vision 启发式补 `grok`（`grok-4.5` 等可附图）                                                                                                                                                  |
-| 2026-09-14 | **体验债落地**：密度/字号极端档（E9：compact+更大 / comfortable+更小抽检；Material 底栏随字号抬高；Composer/会话顶栏/设置分段去过死高度）                                                                                                          |
-| 2026-09-14 | **`VID-PLAYER` 信息密度**：Fluent OD 头栏摘要+元信息、空舞台示意/三步引导、transport 缓冲分层与音量%；桌面内嵌跟版；Material 不跟桌面密度；§5.6                                                                                                     |
-| 2026-09-14 | **`IMG-RERUN`**：双端生图时间线「用此提示重跑」（回填提示词+参数+可读参考图；不自动提交；忙态禁用）；§5.5 对齐 `VID-RERUN`                                                                                                                         |
-| 2026-09-14 | **`CHAT-ATTACH` UI 对齐 OD**：四端 chat 稿补附图；Flutter P0–P2（气泡角标、草稿壳、Material 圆角/padding、附加钮定尺）                                                                                                              |
-| 2026-09-15 | **`IMG-PROMPT` / `VID-PROMPT-REF` AI 润色**：风格档（均衡/精简/电影感/写实/保真）、流式预览、取消清空、换风格基于当前结果、快捷迭代；§5.5 / §5.6                                                                                                    |
-| 2026-09-15 | **`IMG-PROMPT` 模板草稿可编辑**：上区草稿 Tab 多行输入；手改清模板选中与润色结果；润色中禁用；§5.5                                                                                                                                         |
-| 2026-09-15 | **`IMG-SESSION` 已决**：生图多会话 UI **仅 Material**（列表层）；Fluent 单活跃会话、不提供会话列表窗格；core 多会话 API 可保留；§5.5                                                                                                         |
-| 2026-09-17 | **P6 业务 MCP 规格**：受控 Client（双端 HTTP/SSE、自有业务 Server、读写+分级授权）；修订 §1.1–1.3 非目标边界；§2.4 / §3.2 / §3.5；§5.4 `CHAT-TOOL-*`；§5.7 `SET-MCP*`；新增 §5.11；§8 / §9 P6 / §9.1；待决 Q7–Q9                                |
-| 2026-09-17 | **P6 实现默认**：Q7=`none`+`bearer`；Q8=同轮 tool **串行**；Q9=首期仅 `url_safety`（无单独 host 白名单）；排期 P6-1→2→3→4→5                                                                                                     |
-| 2026-09-17 | **P6-1 落地（core）**：`ChatRole.tool` / `ChatToolCall`；`streamChat` 可选 `tools`；SSE `tool_calls` 增量累积；`buildApiMessages`+trim 成对保留；`supportsChatTools`                                                      |
-| 2026-09-17 | **P6-2 落地（core）**：`HttpSseMcpSession`（baseUrl POST JSON-RPC；initialize/list/call；JSON 或 SSE）；`PrefsMcpServerStorage`+SecretStore；Facade 注入 MCP 串行编排（Q8）上限 8；脱敏摘要；无 UI                                  |
-| 2026-09-17 | **P6-3 落地（desktop_fluent）**：设置「业务 MCP」CRUD/探测/tools 策略；对话 tool 轨迹卡 + 授权 ContentDialog；Facade DI；降级横幅                                                                                                   |
-| 2026-09-17 | **P6-4 落地（mobile_material）**：设置提供商 Tab 内「业务 MCP」子页（CRUD/探测/策略）；对话轨迹卡 + 授权 AlertDialog；Facade DI 同构；降级横幅可跳转                                                                                             |
-| 2026-09-17 | **P6-5 收口**：`DataBackupService` 导出/导入 MCP 元数据；默认 omit Bearer；`includeSecrets`/`importSecrets` 对齐提供商；清密钥清 MCP secret、清全部清 Server 列表；旧备份无 mcp 兼容；双端关于页文案明示；脱敏补测；`architecture`/`SECURITY`/`CHANGELOG` 同步 |
-| 2026-09-17 | **P6 OD 原型**：本机 OD `start_run`（Local OpenCode）生成 `*-settings-mcp` / `*-chat-mcp`（Fluent/Material×亮暗）；同步回仓库 `design/opendesign/`（含 index 与设置侧栏/提供商入口）；未同步 `*.artifact.json`                             |
+| 日期         | 说明                                                                                                                                                                                                             |
+|------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| 2026-09-04 | 初稿：四端、分端气质、桌面 MVP、双端对照原型                                                                                                                                                                                       |
+| 2026-09-04 | **独立设计系统**：Fluent ∪ Material；能力对等 UI 不对齐；iOS 跟 Material；禁止换皮冒充                                                                                                                                                 |
+| 2026-09-04 | 补齐 §5 双系统组件规格表（壳/对话/生图/生视频/设置/反馈）及现网映射、原型标注约定                                                                                                                                                                  |
+| 2026-09-04 | 色彩气质：**亮色仿 Claude**、**暗色仿 Cursor**；写入 token 起点与原型色板约束                                                                                                                                                          |
+| 2026-09-04 | **已决**：Flutter → `D:\Moon\tools\Ai_Studio_Flutter`；不上架；直链/侧载自动更新；OpenDesign 跳过 collect_brief                                                                                                                   |
+| 2026-09-04 | 对齐原型审稿：设置五分类/五 Tab；日志必有；关闭行为并入关于；提供商三模型；字号五档；生图/视频回合分隔；OpenDesign 清单与联动约定                                                                                                                                      |
+| 2026-09-04 | **字体栈按设计系统拆分**（§2.2.2）：Fluent=Segoe 系；Material=Roboto/Noto；系统字体、不内嵌专有字库；原型 HTML 已分栈                                                                                                                            |
+| 2026-09-04 | 提供商模型：拉取后 **可搜索下拉** 点选；输入=搜索过滤，对齐现网 `filterable` + `tag`                                                                                                                                                       |
+| 2026-09-04 | 主题：**仅浅色 / 深色**，去掉「跟随系统」                                                                                                                                                                                       |
+| 2026-09-04 | Logo：从现网 `src-tauri/icons` 拷入 `design/brand/`；原型标题栏改用 `assets/logo.png`；Windows `app_icon.ico` 已替换                                                                                                             |
+| 2026-09-04 | 各端图标批量生成：Windows ICO · macOS AppIcon · iOS AppIcon（desktop+mobile）· Android mipmap（mobile+desktop scaffold）均基于 `design/brand/icon.png`                                                                         |
+| 2026-09-04 | 审稿修补：§2.1 分层图对齐 `design_*`/`apps/*`；端矩阵 iOS/Android 分发与「不上架」一致；文档状态标注关键已决；补 `docs/architecture.md` 与 `SECURITY.md` 占位                                                                                          |
+| 2026-09-07 | **实现对照**：P0–P2 主路径已满足；`SYS-SHARE` 列入 P3；§9 标注分期状态并补 §9.1；文档状态更新                                                                                                                                                |
+| 2026-09-07 | Material `SYS-SHARE`：`share_plus` + 生图/生视频分享入口落地；§5.8 / §9 / Changelog 同步                                                                                                                                      |
+| 2026-09-07 | P3 空态/动效部分落地：未配置 vs 无数据语义对齐；壳切换/灯箱/列表短动效；§9 标注                                                                                                                                                                 |
+| 2026-09-07 | P3 无障碍部分落地：主路径 Semantics/tooltip/焦点；Windows ExcludeSemantics 仅 debug；§7 备注                                                                                                                                     |
+| 2026-09-07 | P3 无障碍全路径自证：双端补语义/触控48/liveRegion/对比度 token；§7.1 自证清单；不宣称第三方认证                                                                                                                                                 |
+| 2026-09-07 | P3 主题/密度部分落地：`scrim`、InfoBar/Snackbar token、密度作用到会话/Composer/设置；空态 `illustration` 插槽                                                                                                                           |
+| 2026-09-07 | P3 空态插画落地：双端 CustomPainter 简易线稿接入 `illustration`；§9 标注                                                                                                                                                         |
+| 2026-09-08 | `VID-QUEUE`：双端任务队列增加按状态筛选（全部 / 生成中 / 待恢复 / 已完成 / 失败 / 已放弃）                                                                                                                                                     |
+| 2026-09-08 | Material 根页返回：`NAV-BACK` 增加「再按一次退出」确认（约 2s），确认后进最近任务、不清数据；键盘可见时优先收 IME                                                                                                                                         |
+| 2026-09-11 | **P4 规格**：`VID-PLAYER` 音量+真全屏；`VID-QUEUE` 成功项封面；新增 `IMG-TURN-REF` / `VID-TURN-REF`（用户气泡参考图）；§3.3–3.4 / §5.5–5.6 / §9 P4；CHAT 附图不做                                                                              |
+| 2026-09-11 | **P4 实现**：`VID-PLAYER` 音量（静音+0–100）+ 真全屏（桌面系统全屏 / 移动沉浸）；音量不跨启动持久化                                                                                                                                              |
+| 2026-09-11 | **P4 实现**：`VID-QUEUE` 成功项封面（CDN poster → 本机抽帧缓存 → 占位；点击等同播放；`SET-DATA` 可清）                                                                                                                                     |
+| 2026-09-11 | **P4 实现**：IMG-TURN-REF / VID-TURN-REF（`referenceImages` 落盘 + 双端用户气泡缩略/灯箱；旧无图回合兼容）                                                                                                                              |
+| 2026-09-11 | **`*-TURN-REF` 布局**：气泡改为 meta 通栏 + **左缩略 / 右提示词**（对齐 OD）；双端落地                                                                                                                                                  |
+| 2026-09-11 | **`SHELL-SINGLE`**：桌面单实例（次进程唤起已有窗/托盘恢复）；§5.3 / §9 P4b；移动不做；`desktop_fluent` 已落地（`flutter_single_instance`）                                                                                                     |
+| 2026-09-14 | **体验债规格**：`VID-RERUN`（用此提示重跑，回填提示词+参考图、不自动提交）；`VID-PLAYER` 音量**跨启动持久化**已决；§5.6 / §9.1                                                                                                                          |
+| 2026-09-14 | **P5 `CHAT-ATTACH`**：对话气泡附图规格写入 §5.4 / §9；与 `*-TURN-REF` 分轨                                                                                                                                                    |
+| 2026-09-14 | **P5 细则**：最多 4 张 · MIME png/jpeg/webp · ≤4MiB · 视觉模型启发式 · `chat_image_cache` 分轨 · 有图可空文 · 灯箱角标「附图」                                                                                                             |
+| 2026-09-14 | **P5-1 core**：`attachments` + `persistAttachments` + vision 启发式 + multimodal parts + 备份 omit                                                                                                                   |
+| 2026-09-14 | **P5-2 desktop_fluent**：Composer 附加/拖放/草稿缩略；有图可空文；气泡缩略 + 灯箱「附图」                                                                                                                                                |
+| 2026-09-14 | **P5-3 mobile_material**：Composer 相册附加/草稿缩略；有图可空文；气泡缩略 + 灯箱「附图」；双端能力对等                                                                                                                                         |
+| 2026-09-14 | **P5-4 收口**：禁用提示/清理/备份核对；补非 vision 守门与 replaceAll/clearAll 清盘测；移动禁用文案 widget 测                                                                                                                                 |
+| 2026-09-14 | **P5-5 文档对照 + 测试闸门**：§5.4 / §9 / §9.1 标已落地；CHANGELOG / architecture 同步；analyze + chat/attach 相关 test                                                                                                           |
+| 2026-09-14 | **体验债落地**：`VID-RERUN` 双端队列/播放器「用此提示重跑」（回填提示词+参数+可读参考图；不自动提交；忙态禁用）                                                                                                                                              |
+| 2026-09-14 | **体验债落地**：`VID-PLAYER` 播放失败/弱网提示统一（`VideoPlaybackErrors` + 四处播放壳「重试」；§5.6）                                                                                                                                     |
+| 2026-09-14 | **体验债落地**：`VID-PLAYER` 缓冲/加载态对齐（E3：封面占位+loading / keepFrame / buffering；§5.6）                                                                                                                                  |
+| 2026-09-14 | **体验债落地**：`VID-PLAYER` 音量跨启动持久化（E4：`core.video_playback.v1` volume+muted；双端开播前 load / 拖动 debounce；§5.6）                                                                                                        |
+| 2026-09-14 | **体验债回归**：桌面 `VID-PLAYER` transport（E5）对照 OD 抽检通过——内嵌/弹窗单行含全屏；动作区不重复全屏；全屏壳 Esc/退出；无代码改                                                                                                                         |
+| 2026-09-14 | **体验债落地**：灯箱来源可区分（E6：双端「参考」/「结果」角标；`*-TURN-REF` 与结果时间线）                                                                                                                                                        |
+| 2026-09-14 | **体验债落地**：空态覆盖面（E7：审计补缺；桌面提供商 CTA「添加提供商」+ 详情未选中插画空态；§3.1 / `CHAT-EMPTY`）                                                                                                                                       |
+| 2026-09-14 | **体验债落地**：短动效一致性（E8：主路径对齐 `FluentMotion` / `MaterialMotion`；可打断、无超长挡操作）                                                                                                                                        |
+| 2026-09-14 | **`CHAT-ATTACH`**：vision 启发式补 `grok`（`grok-4.5` 等可附图）                                                                                                                                                          |
+| 2026-09-14 | **体验债落地**：密度/字号极端档（E9：compact+更大 / comfortable+更小抽检；Material 底栏随字号抬高；Composer/会话顶栏/设置分段去过死高度）                                                                                                                  |
+| 2026-09-14 | **`VID-PLAYER` 信息密度**：Fluent OD 头栏摘要+元信息、空舞台示意/三步引导、transport 缓冲分层与音量%；桌面内嵌跟版；Material 不跟桌面密度；§5.6                                                                                                             |
+| 2026-09-14 | **`IMG-RERUN`**：双端生图时间线「用此提示重跑」（回填提示词+参数+可读参考图；不自动提交；忙态禁用）；§5.5 对齐 `VID-RERUN`                                                                                                                                 |
+| 2026-09-14 | **`CHAT-ATTACH` UI 对齐 OD**：四端 chat 稿补附图；Flutter P0–P2（气泡角标、草稿壳、Material 圆角/padding、附加钮定尺）                                                                                                                      |
+| 2026-09-15 | **`IMG-PROMPT` / `VID-PROMPT-REF` AI 润色**：风格档（均衡/精简/电影感/写实/保真）、流式预览、取消清空、换风格基于当前结果、快捷迭代；§5.5 / §5.6                                                                                                            |
+| 2026-09-15 | **`IMG-PROMPT` 模板草稿可编辑**：上区草稿 Tab 多行输入；手改清模板选中与润色结果；润色中禁用；§5.5                                                                                                                                                 |
+| 2026-09-15 | **`IMG-SESSION` 已决**：生图多会话 UI **仅 Material**（列表层）；Fluent 单活跃会话、不提供会话列表窗格；core 多会话 API 可保留；§5.5                                                                                                                 |
+| 2026-09-17 | **P6 业务 MCP 规格**：受控 Client（双端 HTTP/SSE、自有业务 Server、读写+分级授权）；修订 §1.1–1.3 非目标边界；§2.4 / §3.2 / §3.5；§5.4 `CHAT-TOOL-*`；§5.7 `SET-MCP*`；新增 §5.11；§8 / §9 P6 / §9.1；待决 Q7–Q9                                        |
+| 2026-09-17 | **P6 实现默认**：Q7=`none`+`bearer`；Q8=同轮 tool **串行**；Q9=首期仅 `url_safety`（无单独 host 白名单）；排期 P6-1→2→3→4→5                                                                                                             |
+| 2026-09-17 | **P6-1 落地（core）**：`ChatRole.tool` / `ChatToolCall`；`streamChat` 可选 `tools`；SSE `tool_calls` 增量累积；`buildApiMessages`+trim 成对保留；`supportsChatTools`                                                              |
+| 2026-09-17 | **P6-2 落地（core）**：`HttpSseMcpSession`（baseUrl POST JSON-RPC；initialize/list/call；JSON 或 SSE）；`PrefsMcpServerStorage`+SecretStore；Facade 注入 MCP 串行编排（Q8）上限 8；脱敏摘要；无 UI                                          |
+| 2026-09-17 | **P6-3 落地（desktop_fluent）**：设置「业务 MCP」CRUD/探测/tools 策略；对话 tool 轨迹卡 + 授权 ContentDialog；Facade DI；降级横幅                                                                                                           |
+| 2026-09-17 | **P6-4 落地（mobile_material）**：设置提供商 Tab 内「业务 MCP」子页（CRUD/探测/策略）；对话轨迹卡 + 授权 AlertDialog；Facade DI 同构；降级横幅可跳转                                                                                                     |
+| 2026-09-17 | **P6-5 收口**：`DataBackupService` 导出/导入 MCP 元数据；默认 omit Bearer；`includeSecrets`/`importSecrets` 对齐提供商；清密钥清 MCP secret、清全部清 Server 列表；旧备份无 mcp 兼容；双端关于页文案明示；脱敏补测；`architecture`/`SECURITY`/`CHANGELOG` 同步         |
+| 2026-09-17 | **P6 OD 原型**：本机 OD `start_run`（Local OpenCode）生成 `*-settings-mcp` / `*-chat-mcp`（Fluent/Material×亮暗）；同步回仓库 `design/opendesign/`（含 index 与设置侧栏/提供商入口）；未同步 `*.artifact.json`                                     |
 | 2026-09-17 | **P6-S 桌面 stdio 规格**：修订「不做 stdio」→ 移动端不做、桌面可选；§1.1–1.3 / §5.11 传输与配置模型（`transport`/`command`/`args`/`env`/`cwd`）；`StdioMcpSession`+`ProcessHost` 桌面注入；OpenCode/Cursor 映射意图；§8 / §9 P6-S / `SECURITY`；**实现未开始** |
