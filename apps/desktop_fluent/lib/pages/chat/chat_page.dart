@@ -10,6 +10,7 @@ import 'widgets/chat_model_combo.dart';
 import 'widgets/composer.dart';
 import 'widgets/message_list.dart';
 import 'widgets/session_overrides_dialog.dart';
+import 'widgets/tool_auth_dialog.dart';
 
 class ChatPage extends StatefulWidget {
   const ChatPage({
@@ -20,7 +21,10 @@ class ChatPage extends StatefulWidget {
     required this.generation,
     this.appLogRepository,
     this.chatClient,
+    this.mcpServerRepository,
+    this.mcpSessionFactory,
     this.onOpenProviders,
+    this.onOpenMcp,
   });
 
   final ProviderRepository providerRepository;
@@ -29,7 +33,10 @@ class ChatPage extends StatefulWidget {
   final GenerationRuntime generation;
   final AppLogRepository? appLogRepository;
   final OpenAiCompatibleChatClient? chatClient;
+  final McpServerRepository? mcpServerRepository;
+  final McpSessionFactory? mcpSessionFactory;
   final VoidCallback? onOpenProviders;
+  final VoidCallback? onOpenMcp;
 
   @override
   State<ChatPage> createState() => _ChatPageState();
@@ -48,7 +55,15 @@ class _ChatPageState extends State<ChatPage> {
       appLogRepository: widget.appLogRepository,
       generation: widget.generation,
       chatClient: widget.chatClient,
+      mcpServerRepository: widget.mcpServerRepository,
+      mcpSessionFactory: widget.mcpSessionFactory,
+      toolAuthPrompter: _promptToolAuth,
     );
+  }
+
+  Future<bool> _promptToolAuth(ToolAuthPrompt prompt) {
+    if (!mounted) return Future.value(false);
+    return showToolAuthDialog(context: context, prompt: prompt);
   }
 
   @override
@@ -116,6 +131,7 @@ class _ChatPageState extends State<ChatPage> {
         widget.sessionRepository,
         widget.generation,
         _controller,
+        ?widget.mcpServerRepository,
       ]),
       builder: (context, _) {
         final ready = widget.providerRepository.hasConfiguredChatProvider;
@@ -183,8 +199,21 @@ class _ChatPageState extends State<ChatPage> {
                               _controller.recallUserMessage(id),
                           emptyHint: '开始第一条对话',
                           emptySubtitle: '当前会话还没有消息，在下方输入即可开始。',
+                          liveToolTraces: _controller.liveToolTraces,
                         ),
                       ),
+                      if (_controller.mcpStatusHint != null)
+                        _McpStatusBanner(
+                          message: _controller.mcpStatusHint!,
+                          tokens: tokens,
+                          onOpenMcp: widget.onOpenMcp,
+                          onDismiss: _controller.mcpStatusHintDismissible
+                              ? () {
+                                  // ignore: discarded_futures
+                                  _controller.dismissMcpStatusHint();
+                                }
+                              : null,
+                        ),
                       Composer(
                         enabled: _controller.canSend,
                         streaming: streamingHere,
@@ -211,6 +240,59 @@ class _ChatPageState extends State<ChatPage> {
           ),
         );
       },
+    );
+  }
+}
+
+class _McpStatusBanner extends StatelessWidget {
+  const _McpStatusBanner({
+    required this.message,
+    required this.tokens,
+    this.onOpenMcp,
+    this.onDismiss,
+  });
+
+  final String message;
+  final FluentTokens tokens;
+  final VoidCallback? onOpenMcp;
+  final VoidCallback? onDismiss;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(16, 8, 8, 8),
+      decoration: BoxDecoration(
+        color: Color.lerp(tokens.warning, tokens.surface, 0.9),
+        border: Border(top: BorderSide(color: tokens.border)),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              message,
+              style: TextStyle(
+                fontSize: 12,
+                color: tokens.inkSecondary,
+                fontFamily: tokens.fontFamily,
+              ),
+            ),
+          ),
+          if (onOpenMcp != null)
+            HyperlinkButton(
+              onPressed: onOpenMcp,
+              child: const Text('打开 MCP 设置'),
+            ),
+          if (onDismiss != null)
+            Tooltip(
+              message: '不再提示',
+              child: IconButton(
+                icon: const Icon(FluentIcons.chrome_close, size: 12),
+                onPressed: onDismiss,
+              ),
+            ),
+        ],
+      ),
     );
   }
 }

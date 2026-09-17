@@ -23,6 +23,9 @@ class SettingsPage extends StatefulWidget {
     required this.generation,
     this.initialTabIndex = 0,
     this.updateController,
+    this.mcpServerRepository,
+    this.mcpSessionFactory,
+    this.openMcpRequestId = 0,
   });
 
   final ThemeController themeController;
@@ -34,6 +37,11 @@ class SettingsPage extends StatefulWidget {
   final GenerationRuntime generation;
   final int initialTabIndex;
   final MobileUpdateController? updateController;
+  final McpServerRepository? mcpServerRepository;
+  final McpSessionFactory? mcpSessionFactory;
+
+  /// 递增时触发打开 MCP 子页（对话降级横幅跳转）。
+  final int openMcpRequestId;
 
   @override
   State<SettingsPage> createState() => _SettingsPageState();
@@ -108,7 +116,12 @@ class _SettingsPageState extends State<SettingsPage>
       body: TabBarView(
         controller: _tabController,
         children: [
-          SettingsProvidersTab(repository: widget.providerRepository),
+          SettingsProvidersTab(
+            repository: widget.providerRepository,
+            mcpServerRepository: widget.mcpServerRepository,
+            mcpSessionFactory: widget.mcpSessionFactory,
+            openMcpRequestId: widget.openMcpRequestId,
+          ),
           SettingsChatDefaultsTab(repository: widget.chatDefaultsRepository),
           SettingsAppearanceTab(themeController: widget.themeController),
           SettingsLogsTab(repository: widget.appLogRepository),

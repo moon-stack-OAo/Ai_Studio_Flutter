@@ -24,9 +24,15 @@ class ChatController extends ChangeNotifier {
     required this.generation,
     AppLogRepository? appLogRepository,
     OpenAiCompatibleChatClient? chatClient,
+    McpServerRepository? mcpServerRepository,
+    McpSessionFactory? mcpSessionFactory,
+    Future<bool> Function(ToolAuthPrompt prompt)? toolAuthPrompter,
     ImagePicker? imagePicker,
+    McpUiPrefs? mcpUiPrefs,
   })  : _providers = providerRepository,
         _sessions = sessionRepository,
+        _mcpServers = mcpServerRepository,
+        _mcpUiPrefs = mcpUiPrefs ?? McpUiPrefs(),
         _picker = imagePicker ?? ImagePicker() {
     _facade = ChatSessionFacade(
       providers: providerRepository,
@@ -36,23 +42,49 @@ class ChatController extends ChangeNotifier {
       appLogs: appLogRepository,
       chatClient: chatClient,
       onModelsChanged: notifyListeners,
+      mcpServers: mcpServerRepository,
+      mcpSessionFactory: mcpSessionFactory,
+      toolAuthPrompter: toolAuthPrompter ?? _defaultDenyAuth,
+      onToolTrace: _onToolTrace,
     );
+    _mcpServers?.addListener(_onMcpChanged);
+    _mcpUiPrefs.addListener(_onMcpChanged);
+    // ignore: discarded_futures
+    _mcpUiPrefs.ensureLoaded().then((_) {
+      if (hasListeners) notifyListeners();
+    });
   }
 
   final ProviderRepository _providers;
   final ChatSessionRepository _sessions;
+  final McpServerRepository? _mcpServers;
+  final McpUiPrefs _mcpUiPrefs;
   final GenerationRuntime generation;
   final ImagePicker _picker;
   late final ChatSessionFacade _facade;
 
   String? _bannerError;
   final List<ChatDraftAttachment> _draftAttachments = [];
+  final Map<String, ChatToolCallTrace> _liveTraces = {};
+
+  static Future<bool> _defaultDenyAuth(ToolAuthPrompt prompt) async => false;
 
   String? get bannerError => _bannerError;
 
   ChatSessionRepository get sessions => _sessions;
 
   ProviderRepository get providers => _providers;
+
+  McpServerRepository? get mcpServers => _mcpServers;
+
+  /// 当前发送回合的 live 工具轨迹（CHAT-TOOL-CALL）。
+  List<ChatToolCallTrace> get liveToolTraces {
+    final list = _liveTraces.values.toList(growable: false);
+    list.sort((a, b) => a.toolCallId.compareTo(b.toolCallId));
+    return list;
+  }
+
+  bool get hasLiveToolTraces => _liveTraces.isNotEmpty;
 
   List<ChatDraftAttachment> get draftAttachments =>
       List<ChatDraftAttachment>.unmodifiable(_draftAttachments);
@@ -65,6 +97,42 @@ class ChatController extends ChangeNotifier {
       _draftAttachments.length < maxChatAttachments;
 
   bool get activeChatSupportsVision => _facade.activeChatSupportsVision;
+
+  bool get activeChatSupportsTools => _facade.activeChatSupportsTools;
+
+  bool get isMcpWiringEnabled => _facade.isMcpWiringEnabled;
+
+  /// 是否为「未配置」类提示（可关闭并记住）。
+  bool get mcpStatusHintDismissible {
+    if (!isMcpWiringEnabled) return false;
+    final repo = _mcpServers;
+    if (repo == null) return false;
+    return repo.enabledServers.isEmpty;
+  }
+
+  /// MCP 降级提示（未配置 / 未探测 / 模型不支持）；无则 null。
+  String? get mcpStatusHint {
+    if (!isMcpWiringEnabled) return null;
+    final repo = _mcpServers;
+    if (repo == null) return null;
+    final enabled = repo.enabledServers;
+    if (enabled.isEmpty) {
+      if (_mcpUiPrefs.dismissUnconfiguredHint) return null;
+      return '未配置已启用的业务 MCP；可在设置中添加 Server。';
+    }
+    if (repo.exposedTools.isEmpty) {
+      return '已启用 MCP，但尚未拉取 tools；请在设置中「测试连接 / 刷新 tools」。';
+    }
+    if (!activeChatSupportsTools) {
+      return '当前模型可能不支持工具调用；更换支持 tools 的对话模型后即可使用 MCP。';
+    }
+    return null;
+  }
+
+  Future<void> dismissMcpStatusHint() async {
+    if (!mcpStatusHintDismissible) return;
+    await _mcpUiPrefs.dismissUnconfiguredHintBanner();
+  }
 
   bool get modelsLoading => _facade.modelsCache.loading;
 
@@ -113,15 +181,37 @@ class ChatController extends ChangeNotifier {
     notifyListeners();
   }
 
+  void _onMcpChanged() {
+    if ((_mcpServers?.enabledServers.isNotEmpty ?? false) &&
+        _mcpUiPrefs.dismissUnconfiguredHint) {
+      // ignore: discarded_futures
+      _mcpUiPrefs.clearDismissUnconfiguredHint();
+    }
+    notifyListeners();
+  }
+
+  void _onToolTrace(ChatToolCallTrace trace) {
+    _liveTraces[trace.toolCallId] = trace;
+    notifyListeners();
+  }
+
+  void clearLiveToolTraces() {
+    if (_liveTraces.isEmpty) return;
+    _liveTraces.clear();
+    notifyListeners();
+  }
+
   Future<void> createSession() async {
     await _sessions.createSession();
     clearBannerError();
+    clearLiveToolTraces();
   }
 
   Future<void> setActiveSession(String id) async {
     if (id == _sessions.activeId) return;
     await _sessions.setActive(id);
     clearBannerError();
+    clearLiveToolTraces();
     notifyListeners();
   }
 
@@ -233,6 +323,7 @@ class ChatController extends ChangeNotifier {
       _draftAttachments.clear();
       notifyListeners();
     }
+    clearLiveToolTraces();
     await _facade.send(
       raw,
       onNotify: notifyListeners,
@@ -272,6 +363,8 @@ class ChatController extends ChangeNotifier {
 
   @override
   void dispose() {
+    _mcpServers?.removeListener(_onMcpChanged);
+    _mcpUiPrefs.removeListener(_onMcpChanged);
     _facade.dispose();
     super.dispose();
   }

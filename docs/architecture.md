@@ -99,6 +99,7 @@ core     → （无 Flutter UI；可依赖 foundation / 平台无关库）
 | 桌面 | `pages/chat/*`（`message_list`、`composer`、`markdown_host`…） |
 | 移动 | 对应 `pages/chat/*` |
 | `CHAT-ATTACH`（已落地） | core：`chat_attach.dart`、`ChatMessage.attachments`、`persistAttachments` / `chat_image_cache`、`supportsChatVision`、multimodal parts、清理与备份 omit；桌面/移动：分端 Composer 附加 + 用户气泡缩略 + 灯箱「附图」（见 `DESIGN.md` §5.4 / §9 P5） |
+| 业务 MCP（P6 已落地） | core：`mcp_*` + `tool_call_orchestrator` + Facade 注入；`DataBackupService` 含 MCP 段（默认 omit Bearer）；双端：`SET-MCP*` 设置页 + `CHAT-TOOL-*` 轨迹/授权（见 `DESIGN.md` §5.11 / §9 P6） |
 
 ### 生图
 

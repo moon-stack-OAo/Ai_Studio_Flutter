@@ -237,6 +237,8 @@ class ChatSessionRepository extends ChangeNotifier {
     String? id,
     int? createdAt,
     List<ImageRef> attachments = const [],
+    List<ChatToolCall> toolCalls = const [],
+    String? toolCallId,
   }) async {
     final index = _indexOf(sessionId);
     if (index < 0) return null;
@@ -254,6 +256,8 @@ class ChatSessionRepository extends ChangeNotifier {
       model: model,
       latencyMs: latencyMs,
       attachments: capped,
+      toolCalls: toolCalls,
+      toolCallId: toolCallId,
     );
     var title = session.title;
     if (title == '新对话' && role == ChatRole.user) {
@@ -292,6 +296,9 @@ class ChatSessionRepository extends ChangeNotifier {
     int? latencyMs,
     bool clearLatencyMs = false,
     List<ImageRef>? attachments,
+    List<ChatToolCall>? toolCalls,
+    String? toolCallId,
+    bool clearToolCallId = false,
     bool persist = true,
   }) async {
     final index = _indexOf(sessionId);
@@ -313,6 +320,9 @@ class ChatSessionRepository extends ChangeNotifier {
       clearLatencyMs: clearLatencyMs,
       attachments:
           attachments == null ? null : sanitizeChatAttachments(attachments),
+      toolCalls: toolCalls,
+      toolCallId: toolCallId,
+      clearToolCallId: clearToolCallId,
     );
     _replace(
       index,

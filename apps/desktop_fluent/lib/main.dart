@@ -28,8 +28,24 @@ Future<void> main() async {
 
   await bootstrapDesktopWindow();
 
-  final providers = ProviderRepository(storage: SecureProviderStorage());
+  final secretStore = FlutterSecureSecretStore();
+  final providers = ProviderRepository(
+    storage: SecureProviderStorage(secretStore: secretStore),
+  );
   await providers.load();
+
+  final mcpServers = McpServerRepository(
+    storage: PrefsMcpServerStorage(),
+    secretStore: secretStore,
+  );
+  await mcpServers.load();
+  final mcpSessionFactory = HttpSseMcpSessionFactory(
+    secretStoreAuthBuilder: (server) => createMcpAuthProvider(
+      server: server,
+      secretStore: secretStore,
+    ),
+    processHost: const IoProcessHost(),
+  );
 
   final chatAttachmentStore = FileImageAssetStore(subdir: 'chat_image_cache');
   final sessions = ChatSessionRepository(
@@ -116,6 +132,7 @@ Future<void> main() async {
     imageAssetStore: imageAssetStore,
     chatAttachmentStore: chatAttachmentStore,
     videoPosterStore: videoPosterStore,
+    mcpServers: mcpServers,
   );
 
   // Windows 整树关闭语义：规避 flutter#182444（ListView/Tooltip AXTree 不同步），
@@ -135,6 +152,8 @@ Future<void> main() async {
     chatClient: chatClient,
     imageClient: imageClient,
     videoClient: videoClient,
+    mcpServerRepository: mcpServers,
+    mcpSessionFactory: mcpSessionFactory,
     updateController: updateController,
     navigatorKey: navigatorKey,
     closeCoordinator: closeCoordinator,
@@ -162,6 +181,8 @@ class AiStudioApp extends StatelessWidget {
     this.chatClient,
     this.imageClient,
     this.videoClient,
+    this.mcpServerRepository,
+    this.mcpSessionFactory,
     this.updateController,
     this.navigatorKey,
     this.closeCoordinator,
@@ -182,6 +203,8 @@ class AiStudioApp extends StatelessWidget {
   final OpenAiCompatibleChatClient? chatClient;
   final OpenAiCompatibleImageClient? imageClient;
   final OpenAiCompatibleVideoClient? videoClient;
+  final McpServerRepository? mcpServerRepository;
+  final McpSessionFactory? mcpSessionFactory;
   final UpdateController? updateController;
   final GlobalKey<NavigatorState>? navigatorKey;
   final WindowCloseCoordinator? closeCoordinator;
@@ -209,6 +232,8 @@ class AiStudioApp extends StatelessWidget {
           chatClient: chatClient,
           imageClient: imageClient,
           videoClient: videoClient,
+          mcpServerRepository: mcpServerRepository,
+          mcpSessionFactory: mcpSessionFactory,
           updateController: updateController,
           closeCoordinator: closeCoordinator,
           startupUpdateCheckDelay: startupUpdateCheckDelay,

@@ -23,9 +23,25 @@
 - 生图失败可「重新填写」提示词再改；桌面失败提示与右键操作更清晰
 - 设置页滚远后可一键回到顶部；完整更新日志弹层同样支持
 - 对话已配置时引导直接输入首条消息，不再误推「新建会话」
+- 桌面与手机均可配置业务 MCP，对话中支持工具调用授权与轨迹展示
+- 桌面业务 MCP 支持本地 stdio（启动本机进程）；移动仍仅 HTTP
+- 设置可配业务 MCP；对话内工具需确认；备份默认不含 MCP Token
 
 ### Added
 
+- **P6-S2 桌面业务 MCP 本地 stdio**：`desktop_fluent` 注入 `IoProcessHost`；设置页可切换 HTTP/SSE 与本地 stdio（command/args/cwd/env），首次保存/探测确认启动本机进程；列表区分传输标签；移动端不注入 ProcessHost，导入的 stdio Server 提示「仅桌面可用」并禁用探测
+- **P6-S 桌面 stdio MCP 规格（`DESIGN.md` / `SECURITY.md`）**：移动端仍只 HTTP；桌面可选 `transport: stdio`（`command`/`args`/`env`/`cwd`）；core 接口 + 桌面 `ProcessHost` 注入；默认拒绝任意命令、用户确认、退出杀进程、备份 omit env 密钥
+- **MCP Server 默认授权**：设置可先设整 Server 默认策略，再按 tool 覆盖；优先级：单 tool > Server 默认 > 元数据/副作用
+- **MCP 历史工具轮聚合**：会话列表将「调用工具」+ 后续「工具结果」收成一条默认可折叠卡（不再各占一气泡）；进行中 live 轨迹同款聚合；待授权/执行中自动展开
+- **MCP 工具轨迹默认可折叠聚合**：一轮多个 tool 收成「已调用 N 个工具」摘要，点开看明细；待授权/执行中自动展开
+- **MCP 未配置横幅可忽略**：对话页「未配置业务 MCP」提示可关闭并本机记住；启用任一 Server 后恢复提醒资格；缺 tools / 模型不支持仍会提示
+- **P6 OD 原型稿**：`design/opendesign/` 新增 Fluent/Material × 亮暗 `*-settings-mcp.html` / `*-chat-mcp.html`；`index.html`「业务 MCP」分区；设置侧栏/提供商入口互链（本机 OD Local OpenCode `start_run` 生成后回拷仓库）
+- **P6-5 备份/清数据/脱敏收口**：`SET-DATA` 导出默认 omit MCP Bearer（与 API Key 同 `includeSecrets`）；导入合并 MCP 元数据，token 仅 `importSecrets`；清密钥清 MCP secret、清全部/清提供商清 Server 列表；旧备份无 mcp 段兼容；双端关于页文案明示；`DESIGN` §9 / `SECURITY` / `architecture` 同步
+- **P6-4 mobile_material MCP UI**：设置「提供商」Tab 内「管理业务 MCP」子页（Server CRUD、启用、none/bearer、测试连接/刷新 tools、按 tool 授权覆盖）；对话 `CHAT-TOOL-CALL` 轨迹卡与 `CHAT-TOOL-AUTH` AlertDialog；启动 DI 注入 `McpServerRepository` / `HttpSseMcpSessionFactory` / `toolAuthPrompter`；降级横幅可跳转 MCP
+- **P6-3 desktop_fluent MCP UI**：设置侧栏「业务 MCP」（Server CRUD、启用、none/bearer、测试连接/刷新 tools、按 tool 授权覆盖）；对话 `CHAT-TOOL-CALL` 轨迹卡与 `CHAT-TOOL-AUTH` ContentDialog；启动 DI 注入 `McpServerRepository` / `HttpSseMcpSessionFactory` / `toolAuthPrompter`；模型不支持 tools / 未配置 MCP / 未拉 tools 降级横幅
+- **P6-2 MCP Client + Facade 编排（core）**：`HttpSseMcpSession` 对 `baseUrl` POST JSON-RPC（`initialize` / `tools/list` / `tools/call`；JSON 或 SSE 响应）；`none`+`bearer`；`PrefsMcpServerStorage`（prefs 元数据）+ SecretStore（token）；`DefaultToolCallOrchestrator` 串行；`ChatSessionFacade` 注入启用后附带 `tools[]` 并多轮回灌（上限 8）；参数/结果摘要脱敏
+- **P6-1 Chat 协议骨架（core）**：`tools` / `tool_choice` 可选请求；SSE 解析并累积 `delta.tool_calls`；消息模型 `ChatRole.tool` + `ChatToolCall` / `toolCallId`（旧会话兼容）；`buildApiMessages` / 上下文裁剪保留成对 tool 轨迹；`supportsChatTools` 启发式
+- **P6 业务 MCP 规格（`DESIGN.md`）**：受控 MCP Client（双端 HTTP/SSE、自有业务 Server、读写+分级授权）；§5.11 / `CHAT-TOOL-*` / `SET-MCP*` / 分期 P6；**P6-1～P6-5 已落地**
 - **关于页更新日志优先展示「用户摘要」**：章节可含 `### 用户摘要`；core 拆分摘要与工程明细；双端关于页展开版本时优先渲染摘要，明细默认折叠「显示详细变更」
 - **`SET-ABOUT` 多版本折叠更新日志**：双端关于页按 Keep a Changelog 展示多版本折叠行（版本 · 日期 · 当前/最新 pill）；默认全折叠；Fluent ContentDialog / Material BottomSheet 查看完整历史；完整历史弹层右下角「回到顶部」浮钮；core 解析 + **`packages/core/assets/CHANGELOG.md`**（`sync-changelog-asset.mjs` / `bump-version` 同步根目录 CHANGELOG；可并入检查到的远端 notes）；历史浏览不影响更新态
 - **设置页「回到顶部」浮层**：双端各设置可滚动页（含日志列表、提供商编辑）滚过阈值后右下角圆形上箭头，Tooltip「回到顶部」
@@ -36,6 +52,7 @@
 
 ### Changed
 
+- **业务 MCP 规格边界**：原「本期不做 stdio」改为「移动端不做；桌面可选 stdio（P6-S）」；HTTP/SSE 仍为双端主路径（`DESIGN.md` §5.11）
 - **`CHAT-EMPTY` 语义对齐仓库默认会话**：已配置时主区按「当前会话无消息」引导输入；去掉主区「新建会话」CTA（新建仍在会话列表顶栏 / 会话页）；Material 可附「打开会话列表」；`DESIGN.md` §3.1 / 能力表同步
 - **内容空态可挂 CTA**：双端 `*ContentEmpty` 支持主/次操作按钮；消息列表 / 队列等可扩展交互
 - **空态插画精修**：双端 CustomPainter 卡片尺寸、圆角与徽章绘制更统一

@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 import '../chat/chat_errors.dart';
+import '../chat/chat_models.dart';
 import '../provider/provider_repository.dart';
 import '../security/safe_http_client.dart';
 import '../security/url_safety.dart';
@@ -15,6 +16,21 @@ const double defaultChatTemperature = 0.7;
 
 /// 默认连接/请求超时（约 180s）。
 const Duration defaultChatTimeout = Duration(seconds: 180);
+
+/// 流式对话累积结果（content 与可选 tool_calls）。
+class ChatStreamResult {
+  const ChatStreamResult({
+    required this.content,
+    this.toolCalls = const [],
+    this.finishReason,
+  });
+
+  final String content;
+  final List<ChatToolCall> toolCalls;
+  final String? finishReason;
+
+  bool get hasToolCalls => toolCalls.isNotEmpty;
+}
 
 /// OpenAI 兼容流式对话客户端。
 class OpenAiCompatibleChatClient {
@@ -38,12 +54,14 @@ class OpenAiCompatibleChatClient {
   }
 
   /// 使用 [ActiveChatCredentials] 发起流式对话。
-  Future<String> streamChatWithCredentials(
+  Future<ChatStreamResult> streamChatWithCredentials(
     ActiveChatCredentials credentials, {
     required List<Map<String, dynamic>> messages,
     void Function(String delta, String fullText)? onDelta,
     double temperature = defaultChatTemperature,
     int? maxTokens,
+    List<Map<String, dynamic>>? tools,
+    Object? toolChoice,
     Duration? timeout,
     http.Client? client,
   }) {
@@ -55,17 +73,20 @@ class OpenAiCompatibleChatClient {
       onDelta: onDelta,
       temperature: temperature,
       maxTokens: maxTokens,
+      tools: tools,
+      toolChoice: toolChoice,
       timeout: timeout,
       client: client,
     );
   }
 
-  /// 返回完整文本；通过 [onDelta] 回调增量。
+  /// 返回 [ChatStreamResult]；通过 [onDelta] 回调文本增量。
   ///
+  /// [tools] / [toolChoice] 为可选；未传时请求体与历史行为一致（不带 tools）。
   /// 取消：传入可关闭的 [client] 并在外部 `client.close()`，
   /// 或使用本实例 [close]（仅当 ownsClient）。
   /// 用户取消抛出 [ChatAbortException]（文案「已取消」）。
-  Future<String> streamChat({
+  Future<ChatStreamResult> streamChat({
     required String baseUrl,
     required String apiKey,
     required String model,
@@ -73,6 +94,8 @@ class OpenAiCompatibleChatClient {
     void Function(String delta, String fullText)? onDelta,
     double temperature = defaultChatTemperature,
     int? maxTokens,
+    List<Map<String, dynamic>>? tools,
+    Object? toolChoice,
     Duration? timeout,
     http.Client? client,
   }) async {
@@ -99,6 +122,12 @@ class OpenAiCompatibleChatClient {
     };
     if (maxTokens != null && maxTokens > 0) {
       body['max_tokens'] = maxTokens;
+    }
+    if (tools != null && tools.isNotEmpty) {
+      body['tools'] = tools;
+      if (toolChoice != null) {
+        body['tool_choice'] = toolChoice;
+      }
     }
 
     final headers = authHeaders(
@@ -145,13 +174,21 @@ class OpenAiCompatibleChatClient {
     }
 
     final parser = SseLineParser();
+    final toolAcc = ToolCallAccumulator();
     var fullText = '';
+    String? finishReason;
     try {
       await for (final bytes in response.stream.timeout(reqTimeout)) {
         final chunk = utf8.decode(bytes, allowMalformed: true);
         final events = parser.addChunk(chunk);
         for (final event in events) {
           if (event.done) continue;
+          if (event.finishReason != null) {
+            finishReason = event.finishReason;
+          }
+          if (event.hasToolCallDeltas) {
+            toolAcc.apply(event.toolCallDeltas);
+          }
           if (event.delta.isEmpty) continue;
           fullText += event.delta;
           onDelta?.call(event.delta, fullText);
@@ -159,6 +196,12 @@ class OpenAiCompatibleChatClient {
       }
       for (final event in parser.flush()) {
         if (event.done) continue;
+        if (event.finishReason != null) {
+          finishReason = event.finishReason;
+        }
+        if (event.hasToolCallDeltas) {
+          toolAcc.apply(event.toolCallDeltas);
+        }
         if (event.delta.isEmpty) continue;
         fullText += event.delta;
         onDelta?.call(event.delta, fullText);
@@ -174,6 +217,10 @@ class OpenAiCompatibleChatClient {
       throw ChatApiException(describeNetworkError(e));
     }
 
-    return fullText;
+    return ChatStreamResult(
+      content: fullText,
+      toolCalls: toolAcc.snapshot(),
+      finishReason: finishReason,
+    );
   }
 }

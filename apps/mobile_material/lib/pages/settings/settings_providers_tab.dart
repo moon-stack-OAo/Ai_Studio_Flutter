@@ -6,14 +6,21 @@ import '../../widgets/back_to_top_host.dart';
 import '../../widgets/empty_illustrations.dart';
 import '../../widgets/material_empty_states.dart';
 import 'provider_edit_sheet.dart';
+import 'settings_mcp_page.dart';
 
 class SettingsProvidersTab extends StatefulWidget {
   const SettingsProvidersTab({
     super.key,
     required this.repository,
+    this.mcpServerRepository,
+    this.mcpSessionFactory,
+    this.openMcpRequestId = 0,
   });
 
   final ProviderRepository repository;
+  final McpServerRepository? mcpServerRepository;
+  final McpSessionFactory? mcpSessionFactory;
+  final int openMcpRequestId;
 
   @override
   State<SettingsProvidersTab> createState() => _SettingsProvidersTabState();
@@ -21,6 +28,7 @@ class SettingsProvidersTab extends StatefulWidget {
 
 class _SettingsProvidersTabState extends State<SettingsProvidersTab> {
   String? _selectedId;
+  int _handledOpenMcpRequestId = 0;
 
   ProviderRepository get _repo => widget.repository;
 
@@ -29,6 +37,24 @@ class _SettingsProvidersTabState extends State<SettingsProvidersTab> {
     super.initState();
     _repo.addListener(_onRepoChanged);
     _selectedId = _repo.activeProviderId;
+    if (widget.openMcpRequestId > 0) {
+      _handledOpenMcpRequestId = widget.openMcpRequestId;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _openMcp();
+      });
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant SettingsProvidersTab oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.openMcpRequestId != oldWidget.openMcpRequestId &&
+        widget.openMcpRequestId > _handledOpenMcpRequestId) {
+      _handledOpenMcpRequestId = widget.openMcpRequestId;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _openMcp();
+      });
+    }
   }
 
   @override
@@ -88,6 +114,23 @@ class _SettingsProvidersTabState extends State<SettingsProvidersTab> {
       if (p.id == id) return p;
     }
     return null;
+  }
+
+  Future<void> _openMcp() async {
+    final repo = widget.mcpServerRepository;
+    final factory = widget.mcpSessionFactory;
+    if (repo == null || factory == null) {
+      _snack('业务 MCP 尚未就绪');
+      return;
+    }
+    await Navigator.of(context).push<void>(
+      materialFadeSlideRoute(
+        builder: (context) => SettingsMcpPage(
+          repository: repo,
+          sessionFactory: factory,
+        ),
+      ),
+    );
   }
 
   Future<void> _deleteSelected() async {
@@ -191,6 +234,33 @@ class _SettingsProvidersTabState extends State<SettingsProvidersTab> {
             ),
           ),
         ),
+        if (widget.mcpServerRepository != null &&
+            widget.mcpSessionFactory != null) ...[
+          const SizedBox(height: 20),
+          Text(
+            '业务 MCP',
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: tokens.ink,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            '配置 Server、鉴权与工具授权策略；不另开设置 Tab。',
+            style: TextStyle(fontSize: 12, color: tokens.inkMuted),
+          ),
+          const SizedBox(height: 8),
+          OutlinedButton.icon(
+            onPressed: _openMcp,
+            icon: const Icon(Icons.hub_outlined),
+            label: const Text('管理业务 MCP'),
+            style: OutlinedButton.styleFrom(
+              minimumSize: const Size.fromHeight(44),
+              side: BorderSide(color: tokens.border),
+            ),
+          ),
+        ],
       ],
       ),
     );

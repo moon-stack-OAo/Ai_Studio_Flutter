@@ -9,6 +9,7 @@ import 'settings_about_page.dart';
 import 'settings_appearance_page.dart';
 import 'settings_chat_defaults_page.dart';
 import 'settings_logs_page.dart';
+import 'settings_mcp_page.dart';
 import 'settings_providers_page.dart';
 
 class SettingsShell extends StatelessWidget {
@@ -24,6 +25,8 @@ class SettingsShell extends StatelessWidget {
     required this.dataBackupService,
     required this.generation,
     this.updateController,
+    this.mcpServerRepository,
+    this.mcpSessionFactory,
   });
 
   final SettingsCategory category;
@@ -36,6 +39,8 @@ class SettingsShell extends StatelessWidget {
   final DataBackupService dataBackupService;
   final GenerationRuntime generation;
   final UpdateController? updateController;
+  final McpServerRepository? mcpServerRepository;
+  final McpSessionFactory? mcpSessionFactory;
 
   @override
   Widget build(BuildContext context) {
@@ -104,6 +109,7 @@ class SettingsShell extends StatelessWidget {
       SettingsCategory.providers => SettingsProvidersPage(
           repository: providerRepository,
         ),
+      SettingsCategory.mcp => _buildMcpPage(),
       SettingsCategory.chatDefaults => SettingsChatDefaultsPage(
           repository: chatDefaultsRepository,
         ),
@@ -121,6 +127,23 @@ class SettingsShell extends StatelessWidget {
           updateController: updateController,
         ),
     };
+  }
+
+  Widget _buildMcpPage() {
+    final repo = mcpServerRepository;
+    final factory = mcpSessionFactory;
+    if (repo == null || factory == null) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(24),
+          child: Text('MCP 尚未在本机初始化。'),
+        ),
+      );
+    }
+    return SettingsMcpPage(
+      repository: repo,
+      sessionFactory: factory,
+    );
   }
 }
 

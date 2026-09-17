@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import '../chat/chat_models.dart';
 import '../image/image_models.dart';
+import '../mcp/mcp_models.dart';
 import '../provider/provider_config.dart';
 import '../video/video_models.dart';
 import 'appearance_settings.dart';
@@ -16,9 +17,10 @@ class DataBackupExportOptions {
     this.includeSecrets = false,
     this.includeSessions = true,
     this.includeChatDefaults = true,
+    this.includeMcpServers = true,
   });
 
-  /// 是否导出 API Key 明文。默认 false；true 时见 SECURITY.md 风险说明。
+  /// 是否导出 API Key / MCP Bearer 明文。默认 false；true 时见 SECURITY.md 风险说明。
   final bool includeSecrets;
 
   /// 是否导出对话 / 生图 / 生视频会话（不含媒体二进制）。
@@ -26,6 +28,9 @@ class DataBackupExportOptions {
 
   /// 是否导出对话全局默认。
   final bool includeChatDefaults;
+
+  /// 是否导出业务 MCP Server 元数据（默认 true；密钥仍受 [includeSecrets] 约束）。
+  final bool includeMcpServers;
 }
 
 /// 导入选项。
@@ -35,9 +40,10 @@ class DataBackupImportOptions {
     this.importSessions = true,
     this.importChatDefaults = true,
     this.replaceSessions = true,
+    this.importMcpServers = true,
   });
 
-  /// 是否接受备份中的 API Key。仅当导出时含密钥且本项为 true 时覆盖本地密钥。
+  /// 是否接受备份中的 API Key / MCP Bearer。仅当导出时含密钥且本项为 true 时覆盖本地密钥。
   final bool importSecrets;
 
   /// 是否导入会话。
@@ -48,6 +54,9 @@ class DataBackupImportOptions {
 
   /// true：用备份会话整体替换本地；false：仅合并提供商/设置（会话跳过）。
   final bool replaceSessions;
+
+  /// 是否合并备份中的 MCP Server 元数据（旧备份无 mcp 段则跳过）。
+  final bool importMcpServers;
 }
 
 /// 清数据档位 / 开关。
@@ -140,6 +149,9 @@ class DataBackupImportResult {
     required this.sessionsImported,
     required this.appearanceImported,
     required this.chatDefaultsImported,
+    this.mcpServersMerged = 0,
+    this.mcpServersAdded = 0,
+    this.mcpImported = false,
   });
 
   final int schemaVersion;
@@ -149,6 +161,9 @@ class DataBackupImportResult {
   final bool sessionsImported;
   final bool appearanceImported;
   final bool chatDefaultsImported;
+  final int mcpServersMerged;
+  final int mcpServersAdded;
+  final bool mcpImported;
 }
 
 /// 清数据结果摘要。
@@ -191,6 +206,40 @@ class DataBackupSchemaException implements Exception {
   String toString() => 'DataBackupSchemaException: $message';
 }
 
+/// 备份中的 MCP Server 条目（元数据 ± 可选 authToken 明文）。
+class DataBackupMcpServer {
+  const DataBackupMcpServer({
+    required this.config,
+    this.authToken,
+  });
+
+  final McpServerConfig config;
+
+  /// 仅当导出含密钥时非空；导入时受 [DataBackupImportOptions.importSecrets] 约束。
+  final String? authToken;
+
+  Map<String, dynamic> toJson({required bool includeSecrets}) {
+    return config.toJsonForBackup(
+      authToken: includeSecrets ? authToken : null,
+      includeSecrets: includeSecrets,
+    );
+  }
+
+  factory DataBackupMcpServer.fromJson(Map<String, dynamic> json) {
+    final tokenRaw = json['authToken']?.toString();
+    final token = (tokenRaw == null || tokenRaw.trim().isEmpty)
+        ? null
+        : tokenRaw.trim();
+    final cleaned = Map<String, dynamic>.from(json)
+      ..remove('authToken')
+      ..remove('authSecretRef');
+    return DataBackupMcpServer(
+      config: McpServerConfig.fromJson(cleaned),
+      authToken: token,
+    );
+  }
+}
+
 /// 解析后的备份载荷（内存结构）。
 class DataBackupPayload {
   const DataBackupPayload({
@@ -207,6 +256,7 @@ class DataBackupPayload {
     required this.imageActiveId,
     required this.videoSessions,
     required this.videoActiveId,
+    this.mcpServers,
   });
 
   final int schemaVersion;
@@ -223,6 +273,9 @@ class DataBackupPayload {
   final List<VideoSession>? videoSessions;
   final String? videoActiveId;
 
+  /// 旧备份无 mcp 段时为 null（导入不崩、不改本地 MCP）。
+  final List<DataBackupMcpServer>? mcpServers;
+
   Map<String, dynamic> toJson() {
     final map = <String, dynamic>{
       'schemaVersion': schemaVersion,
@@ -238,6 +291,14 @@ class DataBackupPayload {
         ],
       },
     };
+    if (mcpServers != null) {
+      map['mcp'] = {
+        'servers': [
+          for (final s in mcpServers!)
+            s.toJson(includeSecrets: includeSecrets),
+        ],
+      };
+    }
     if (chatSessions != null) {
       map['chat'] = {
         'activeId': chatActiveId ?? '',
@@ -383,6 +444,13 @@ class DataBackupPayload {
       videoSessions = _parseVideoSessions(videoMap['sessions']);
     }
 
+    List<DataBackupMcpServer>? mcpServers;
+    final mcpRaw = map['mcp'];
+    if (mcpRaw is Map) {
+      final mcpMap = Map<String, dynamic>.from(mcpRaw);
+      mcpServers = _parseMcpServers(mcpMap['servers']);
+    }
+
     final exportedAt = map['exportedAtMs'];
     final exportedAtMs = exportedAt is int
         ? exportedAt
@@ -404,6 +472,7 @@ class DataBackupPayload {
       imageActiveId: imageActiveId,
       videoSessions: videoSessions,
       videoActiveId: videoActiveId,
+      mcpServers: mcpServers,
     );
   }
 }
@@ -440,6 +509,19 @@ List<VideoSession> _parseVideoSessions(Object? raw) {
     if (e is Map) {
       out.add(VideoSession.fromJson(Map<String, dynamic>.from(e)));
     }
+  }
+  return out;
+}
+
+List<DataBackupMcpServer> _parseMcpServers(Object? raw) {
+  if (raw is! List) return const [];
+  final out = <DataBackupMcpServer>[];
+  for (final e in raw) {
+    if (e is! Map) continue;
+    final item = Map<String, dynamic>.from(e);
+    final id = item['id']?.toString().trim() ?? '';
+    if (id.isEmpty) continue;
+    out.add(DataBackupMcpServer.fromJson(item));
   }
   return out;
 }
@@ -561,6 +643,106 @@ Map<String, dynamic> _videoSessionMetaJson(VideoSession session) {
     'updatedAt': session.updatedAt,
     'items': items,
   };
+}
+
+/// MCP 合并结果（元数据列表 + 待写入 SecretStore 的 token）。
+class McpMergeResult {
+  const McpMergeResult({
+    required this.servers,
+    required this.secretsToWrite,
+    required this.mergedCount,
+    required this.addedCount,
+  });
+
+  final List<McpServerConfig> servers;
+
+  /// `serverId → bearer token`；仅 [applySecrets] 时非空。
+  final Map<String, String> secretsToWrite;
+  final int mergedCount;
+  final int addedCount;
+}
+
+/// 按 id 合并 MCP Server：同 id 覆盖元数据；token 仅在 [applySecrets] 且源有值时写入。
+McpMergeResult mergeMcpServers({
+  required List<McpServerConfig> local,
+  required List<DataBackupMcpServer> incoming,
+  required bool applySecrets,
+}) {
+  final byId = <String, McpServerConfig>{
+    for (final s in local) s.id: s,
+  };
+  final secrets = <String, String>{};
+  var merged = 0;
+  var added = 0;
+
+  for (final entry in incoming) {
+    final src = entry.config;
+    final existing = byId[src.id];
+    final token = entry.authToken?.trim() ?? '';
+    if (existing == null) {
+      added++;
+      byId[src.id] = src.copyWith(clearAuthSecretRef: true);
+      if (applySecrets &&
+          src.authKind == McpAuthKind.bearer &&
+          token.isNotEmpty) {
+        secrets[src.id] = token;
+      }
+      continue;
+    }
+    merged++;
+    byId[src.id] = existing.copyWith(
+      displayName: src.displayName,
+      transport: src.transport,
+      baseUrl: src.baseUrl,
+      command: src.command,
+      clearCommand: src.command == null,
+      args: src.args,
+      env: src.env,
+      cwd: src.cwd,
+      clearCwd: src.cwd == null,
+      enabled: src.enabled,
+      authKind: src.authKind,
+      defaultToolPolicy: src.defaultToolPolicy,
+      clearDefaultToolPolicy: src.defaultToolPolicy == null,
+      toolPolicyOverrides: src.toolPolicyOverrides,
+      toolsCache: src.toolsCache,
+      lastProbeAtMs: src.lastProbeAtMs,
+      lastError: src.lastError,
+      probeStatus: src.probeStatus,
+      callTimeoutSeconds: src.callTimeoutSeconds,
+      // 保留本地 secret ref；token 另经 secretsToWrite 覆盖
+    );
+    if (applySecrets &&
+        src.authKind == McpAuthKind.bearer &&
+        token.isNotEmpty) {
+      secrets[src.id] = token;
+    }
+  }
+
+  final result = <McpServerConfig>[];
+  final seen = <String>{};
+  for (final s in local) {
+    final m = byId[s.id];
+    if (m != null) {
+      result.add(m);
+      seen.add(s.id);
+    }
+  }
+  for (final entry in incoming) {
+    final id = entry.config.id;
+    if (seen.contains(id)) continue;
+    final m = byId[id];
+    if (m != null) {
+      result.add(m);
+      seen.add(id);
+    }
+  }
+  return McpMergeResult(
+    servers: result,
+    secretsToWrite: secrets,
+    mergedCount: merged,
+    addedCount: added,
+  );
 }
 
 /// 按 id 合并提供商：同 id 覆盖非密钥字段；密钥仅在 [applySecrets] 且源有值时覆盖。

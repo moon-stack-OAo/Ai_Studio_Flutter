@@ -9,6 +9,7 @@ void main() {
       );
       expect(e?.delta, '你');
       expect(e?.done, isFalse);
+      expect(e?.toolCallDeltas, isEmpty);
     });
 
     test('[DONE]', () {
@@ -42,6 +43,55 @@ void main() {
         ),
       );
     });
+
+    test('delta.tool_calls 与 content 可并存', () {
+      final e = parseSseDataPayload(
+        '{"choices":[{"delta":{"content":"查","tool_calls":['
+        '{"index":0,"id":"call_1","type":"function","function":{"name":"lookup","arguments":"{\\"a\\":"}}'
+        ']},"finish_reason":null}]}',
+      );
+      expect(e?.delta, '查');
+      expect(e?.toolCallDeltas, hasLength(1));
+      expect(e?.toolCallDeltas.single.id, 'call_1');
+      expect(e?.toolCallDeltas.single.name, 'lookup');
+      expect(e?.toolCallDeltas.single.argumentsDelta, '{"a":');
+    });
+  });
+
+  group('ToolCallAccumulator', () {
+    test('按 index 增量拼接 id/name/arguments', () {
+      final acc = ToolCallAccumulator();
+      acc.apply([
+        const SseToolCallDelta(
+          index: 0,
+          id: 'call_a',
+          type: 'function',
+          name: 'lookup',
+          argumentsDelta: '{"q":',
+        ),
+      ]);
+      acc.apply([
+        const SseToolCallDelta(
+          index: 0,
+          argumentsDelta: '"hi"}',
+        ),
+      ]);
+      acc.apply([
+        const SseToolCallDelta(
+          index: 1,
+          id: 'call_b',
+          name: 'write',
+          argumentsDelta: '{}',
+        ),
+      ]);
+      final list = acc.snapshot();
+      expect(list, hasLength(2));
+      expect(list[0].id, 'call_a');
+      expect(list[0].name, 'lookup');
+      expect(list[0].arguments, '{"q":"hi"}');
+      expect(list[1].id, 'call_b');
+      expect(list[1].name, 'write');
+    });
   });
 
   group('SseLineParser 分片', () {
@@ -61,6 +111,21 @@ void main() {
       parser.addChunk('data: {"choices":[{"delta":{"content":"Z"}}]}');
       final flushed = parser.flush();
       expect(flushed.single.delta, 'Z');
+    });
+
+    test('跨 chunk 的 tool_calls 增量', () {
+      final parser = SseLineParser();
+      final acc = ToolCallAccumulator();
+      final e1 = parser.addChunk(
+        'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"c1","function":{"name":"f","arguments":"{"}}]}}]}\n',
+      );
+      acc.apply(e1.single.toolCallDeltas);
+      final e2 = parser.addChunk(
+        'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"arguments":"}"}}]},"finish_reason":"tool_calls"}]}\n',
+      );
+      acc.apply(e2.single.toolCallDeltas);
+      expect(e2.single.finishReason, 'tool_calls');
+      expect(acc.snapshot().single.arguments, '{}');
     });
   });
 }

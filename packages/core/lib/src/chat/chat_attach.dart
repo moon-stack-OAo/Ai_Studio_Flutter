@@ -45,6 +45,53 @@ bool supportsChatVision(String? chatModel) {
   return false;
 }
 
+/// OpenAI 兼容 `tools` / `tool_calls` 启发式（P6）；不支持则上层勿传 tools。
+///
+/// 显式 [force] 可覆盖启发式（如提供商配置日后扩展）；默认 null 走 id 匹配。
+bool supportsChatTools(String? chatModel, {bool? force}) {
+  if (force != null) return force;
+  final id = (chatModel ?? '').trim().toLowerCase();
+  if (id.isEmpty) return false;
+  // 明确不支持 / 非对话面
+  const deny = <String>[
+    'instruct',
+    'embedding',
+    'whisper',
+    'tts',
+    'dall-e',
+    'gpt-image',
+    'imagen',
+    'flux',
+    'sora',
+    'veo',
+    'kling',
+  ];
+  for (final n in deny) {
+    if (id.contains(n)) return false;
+  }
+  const needles = <String>[
+    'gpt-4',
+    'gpt-5',
+    'gpt-3.5',
+    'o1',
+    'o3',
+    'o4',
+    'claude',
+    'gemini',
+    'grok',
+    'deepseek',
+    'qwen',
+    'mistral',
+    'command-r',
+    'tool',
+    'function',
+  ];
+  for (final n in needles) {
+    if (id.contains(n)) return true;
+  }
+  return false;
+}
+
 /// MIME 是否在允许列表（大小写不敏感；空视为未知）。
 bool isAllowedChatAttachmentMime(String? mime) {
   final m = (mime ?? '').trim().toLowerCase();

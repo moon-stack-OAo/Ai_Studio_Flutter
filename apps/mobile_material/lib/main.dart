@@ -27,7 +27,20 @@ Future<void> main() async {
   final themeController = ThemeController(repository: appearance);
   themeController.loadFrom(appearance.settings);
 
-  final providers = ProviderRepository(storage: SecureProviderStorage());
+  final secretStore = FlutterSecureSecretStore();
+  final providers = ProviderRepository(
+    storage: SecureProviderStorage(secretStore: secretStore),
+  );
+  final mcpServers = McpServerRepository(
+    storage: PrefsMcpServerStorage(),
+    secretStore: secretStore,
+  );
+  final mcpSessionFactory = HttpSseMcpSessionFactory(
+    secretStoreAuthBuilder: (server) => createMcpAuthProvider(
+      server: server,
+      secretStore: secretStore,
+    ),
+  );
   final chatAttachmentStore = FileImageAssetStore(subdir: 'chat_image_cache');
   final sessions = ChatSessionRepository(
     storage: PrefsChatSessionStorage(),
@@ -68,6 +81,7 @@ Future<void> main() async {
     imageAssetStore: imageAssetStore,
     chatAttachmentStore: chatAttachmentStore,
     videoPosterStore: videoPosterStore,
+    mcpServers: mcpServers,
   );
 
   final updateController = MobileUpdateController(
@@ -90,10 +104,13 @@ Future<void> main() async {
       chatClient: chatClient,
       imageClient: imageClient,
       videoClient: videoClient,
+      mcpServerRepository: mcpServers,
+      mcpSessionFactory: mcpSessionFactory,
       updateController: updateController,
       bootstrap: () async {
         await Future.wait<void>([
           providers.load(),
+          mcpServers.load(),
           sessions.load(),
           imageSessions.load(),
           videoSessions.load(),
@@ -101,6 +118,12 @@ Future<void> main() async {
           appLogs.load(),
           updateController.ensurePrefsLoaded(),
         ]);
+        // 移动端不支持本地 stdio：导入配置若启用则强制停用，避免对话误暴露 tools。
+        for (final s in mcpServers.servers) {
+          if (s.transport == McpTransport.stdio && s.enabled) {
+            await mcpServers.setEnabled(s.id, false);
+          }
+        }
         await appLogs.append(
           level: AppLogLevel.info,
           source: AppLogSources.system,
@@ -128,6 +151,8 @@ class AiStudioApp extends StatefulWidget {
     this.chatClient,
     this.imageClient,
     this.videoClient,
+    this.mcpServerRepository,
+    this.mcpSessionFactory,
     this.updateController,
     this.updatePrefs,
     this.startupUpdateCheckDelay = const Duration(milliseconds: 800),
@@ -149,6 +174,8 @@ class AiStudioApp extends StatefulWidget {
   final OpenAiCompatibleChatClient? chatClient;
   final OpenAiCompatibleImageClient? imageClient;
   final OpenAiCompatibleVideoClient? videoClient;
+  final McpServerRepository? mcpServerRepository;
+  final McpSessionFactory? mcpSessionFactory;
   final MobileUpdateController? updateController;
   final UpdatePrefs? updatePrefs;
   final Duration startupUpdateCheckDelay;
@@ -242,6 +269,8 @@ class _AiStudioAppState extends State<AiStudioApp> {
                       chatClient: widget.chatClient,
                       imageClient: widget.imageClient,
                       videoClient: widget.videoClient,
+                      mcpServerRepository: widget.mcpServerRepository,
+                      mcpSessionFactory: widget.mcpSessionFactory,
                       updateController: widget.updateController,
                       updatePrefs: widget.updatePrefs,
                       startupUpdateCheckDelay: widget.startupUpdateCheckDelay,

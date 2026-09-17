@@ -157,7 +157,7 @@ Future<String> enhancePrompt({
   final effectiveTemp = temperature ?? resolvedSkill.temperature;
   final effectiveMaxTokens = _clampEnhanceMaxTokens(resolvedSkill.maxTokens);
 
-  final raw = await chatClient.streamChatWithCredentials(
+  final stream = await chatClient.streamChatWithCredentials(
     credentials,
     messages: [
       {'role': 'system', 'content': system},
@@ -170,7 +170,7 @@ Future<String> enhancePrompt({
     onDelta: onDelta,
   );
 
-  final content = stripEnhancedPrompt(raw);
+  final content = stripEnhancedPrompt(stream.content);
   if (content.isEmpty) {
     throw const ChatApiException('优化结果为空，请重试');
   }

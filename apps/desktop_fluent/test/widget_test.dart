@@ -273,6 +273,11 @@ void main() {
 
   testWidgets('about page shows version and persists closeBehavior',
       (tester) async {
+    tester.view.physicalSize = const Size(1280, 1200);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
     final appearance = AppearanceRepository(
       storage: MemoryAppearanceStorage(),
     );
@@ -333,7 +338,10 @@ void main() {
     expect(find.text('最小化到托盘'), findsOneWidget);
     expect(appearance.settings.closeBehavior, 'ask');
 
-    await tester.tap(find.text('直接退出'));
+    final quitLabel = find.text('直接退出');
+    await tester.ensureVisible(quitLabel);
+    await tester.pumpAndSettle();
+    await tester.tap(quitLabel);
     await tester.pumpAndSettle();
     expect(appearance.settings.closeBehavior, 'quit');
 
@@ -349,7 +357,7 @@ void main() {
     expect(find.text('开源许可暂未开放'), findsNothing);
   });
 
-  testWidgets('about page fits default 1280x820 without vertical scroll',
+  testWidgets('about page exposes key sections and can scroll at 1280x820',
       (tester) async {
     tester.view.physicalSize = const Size(1280, 820);
     tester.view.devicePixelRatio = 1.0;
@@ -412,17 +420,26 @@ void main() {
     await tester.tap(find.text('关于与更新'));
     await tester.pumpAndSettle();
 
-    final aboutPos = tester
-        .state<ScrollableState>(
-          find
-              .descendant(
-                of: find.byType(SettingsAboutPage),
-                matching: find.byType(Scrollable),
-              )
-              .first,
-        )
-        .position;
-    expect(aboutPos.maxScrollExtent, 0);
+    expect(find.byType(SettingsAboutPage), findsOneWidget);
+    expect(find.text('关于与更新'), findsWidgets);
+    expect(find.text('检查更新'), findsOneWidget);
+    expect(find.text('更新日志'), findsOneWidget);
+
+    final aboutScrollable = find.descendant(
+      of: find.byType(SettingsAboutPage),
+      matching: find.byType(Scrollable),
+    );
+    final aboutPos =
+        tester.state<ScrollableState>(aboutScrollable.first).position;
+    // 多版本更新日志后默认窗高通常需纵向滚动；断言可滚且底部操作可达。
+    expect(aboutPos.maxScrollExtent, greaterThan(0));
+
+    // ListView 懒构建：先滚到底再建出「关闭行为 / 数据」。
+    aboutPos.jumpTo(aboutPos.maxScrollExtent);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+    expect(find.text('关闭行为'), findsOneWidget);
+    expect(find.text('清除本地数据'), findsWidgets);
   });
 
   testWidgets('about clear data shows confirm dialog', (tester) async {
@@ -446,6 +463,9 @@ void main() {
       storage: MemoryChatDefaultsStorage(),
     );
     await chatDefaults.load();
+
+    await tester.binding.setSurfaceSize(const Size(1280, 1200));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
 
     await tester.pumpWidget(
       FluentApp(
@@ -472,13 +492,14 @@ void main() {
     await tester.pumpAndSettle();
 
     final clearBtn = find.text('清除本地数据');
-    await tester.ensureVisible(clearBtn);
+    expect(clearBtn, findsWidgets);
+    await tester.ensureVisible(clearBtn.first);
     await tester.pumpAndSettle();
-    await tester.tap(clearBtn);
+    await tester.tap(clearBtn.first);
     await tester.pumpAndSettle();
     expect(find.text('仅会话（对话 / 生图 / 生视频）'), findsOneWidget);
     expect(find.text('仅媒体缓存'), findsOneWidget);
-    expect(find.text('全部（含设置与密钥）'), findsOneWidget);
+    expect(find.text('全部（含设置、MCP 与密钥）'), findsOneWidget);
     await tester.tap(find.text('取消'));
     await tester.pumpAndSettle();
   });
@@ -620,6 +641,7 @@ void main() {
     await tester.pump();
 
     expect(find.bySemanticsLabel(RegExp(r'提供商')), findsWidgets);
+    expect(find.bySemanticsLabel(RegExp(r'业务 MCP')), findsWidgets);
     expect(find.bySemanticsLabel(RegExp(r'外观')), findsWidgets);
   });
 

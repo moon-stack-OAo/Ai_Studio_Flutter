@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 
 import '../../image/widgets/image_lightbox.dart';
 import 'markdown_host.dart';
+import 'tool_call_trace_card.dart';
 
 class MessageBubble extends StatefulWidget {
   const MessageBubble({
@@ -15,11 +16,15 @@ class MessageBubble extends StatefulWidget {
     required this.message,
     this.onRecall,
     this.recallEnabled = false,
+    this.hideToolCallsStrip = false,
   });
 
   final ChatMessage message;
   final VoidCallback? onRecall;
   final bool recallEnabled;
+
+  /// 工具轮已由列表聚合卡展示时，隐藏气泡内「调用了工具」条。
+  final bool hideToolCallsStrip;
 
   @override
   State<MessageBubble> createState() => _MessageBubbleState();
@@ -129,18 +134,24 @@ class _MessageBubbleState extends State<MessageBubble> {
   Widget build(BuildContext context) {
     final tokens = fluentTokensOf(context);
     final isUser = message.role == ChatRole.user;
+    final isTool = message.role == ChatRole.tool;
     final isDark = tokens.brightness == Brightness.dark;
     final Color bg;
     if (isUser) {
       bg = tokens.surface;
+    } else if (isTool) {
+      bg = Color.lerp(tokens.surface, tokens.canvas, 0.4)!;
     } else if (isDark) {
       bg = tokens.surfaceElevated;
     } else {
       bg = Color.lerp(tokens.surface, tokens.surfaceElevated, 0.55)!;
     }
     final border = tokens.border;
-    final roleColor = isUser ? tokens.primaryPressed : tokens.inkMuted;
-    final showActions = (_hovered || _focused) && !message.streaming;
+    final roleColor = isUser
+        ? tokens.primaryPressed
+        : (isTool ? tokens.inkMuted : tokens.inkMuted);
+    final showActions =
+        (_hovered || _focused) && !message.streaming && !isTool;
     final canRecall = widget.recallEnabled && widget.onRecall != null;
     final attachments = isUser ? message.attachments : const <ImageRef>[];
     final hasAttachments = attachments.isNotEmpty;
@@ -150,6 +161,7 @@ class _MessageBubbleState extends State<MessageBubble> {
             ? (message.errorMessage ?? '出错了')
             : message.content);
     final showUserText = isUser && bodyText.isNotEmpty;
+    final roleLabel = isUser ? '你' : (isTool ? '工具' : '助手');
 
     return FocusableActionDetector(
       onShowFocusHighlight: (v) => setState(() => _focused = v),
@@ -159,8 +171,9 @@ class _MessageBubbleState extends State<MessageBubble> {
         child: FlyoutTarget(
           controller: _flyout,
           child: GestureDetector(
-            onSecondaryTapUp: (details) =>
-                _showContextMenu(details.globalPosition),
+            onSecondaryTapUp: isTool
+                ? null
+                : (details) => _showContextMenu(details.globalPosition),
             child: Padding(
               padding: const EdgeInsets.symmetric(vertical: 9),
               // 短消息随内容宽度；外层 Align 左右分侧 + maxWidth:780 约束长内容
@@ -179,7 +192,7 @@ class _MessageBubbleState extends State<MessageBubble> {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Text(
-                          isUser ? '你' : '助手',
+                          roleLabel,
                           style: TextStyle(
                             fontSize: 11,
                             fontWeight: FontWeight.w600,
@@ -188,7 +201,7 @@ class _MessageBubbleState extends State<MessageBubble> {
                             fontFamily: tokens.fontFamily,
                           ),
                         ),
-                        if (!isUser) ...[
+                        if (!isUser && !isTool) ...[
                           Builder(
                             builder: (_) {
                               final meta = formatChatMessageMeta(
@@ -254,10 +267,13 @@ class _MessageBubbleState extends State<MessageBubble> {
                                 ),
                             ],
                           )
-                        : _AssistantBody(
-                            message: message,
-                            tokens: tokens,
-                          ),
+                        : isTool
+                            ? ToolResultBubbleBody(message: message)
+                            : _AssistantBody(
+                                message: message,
+                                tokens: tokens,
+                                hideToolCallsStrip: widget.hideToolCallsStrip,
+                              ),
                   ),
                   if (message.stopped)
                     Padding(
@@ -493,14 +509,18 @@ class _AssistantBody extends StatelessWidget {
   const _AssistantBody({
     required this.message,
     required this.tokens,
+    this.hideToolCallsStrip = false,
   });
 
   final ChatMessage message;
   final FluentTokens tokens;
+  final bool hideToolCallsStrip;
 
   @override
   Widget build(BuildContext context) {
-    final emptyStreaming = message.content.isEmpty && message.streaming;
+    final emptyStreaming = message.content.isEmpty &&
+        message.streaming &&
+        !message.hasToolCalls;
     final data = emptyStreaming
         ? ''
         : (message.content.isEmpty && message.error
@@ -514,10 +534,13 @@ class _AssistantBody extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        MarkdownHost(
-          data: data,
-          error: message.error,
-        ),
+        if (message.hasToolCalls && !hideToolCallsStrip)
+          ToolCallsInvokedStrip(toolCalls: message.toolCalls),
+        if (data.isNotEmpty || message.error)
+          MarkdownHost(
+            data: data,
+            error: message.error,
+          ),
         if (message.streaming && message.content.isNotEmpty)
           const Padding(
             padding: EdgeInsets.only(top: 2),

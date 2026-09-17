@@ -34,7 +34,7 @@ void main() {
 
     final chat = OpenAiCompatibleChatClient(client: client);
     final deltas = <String>[];
-    final full = await chat.streamChat(
+    final result = await chat.streamChat(
       baseUrl: 'https://api.example.com/v1',
       apiKey: 'sk-test',
       model: 'gpt-test',
@@ -43,8 +43,81 @@ void main() {
       ],
       onDelta: (d, _) => deltas.add(d),
     );
-    expect(full, '你好');
+    expect(result.content, '你好');
+    expect(result.toolCalls, isEmpty);
     expect(deltas, ['你', '好']);
+  });
+
+  test('可选 tools 写入 body；缺省不传', () async {
+    Map? captured;
+    final client = MockClient.streaming((request, bodyStream) async {
+      captured = jsonDecode(await bodyStream.bytesToString()) as Map;
+      return http.StreamedResponse(
+        Stream.value(utf8.encode('data: [DONE]\n')),
+        200,
+      );
+    });
+    final chat = OpenAiCompatibleChatClient(client: client);
+    await chat.streamChat(
+      baseUrl: 'https://x.test/v1/',
+      apiKey: 'k',
+      model: 'm',
+      messages: [
+        {'role': 'user', 'content': 'a'},
+      ],
+      tools: [
+        {
+          'type': 'function',
+          'function': {'name': 'lookup', 'parameters': <String, dynamic>{}},
+        },
+      ],
+      toolChoice: 'auto',
+    );
+    expect(captured!['tools'], isA<List>());
+    expect(captured!['tool_choice'], 'auto');
+
+    await chat.streamChat(
+      baseUrl: 'https://x.test/v1/',
+      apiKey: 'k',
+      model: 'm',
+      messages: [
+        {'role': 'user', 'content': 'a'},
+      ],
+    );
+    expect(captured!.containsKey('tools'), isFalse);
+  });
+
+  test('流式 tool_calls 累积进 ChatStreamResult', () async {
+    final client = MockClient.streaming((request, bodyStream) async {
+      await bodyStream.drain();
+      final controller = StreamController<List<int>>();
+      scheduleMicrotask(() {
+        controller.add(
+          utf8.encode(
+            'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_1","type":"function","function":{"name":"lookup","arguments":"{\\"q\\":"}}]}}]}\n'
+            'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"arguments":"\\"x\\"}"}}]},"finish_reason":"tool_calls"}]}\n'
+            'data: [DONE]\n',
+          ),
+        );
+        controller.close();
+      });
+      return http.StreamedResponse(controller.stream, 200);
+    });
+    final chat = OpenAiCompatibleChatClient(client: client);
+    final result = await chat.streamChat(
+      baseUrl: 'https://api.example.com/v1',
+      apiKey: 'k',
+      model: 'm',
+      messages: [
+        {'role': 'user', 'content': 'x'},
+      ],
+    );
+    expect(result.content, '');
+    expect(result.finishReason, 'tool_calls');
+    expect(result.toolCalls, hasLength(1));
+    expect(result.toolCalls.single.id, 'call_1');
+    expect(result.toolCalls.single.name, 'lookup');
+    expect(result.toolCalls.single.arguments, '{"q":"x"}');
   });
 
   test('maxTokens>0 才写入 body', () async {

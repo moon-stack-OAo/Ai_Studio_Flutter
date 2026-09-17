@@ -13,15 +13,23 @@ int countChatTurns(Iterable<ChatMessage> messages) {
   return n;
 }
 
-/// 粗估字符数（非 Token）。
+/// 粗估字符数（非 Token）；含 tool_calls 参数与 toolCallId。
 int estimateChatChars(Iterable<ChatMessage> messages) {
   var total = 0;
   for (final m in messages) {
     total += m.content.length;
+    if (m.toolCallId != null) total += m.toolCallId!.length;
+    for (final tc in m.toolCalls) {
+      total += tc.id.length + tc.name.length + tc.arguments.length;
+    }
   }
   return total;
 }
 
+/// 丢弃最旧一轮：从首个 user 起，直到下一 user（不含）。
+///
+/// 一轮内可含 assistant（含 tool_calls）与随后的 role=tool 结果；
+/// 整轮一起丢，避免留下不成对的 tool 消息。
 List<ChatMessage> _dropOldestTurn(List<ChatMessage> rest) {
   final firstUser = rest.indexWhere((m) => m.role == ChatRole.user);
   if (firstUser < 0) return rest;
@@ -34,6 +42,34 @@ List<ChatMessage> _dropOldestTurn(List<ChatMessage> rest) {
   }
   if (nextUser < 0) return rest;
   return rest.sublist(nextUser);
+}
+
+/// 裁剪起点前若落在 tool 结果上，回退到对应 assistant（含 tool_calls），
+/// 保证发出的历史不出现「孤立 tool」。
+int _alignTrimStart(List<ChatMessage> rest, int startIdx) {
+  if (startIdx <= 0 || startIdx >= rest.length) return startIdx;
+  var i = startIdx;
+  while (i > 0 && rest[i].role == ChatRole.tool) {
+    i--;
+  }
+  // 若当前是紧跟 tool 的 assistant（带 tool_calls），保留它；
+  // 若前面还有更早的 tool，继续回退由 while 处理。
+  if (i > 0 &&
+      rest[i].role == ChatRole.assistant &&
+      rest[i].hasToolCalls) {
+    // 已对齐到发起 tool_calls 的 assistant。
+    return i;
+  }
+  if (rest[i].role == ChatRole.tool) {
+    // 仍孤立：再向前找带 tool_calls 的 assistant。
+    for (var j = i; j >= 0; j--) {
+      if (rest[j].role == ChatRole.assistant && rest[j].hasToolCalls) {
+        return j;
+      }
+      if (rest[j].role == ChatRole.user) break;
+    }
+  }
+  return i;
 }
 
 /// 裁剪结果。
@@ -68,6 +104,8 @@ class TrimChatResult {
 }
 
 /// 保留全部 system + 最近 [maxTurns] 轮；可选字符预算。
+///
+/// tool 轨迹随所属 user 轮一起保留/丢弃；起点对齐避免不成对 tool。
 TrimChatResult trimChatMessages(
   List<ChatMessage> messages, {
   bool enabled = true,
@@ -83,7 +121,9 @@ TrimChatResult trimChatMessages(
   for (final m in messages) {
     if (m.role == ChatRole.system) {
       system.add(m);
-    } else if (m.role == ChatRole.user || m.role == ChatRole.assistant) {
+    } else if (m.role == ChatRole.user ||
+        m.role == ChatRole.assistant ||
+        m.role == ChatRole.tool) {
       rest.add(m);
     }
   }
@@ -105,6 +145,7 @@ TrimChatResult trimChatMessages(
         }
       }
     }
+    startIdx = _alignTrimStart(rest, startIdx);
     kept = rest.sublist(startIdx);
     truncated = true;
     droppedTurns = totalTurns - countChatTurns(kept);
@@ -153,7 +194,10 @@ TrimChatResult trimChatMessages(
   );
 }
 
-/// 组装 API messages：system 前置，history 仅 user/assistant。
+/// 组装 API messages：system 前置；history 含 user / assistant / tool。
+///
+/// assistant 若有 [ChatMessage.toolCalls] 则写入 OpenAI `tool_calls`；
+/// role=tool 写入 `tool_call_id`。
 ///
 /// [attachmentDataUrls]：`messageId → data:` URL 列表；有附图的 user 消息
 /// 使用 parts（text + image_url）；无附图仍用 string content。
@@ -169,8 +213,25 @@ List<Map<String, dynamic>> buildApiMessages({
   }
   final urlsByMsg = attachmentDataUrls ?? const <String, List<String>>{};
   for (final m in history) {
+    if (m.role == ChatRole.system) continue;
+
+    if (m.role == ChatRole.tool) {
+      final map = <String, dynamic>{
+        'role': 'tool',
+        'content': m.content,
+      };
+      final tcid = m.toolCallId;
+      if (tcid != null && tcid.isNotEmpty) {
+        map['tool_call_id'] = tcid;
+      }
+      out.add(map);
+      continue;
+    }
+
     if (m.role != ChatRole.user && m.role != ChatRole.assistant) continue;
+
     final urls = urlsByMsg[m.id];
+    Map<String, dynamic> entry;
     if (m.role == ChatRole.user && urls != null && urls.isNotEmpty) {
       final parts = <Map<String, dynamic>>[];
       final text = m.content;
@@ -185,13 +246,18 @@ List<Map<String, dynamic>> buildApiMessages({
         });
       }
       if (parts.isEmpty) {
-        out.add({'role': m.role.wire, 'content': ''});
+        entry = {'role': m.role.wire, 'content': ''};
       } else {
-        out.add({'role': m.role.wire, 'content': parts});
+        entry = {'role': m.role.wire, 'content': parts};
       }
     } else {
-      out.add({'role': m.role.wire, 'content': m.content});
+      entry = {'role': m.role.wire, 'content': m.content};
     }
+
+    if (m.role == ChatRole.assistant && m.hasToolCalls) {
+      entry['tool_calls'] = m.toolCalls.map((t) => t.toApiJson()).toList();
+    }
+    out.add(entry);
   }
   return out;
 }

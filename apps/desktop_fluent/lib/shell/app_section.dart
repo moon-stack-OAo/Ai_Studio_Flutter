@@ -14,6 +14,7 @@ enum AppSection {
 
 enum SettingsCategory {
   providers,
+  mcp,
   chatDefaults,
   appearance,
   logs,
@@ -21,6 +22,7 @@ enum SettingsCategory {
 
   String get label => switch (this) {
         SettingsCategory.providers => '提供商',
+        SettingsCategory.mcp => '业务 MCP',
         SettingsCategory.chatDefaults => '对话默认',
         SettingsCategory.appearance => '外观',
         SettingsCategory.logs => '日志',
@@ -29,6 +31,7 @@ enum SettingsCategory {
 
   String get description => switch (this) {
         SettingsCategory.providers => '密钥 · 连接 · 模型',
+        SettingsCategory.mcp => 'Server · 工具 · 授权',
         SettingsCategory.chatDefaults => '温度 · Tokens · 裁剪',
         SettingsCategory.appearance => '主题 · 字号 · 密度',
         SettingsCategory.logs => '筛选 · 复制 · 清空',

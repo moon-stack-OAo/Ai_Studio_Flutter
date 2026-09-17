@@ -13,6 +13,8 @@ void main() {
   late AppLogRepository logs;
   late MemoryImageAssetStore imageStore;
   late MemoryVideoAssetStore videoStore;
+  late MemorySecretStore mcpSecrets;
+  late McpServerRepository mcpServers;
   late DataBackupService service;
 
   setUp(() async {
@@ -34,6 +36,11 @@ void main() {
       assetStore: videoStore,
     );
     logs = AppLogRepository(storage: MemoryAppLogStorage());
+    mcpSecrets = MemorySecretStore();
+    mcpServers = McpServerRepository(
+      storage: MemoryMcpServerStorage(),
+      secretStore: mcpSecrets,
+    );
 
     await providers.load();
     await appearance.load();
@@ -42,6 +49,7 @@ void main() {
     await imageSessions.load();
     await videoSessions.load();
     await logs.load();
+    await mcpServers.load();
 
     service = DataBackupService(
       providers: providers,
@@ -53,6 +61,7 @@ void main() {
       logs: logs,
       imageAssetStore: imageStore,
       videoAssetStore: videoStore,
+      mcpServers: mcpServers,
     );
   });
 
@@ -67,6 +76,13 @@ void main() {
       imageModel: 'img-test',
     );
     await providers.setActiveProvider(custom.id);
+
+    await mcpServers.add(
+      displayName: 'Biz MCP',
+      baseUrl: 'https://mcp.backup.test/mcp',
+      authKind: McpAuthKind.bearer,
+      bearerToken: 'mcp-tok-backup-xyz',
+    );
 
     final chat = await chatSessions.createSession(title: '导出对话');
     await chatSessions.appendMessage(
@@ -343,6 +359,7 @@ void main() {
       imageAssetStore: imageStore,
       chatAttachmentStore: chatStore,
       videoAssetStore: videoStore,
+      mcpServers: mcpServers,
     );
 
     final chat = await chatSessions.createSession(title: '附图会话');
@@ -364,5 +381,93 @@ void main() {
     final media = await service.clearLocalData(ClearLocalDataFlags.mediaOnly);
     expect(media.clearedMediaCache, isTrue);
     expect(chatStore.entries, isEmpty);
+  });
+
+  test('default export omits MCP bearer token', () async {
+    await seedSampleData();
+    final json = await service.exportBackupJson();
+    expect(json.contains('mcp-tok-backup-xyz'), isFalse);
+    expect(json.contains('Biz MCP'), isTrue);
+    expect(json.contains('"authToken"'), isFalse);
+
+    final payload = DataBackupPayload.parse(json);
+    expect(payload.mcpServers, isNotNull);
+    expect(payload.mcpServers, isNotEmpty);
+    for (final s in payload.mcpServers!) {
+      expect(s.authToken, isNull);
+      expect(s.config.authSecretRef, isNull);
+    }
+  });
+
+  test('includeSecrets exports MCP token and importSecrets restores it',
+      () async {
+    await seedSampleData();
+    final json = await service.exportBackupJson(
+      const DataBackupExportOptions(includeSecrets: true),
+    );
+    expect(json.contains('mcp-tok-backup-xyz'), isTrue);
+
+    await service.clearLocalData(ClearLocalDataFlags.all);
+    expect(mcpServers.servers, isEmpty);
+
+    await service.importBackup(
+      json,
+      options: const DataBackupImportOptions(importSecrets: false),
+    );
+    expect(mcpServers.servers.any((s) => s.displayName == 'Biz MCP'), isTrue);
+    final without = mcpServers.servers.firstWhere((s) => s.displayName == 'Biz MCP');
+    expect(await mcpServers.hasBearerSecret(without.id), isFalse);
+
+    await service.importBackup(
+      json,
+      options: const DataBackupImportOptions(importSecrets: true),
+    );
+    final withTok =
+        mcpServers.servers.firstWhere((s) => s.displayName == 'Biz MCP');
+    expect(await mcpServers.readBearerSecret(withTok.id), 'mcp-tok-backup-xyz');
+  });
+
+  test('legacy backup without mcp block still imports', () async {
+    final legacy = {
+      'schemaVersion': dataBackupSchemaVersion,
+      'exportedAtMs': 1,
+      'includeSecrets': false,
+      'providers': {
+        'activeProviderId': '',
+        'items': [
+          {
+            'id': 'legacy_p',
+            'name': 'Legacy',
+            'type': 'openai_compatible',
+            'baseUrl': 'https://legacy.test/v1',
+            'chatModel': 'm',
+          },
+        ],
+      },
+    };
+    final result = await service.importBackup(legacy);
+    expect(result.mcpImported, isFalse);
+    expect(providers.providers.any((p) => p.name == 'Legacy'), isTrue);
+  });
+
+  test('clearLocalData secrets clears MCP tokens; all clears MCP servers',
+      () async {
+    await seedSampleData();
+    final id = mcpServers.servers.single.id;
+    expect(await mcpServers.hasBearerSecret(id), isTrue);
+
+    final secretsOnly = await service.clearLocalData(
+      const ClearLocalDataFlags(secrets: true),
+    );
+    expect(secretsOnly.clearedSecrets, isTrue);
+    expect(mcpServers.servers, isNotEmpty);
+    expect(await mcpServers.hasBearerSecret(id), isFalse);
+
+    await mcpServers.writeBearerSecret(id, 'mcp-tok-again');
+    final all = await service.clearLocalData(ClearLocalDataFlags.all);
+    expect(all.clearedSecrets, isTrue);
+    expect(all.clearedProviders, isTrue);
+    expect(mcpServers.servers, isEmpty);
+    expect(mcpSecrets.debugData, isEmpty);
   });
 }

@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 
 import '../../image/widgets/image_lightbox.dart';
 import 'markdown_host.dart';
+import 'tool_call_trace_card.dart';
 
 class MessageBubble extends StatelessWidget {
   const MessageBubble({
@@ -15,11 +16,15 @@ class MessageBubble extends StatelessWidget {
     required this.message,
     this.onRecall,
     this.recallEnabled = false,
+    this.hideToolCallsStrip = false,
   });
 
   final ChatMessage message;
   final VoidCallback? onRecall;
   final bool recallEnabled;
+
+  /// 工具轮已由列表聚合卡展示时，隐藏气泡内「调用了工具」条。
+  final bool hideToolCallsStrip;
 
   Future<void> _copy(BuildContext context) async {
     final text = message.content.isEmpty && message.error
@@ -100,17 +105,26 @@ class MessageBubble extends StatelessWidget {
   Widget build(BuildContext context) {
     final tokens = materialTokensOf(context);
     final isUser = message.role == ChatRole.user;
+    final isTool = message.role == ChatRole.tool;
     final align =
         isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start;
-    final bg = isUser
-        ? tokens.primary.withValues(alpha: 0.14)
-        : tokens.surface;
+    final Color bg;
+    if (isUser) {
+      bg = tokens.primary.withValues(alpha: 0.14);
+    } else if (isTool) {
+      bg = Color.lerp(tokens.surface, tokens.canvas, 0.4)!;
+    } else {
+      bg = tokens.surface;
+    }
     final border = isUser
         ? tokens.primary.withValues(alpha: 0.28)
         : tokens.border;
-    final label = isUser ? '你' : '助手';
+    final label = isUser ? '你' : (isTool ? '工具' : '助手');
 
-    final bodyText = message.content.isEmpty && message.streaming
+    final emptyStreaming = message.content.isEmpty &&
+        message.streaming &&
+        !message.hasToolCalls;
+    final bodyText = emptyStreaming
         ? ''
         : (message.content.isEmpty && message.error
             ? (message.errorMessage ?? '出错了')
@@ -138,7 +152,7 @@ class MessageBubble extends StatelessWidget {
                     fontFamily: tokens.fontFamily,
                   ),
                 ),
-                if (!isUser) ...[
+                if (!isUser && !isTool) ...[
                   Builder(
                     builder: (_) {
                       final meta = formatChatMessageMeta(
@@ -167,7 +181,7 @@ class MessageBubble extends StatelessWidget {
             ),
           ),
           GestureDetector(
-            onLongPress: () => _showActions(context),
+            onLongPress: isTool ? null : () => _showActions(context),
             child: ConstrainedBox(
               constraints: BoxConstraints(
                 maxWidth: MediaQuery.sizeOf(context).width * 0.88,
@@ -221,10 +235,14 @@ class MessageBubble extends StatelessWidget {
                             ),
                         ],
                       )
-                    : MarkdownHost(
-                        data: bodyText,
-                        error: message.error,
-                      ),
+                    : isTool
+                        ? ToolResultBubbleBody(message: message)
+                        : _AssistantBody(
+                            message: message,
+                            bodyText: bodyText,
+                            emptyStreaming: emptyStreaming,
+                            hideToolCallsStrip: hideToolCallsStrip,
+                          ),
               ),
             ),
           ),
@@ -256,6 +274,46 @@ class MessageBubble extends StatelessWidget {
             ),
         ],
       ),
+    );
+  }
+}
+
+class _AssistantBody extends StatelessWidget {
+  const _AssistantBody({
+    required this.message,
+    required this.bodyText,
+    required this.emptyStreaming,
+    this.hideToolCallsStrip = false,
+  });
+
+  final ChatMessage message;
+  final String bodyText;
+  final bool emptyStreaming;
+  final bool hideToolCallsStrip;
+
+  @override
+  Widget build(BuildContext context) {
+    if (emptyStreaming) {
+      return Text(
+        '…',
+        style: TextStyle(
+          fontSize: 14,
+          color: materialTokensOf(context).inkMuted,
+        ),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (message.hasToolCalls && !hideToolCallsStrip)
+          ToolCallsInvokedStrip(toolCalls: message.toolCalls),
+        if (bodyText.isNotEmpty || message.error)
+          MarkdownHost(
+            data: bodyText,
+            error: message.error,
+          ),
+      ],
     );
   }
 }

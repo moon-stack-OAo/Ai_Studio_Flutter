@@ -33,6 +33,8 @@ class AppShell extends StatefulWidget {
     this.chatClient,
     this.imageClient,
     this.videoClient,
+    this.mcpServerRepository,
+    this.mcpSessionFactory,
     this.updateController,
     this.closeCoordinator,
     this.updatePrefs,
@@ -53,6 +55,8 @@ class AppShell extends StatefulWidget {
   final OpenAiCompatibleChatClient? chatClient;
   final OpenAiCompatibleImageClient? imageClient;
   final OpenAiCompatibleVideoClient? videoClient;
+  final McpServerRepository? mcpServerRepository;
+  final McpSessionFactory? mcpSessionFactory;
   final UpdateController? updateController;
   final WindowCloseCoordinator? closeCoordinator;
   final UpdatePrefs? updatePrefs;
@@ -102,7 +106,10 @@ class _AppShellState extends State<AppShell> {
         appLogRepository: widget.appLogRepository,
         generation: widget.generation,
         chatClient: widget.chatClient,
+        mcpServerRepository: widget.mcpServerRepository,
+        mcpSessionFactory: widget.mcpSessionFactory,
         onOpenProviders: _openProviders,
+        onOpenMcp: _openMcp,
       ),
       ImagePage(
         providerRepository: widget.providerRepository,
@@ -324,6 +331,13 @@ class _AppShellState extends State<AppShell> {
     });
   }
 
+  void _openMcp() {
+    setState(() {
+      _section = AppSection.settings;
+      _settingsCategory = SettingsCategory.mcp;
+    });
+  }
+
   void _onPaneChanged(int index) {
     final next = switch (index) {
       0 => AppSection.chat,
@@ -393,6 +407,8 @@ class _AppShellState extends State<AppShell> {
                       dataBackupService: widget.dataBackupService,
                       generation: widget.generation,
                       updateController: widget.updateController,
+                      mcpServerRepository: widget.mcpServerRepository,
+                      mcpSessionFactory: widget.mcpSessionFactory,
                     ),
                   ],
                 );

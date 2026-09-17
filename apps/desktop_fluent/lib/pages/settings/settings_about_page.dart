@@ -383,7 +383,7 @@ class _SettingsAboutPageState extends State<SettingsAboutPage> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Text(
-                    '将导出提供商、外观、对话默认与会话元数据为 JSON 文件。'
+                    '将导出提供商、业务 MCP、外观、对话默认与会话元数据为 JSON 文件。'
                     '媒体二进制不会写入备份。',
                   ),
                   const SizedBox(height: 14),
@@ -392,12 +392,12 @@ class _SettingsAboutPageState extends State<SettingsAboutPage> {
                     onChanged: (v) {
                       setLocal(() => includeSecrets = v == true);
                     },
-                    content: const Text('包含 API Key 明文'),
+                    content: const Text('包含 API Key / MCP Token 明文'),
                   ),
                   if (includeSecrets) ...[
                     const SizedBox(height: 10),
                     Text(
-                      '警告：备份将含明文密钥，等同密钥副本。'
+                      '警告：备份将含提供商 API Key 与 MCP Bearer 明文，等同密钥副本。'
                       '请勿分享、云同步或截图；用完建议立即删除。',
                       style: TextStyle(
                         fontSize: 12,
@@ -501,7 +501,7 @@ class _SettingsAboutPageState extends State<SettingsAboutPage> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    '将合并提供商与外观设置，并用备份中的会话替换本地会话。'
+                    '将合并提供商、业务 MCP 与外观设置，并用备份中的会话替换本地会话。'
                     '${widget.generation?.busy == true ? '\n\n检测到进行中的生成，导入前将尝试停止。' : ''}',
                   ),
                   if (payload.includeSecrets) ...[
@@ -511,12 +511,12 @@ class _SettingsAboutPageState extends State<SettingsAboutPage> {
                       onChanged: (v) {
                         setLocal(() => importSecrets = v == true);
                       },
-                      content: const Text('同时导入 API Key'),
+                      content: const Text('同时导入 API Key / MCP Token'),
                     ),
                     if (importSecrets) ...[
                       const SizedBox(height: 8),
                       Text(
-                        '将用备份中的密钥覆盖本机对应提供商密钥。请确认备份来源可信。',
+                        '将用备份中的密钥覆盖本机对应提供商 API Key 与 MCP Token。请确认备份来源可信。',
                         style: TextStyle(
                           fontSize: 12,
                           color: fluentTokensOf(ctx).danger,
@@ -526,7 +526,7 @@ class _SettingsAboutPageState extends State<SettingsAboutPage> {
                   ] else ...[
                     const SizedBox(height: 10),
                     Text(
-                      '此备份不含密钥，导入后本地 API Key 保持不变。',
+                      '此备份不含密钥，导入后本地 API Key / MCP Token 保持不变。',
                       style: TextStyle(
                         fontSize: 12,
                         color: FluentTheme.of(ctx)
@@ -632,7 +632,7 @@ class _SettingsAboutPageState extends State<SettingsAboutPage> {
                   if (choice == _ClearChoice.all) ...[
                     const SizedBox(height: 12),
                     Text(
-                      '将清除会话、媒体缓存、外观与对话默认、提供商配置、日志以及全部 API Key。',
+                      '将清除会话、媒体缓存、外观与对话默认、提供商与业务 MCP、日志以及全部 API Key / MCP Token。',
                       style: TextStyle(fontSize: 12, color: tokens.danger),
                     ),
                   ],
@@ -954,7 +954,7 @@ class _SettingsAboutPageState extends State<SettingsAboutPage> {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  '默认导出不含 API Key。含密钥导出、导入密钥与全部清除均需确认。',
+                  '默认导出不含 API Key / MCP Token。含密钥导出、导入密钥与全部清除均需确认。',
                   style: TextStyle(
                     fontSize: 12,
                     color: tokens.inkMuted,
@@ -979,7 +979,7 @@ enum _ClearChoice {
   String get label => switch (this) {
         sessions => '仅会话（对话 / 生图 / 生视频）',
         media => '仅媒体缓存',
-        all => '全部（含设置与密钥）',
+        all => '全部（含设置、MCP 与密钥）',
       };
 
   ClearLocalDataFlags get flags => switch (this) {

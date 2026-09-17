@@ -79,4 +79,65 @@ void main() {
     expect(api[1]['role'], 'user');
     expect(api[2]['role'], 'assistant');
   });
+
+  test('buildApiMessages 含 tool_calls 与 role=tool', () {
+    final history = [
+      _msg(ChatRole.user, '查一下'),
+      ChatMessage(
+        id: 'a1',
+        createdAt: 1,
+        role: ChatRole.assistant,
+        content: '',
+        toolCalls: const [
+          ChatToolCall(id: 'call_1', name: 'lookup', arguments: '{"q":1}'),
+        ],
+      ),
+      const ChatMessage(
+        id: 't1',
+        createdAt: 2,
+        role: ChatRole.tool,
+        content: '{"ok":true}',
+        toolCallId: 'call_1',
+      ),
+      _msg(ChatRole.assistant, '结果如下'),
+    ];
+    final api = buildApiMessages(history: history);
+    expect(api.length, 4);
+    expect(api[1]['tool_calls'], isA<List>());
+    expect((api[1]['tool_calls'] as List).single['id'], 'call_1');
+    expect(api[2], {
+      'role': 'tool',
+      'content': '{"ok":true}',
+      'tool_call_id': 'call_1',
+    });
+  });
+
+  test('裁剪整轮丢弃，不留孤立 tool', () {
+    final msgs = [
+      _msg(ChatRole.user, 'u1'),
+      ChatMessage(
+        id: 'a1',
+        createdAt: 1,
+        role: ChatRole.assistant,
+        content: '',
+        toolCalls: const [
+          ChatToolCall(id: 'c1', name: 'f', arguments: '{}'),
+        ],
+      ),
+      const ChatMessage(
+        id: 't1',
+        createdAt: 2,
+        role: ChatRole.tool,
+        content: 'r1',
+        toolCallId: 'c1',
+      ),
+      _msg(ChatRole.assistant, 'done1'),
+      _msg(ChatRole.user, 'u2'),
+      _msg(ChatRole.assistant, 'a2'),
+    ];
+    final result = trimChatMessages(msgs, maxTurns: 1);
+    expect(result.keptTurns, 1);
+    expect(result.messages.any((m) => m.role == ChatRole.tool), isFalse);
+    expect(result.messages.map((m) => m.content), ['u2', 'a2']);
+  });
 }

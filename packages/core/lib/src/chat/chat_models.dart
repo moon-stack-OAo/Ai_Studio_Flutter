@@ -6,7 +6,10 @@ import 'chat_attach.dart';
 enum ChatRole {
   user,
   assistant,
-  system;
+  system,
+
+  /// OpenAI 兼容 tool 结果角色（P6）。
+  tool;
 
   static ChatRole? tryParse(String? raw) {
     switch ((raw ?? '').trim().toLowerCase()) {
@@ -16,12 +19,94 @@ enum ChatRole {
         return ChatRole.assistant;
       case 'system':
         return ChatRole.system;
+      case 'tool':
+        return ChatRole.tool;
       default:
         return null;
     }
   }
 
   String get wire => name;
+}
+
+/// OpenAI 兼容的单次 function tool call（请求/持久化/SSE 累积共用）。
+class ChatToolCall {
+  const ChatToolCall({
+    required this.id,
+    this.type = 'function',
+    required this.name,
+    this.arguments = '',
+  });
+
+  final String id;
+  final String type;
+  final String name;
+
+  /// function.arguments JSON 字符串（流式中可能尚未闭合）。
+  final String arguments;
+
+  ChatToolCall copyWith({
+    String? id,
+    String? type,
+    String? name,
+    String? arguments,
+  }) {
+    return ChatToolCall(
+      id: id ?? this.id,
+      type: type ?? this.type,
+      name: name ?? this.name,
+      arguments: arguments ?? this.arguments,
+    );
+  }
+
+  /// 发往 chat/completions 的 `tool_calls[]` 项。
+  Map<String, dynamic> toApiJson() => {
+        'id': id,
+        'type': type,
+        'function': {
+          'name': name,
+          'arguments': arguments,
+        },
+      };
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        if (type != 'function') 'type': type,
+        'name': name,
+        'arguments': arguments,
+      };
+
+  factory ChatToolCall.fromJson(Map<String, dynamic> json) {
+    var name = json['name']?.toString() ?? '';
+    var arguments = json['arguments']?.toString() ?? '';
+    final fn = json['function'];
+    if (fn is Map) {
+      final fnName = fn['name']?.toString();
+      if (fnName != null && fnName.isNotEmpty) name = fnName;
+      if (fn['arguments'] != null) {
+        arguments = fn['arguments'].toString();
+      }
+    }
+    final typeRaw = json['type']?.toString();
+    return ChatToolCall(
+      id: json['id']?.toString() ?? '',
+      type: (typeRaw == null || typeRaw.isEmpty) ? 'function' : typeRaw,
+      name: name,
+      arguments: arguments,
+    );
+  }
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ChatToolCall &&
+          id == other.id &&
+          type == other.type &&
+          name == other.name &&
+          arguments == other.arguments;
+
+  @override
+  int get hashCode => Object.hash(id, type, name, arguments);
 }
 
 class ChatOverrides {
@@ -98,6 +183,8 @@ class ChatMessage {
     this.model,
     this.latencyMs,
     this.attachments = const [],
+    this.toolCalls = const [],
+    this.toolCallId,
   });
 
   final String id;
@@ -120,6 +207,14 @@ class ChatMessage {
   /// 用户消息附图（CHAT-ATTACH）；旧 JSON 无字段 → 空列表。
   final List<ImageRef> attachments;
 
+  /// assistant 发起的 tool_calls（OpenAI 形态）；旧 JSON 无字段 → 空。
+  final List<ChatToolCall> toolCalls;
+
+  /// role=tool 时对应的 `tool_call_id`；旧 JSON 无字段 → null。
+  final String? toolCallId;
+
+  bool get hasToolCalls => toolCalls.isNotEmpty;
+
   ChatMessage copyWith({
     String? id,
     int? createdAt,
@@ -135,6 +230,9 @@ class ChatMessage {
     int? latencyMs,
     bool clearLatencyMs = false,
     List<ImageRef>? attachments,
+    List<ChatToolCall>? toolCalls,
+    String? toolCallId,
+    bool clearToolCallId = false,
   }) {
     return ChatMessage(
       id: id ?? this.id,
@@ -149,6 +247,8 @@ class ChatMessage {
       model: clearModel ? null : (model ?? this.model),
       latencyMs: clearLatencyMs ? null : (latencyMs ?? this.latencyMs),
       attachments: attachments ?? this.attachments,
+      toolCalls: toolCalls ?? this.toolCalls,
+      toolCallId: clearToolCallId ? null : (toolCallId ?? this.toolCallId),
     );
   }
 
@@ -165,6 +265,10 @@ class ChatMessage {
         if (latencyMs != null) 'latencyMs': latencyMs,
         if (attachments.isNotEmpty)
           'attachments': attachments.map((a) => a.toJson()).toList(),
+        if (toolCalls.isNotEmpty)
+          'toolCalls': toolCalls.map((t) => t.toJson()).toList(),
+        if (toolCallId != null && toolCallId!.isNotEmpty)
+          'toolCallId': toolCallId,
       };
 
   factory ChatMessage.fromJson(Map<String, dynamic> json) {
@@ -186,6 +290,17 @@ class ChatMessage {
         }
       }
     }
+    final calls = <ChatToolCall>[];
+    final rawCalls = json['toolCalls'] ?? json['tool_calls'];
+    if (rawCalls is List) {
+      for (final e in rawCalls) {
+        if (e is Map) {
+          calls.add(ChatToolCall.fromJson(Map<String, dynamic>.from(e)));
+        }
+      }
+    }
+    final tcid = json['toolCallId']?.toString() ??
+        json['tool_call_id']?.toString();
     return ChatMessage(
       id: json['id']?.toString() ?? '',
       createdAt: (json['createdAt'] is num)
@@ -200,6 +315,8 @@ class ChatMessage {
       model: (modelRaw == null || modelRaw.isEmpty) ? null : modelRaw,
       latencyMs: latency,
       attachments: sanitizeChatAttachments(refs),
+      toolCalls: calls,
+      toolCallId: (tcid == null || tcid.isEmpty) ? null : tcid,
     );
   }
 }

@@ -6,6 +6,8 @@ import '../image/image_asset_store.dart';
 import '../image/image_models.dart';
 import '../image/image_session_repository.dart';
 import '../logging/app_log_repository.dart';
+import '../mcp/mcp_models.dart';
+import '../mcp/mcp_server_repository.dart';
 import '../provider/provider_config.dart';
 import '../provider/provider_repository.dart';
 import '../provider/provider_storage.dart';
@@ -23,6 +25,7 @@ import 'data_backup.dart';
 /// - 若有进行中的对话 / 生图 / 生视频任务，**UI 应先停止**再调用
 ///   [importBackup] / [clearLocalData]；本服务幂等，但不取消网络请求。
 /// - 破坏性操作（清数据、导入含密钥）须由 UI 二次确认。
+/// - MCP：默认导出 omit Bearer；清密钥 / 清全部时清 MCP secret；清提供商时清 Server 列表。
 class DataBackupService {
   DataBackupService({
     required ProviderRepository providers,
@@ -36,6 +39,7 @@ class DataBackupService {
     ImageAssetStore? chatAttachmentStore,
     VideoAssetStore? videoAssetStore,
     this._videoPosterStore,
+    McpServerRepository? mcpServers,
   })  : _providers = providers,
         _appearance = appearance,
         _chatDefaults = chatDefaults,
@@ -46,7 +50,8 @@ class DataBackupService {
         _imageAssetStore = imageAssetStore ?? imageSessions.assetStore,
         _chatAttachmentStore =
             chatAttachmentStore ?? chatSessions.attachmentStore,
-        _videoAssetStore = videoAssetStore ?? videoSessions.assetStore;
+        _videoAssetStore = videoAssetStore ?? videoSessions.assetStore,
+        _mcpServers = mcpServers;
 
   final ProviderRepository _providers;
   final AppearanceRepository _appearance;
@@ -59,6 +64,7 @@ class DataBackupService {
   final ImageAssetStore _chatAttachmentStore;
   final VideoAssetStore _videoAssetStore;
   final VideoPosterStore? _videoPosterStore;
+  final McpServerRepository? _mcpServers;
 
   /// 导出备份为 [DataBackupPayload]（再 [DataBackupPayload.encodeJson]）。
   Future<DataBackupPayload> exportBackup([
@@ -82,6 +88,19 @@ class DataBackupService {
       videoActive = _videoSessions.activeId;
     }
 
+    List<DataBackupMcpServer>? mcp;
+    final mcpRepo = _mcpServers;
+    if (options.includeMcpServers && mcpRepo != null) {
+      mcp = <DataBackupMcpServer>[];
+      for (final s in mcpRepo.servers) {
+        String? token;
+        if (options.includeSecrets && s.authKind == McpAuthKind.bearer) {
+          token = await mcpRepo.readBearerSecret(s.id);
+        }
+        mcp.add(DataBackupMcpServer(config: s, authToken: token));
+      }
+    }
+
     return DataBackupPayload(
       schemaVersion: dataBackupSchemaVersion,
       exportedAtMs: DateTime.now().millisecondsSinceEpoch,
@@ -97,6 +116,7 @@ class DataBackupService {
       imageActiveId: imageActive,
       videoSessions: video,
       videoActiveId: videoActive,
+      mcpServers: mcp,
     );
   }
 
@@ -193,6 +213,28 @@ class DataBackupService {
       }
     }
 
+    var mcpImported = false;
+    var mcpMerged = 0;
+    var mcpAdded = 0;
+    final mcpRepo = _mcpServers;
+    final incomingMcp = payload.mcpServers;
+    if (options.importMcpServers &&
+        mcpRepo != null &&
+        incomingMcp != null) {
+      final merge = mergeMcpServers(
+        local: List<McpServerConfig>.from(mcpRepo.servers),
+        incoming: incomingMcp,
+        applySecrets: applySecrets,
+      );
+      await mcpRepo.replaceAll(merge.servers);
+      for (final e in merge.secretsToWrite.entries) {
+        await mcpRepo.writeBearerSecret(e.key, e.value);
+      }
+      mcpMerged = merge.mergedCount;
+      mcpAdded = merge.addedCount;
+      mcpImported = true;
+    }
+
     return DataBackupImportResult(
       schemaVersion: payload.schemaVersion,
       providersMerged: updated,
@@ -201,6 +243,9 @@ class DataBackupService {
       sessionsImported: sessionsImported,
       appearanceImported: appearanceImported,
       chatDefaultsImported: chatDefaultsImported,
+      mcpServersMerged: mcpMerged,
+      mcpServersAdded: mcpAdded,
+      mcpImported: mcpImported,
     );
   }
 
@@ -274,6 +319,12 @@ class DataBackupService {
       clearedProviders = true;
       // resetPresets 会清空自定义项；密钥随快照重写
       if (flags.secrets) clearedSecrets = true;
+      // 清提供商配置时一并清空 MCP Server 列表（含 secret）
+      final mcpRepo = _mcpServers;
+      if (mcpRepo != null) {
+        await mcpRepo.clearAllServers();
+        if (flags.secrets) clearedSecrets = true;
+      }
     } else if (flags.secrets) {
       final wiped = [
         for (final p in _providers.providers) p.copyWith(apiKey: ''),
@@ -284,6 +335,10 @@ class DataBackupService {
           activeProviderId: _providers.activeProviderId,
         ),
       );
+      final mcpRepo = _mcpServers;
+      if (mcpRepo != null) {
+        await mcpRepo.clearAllSecrets();
+      }
       clearedSecrets = true;
     }
 
@@ -385,6 +440,8 @@ class DataBackupService {
     if (!_chatSessions.isLoaded) await _chatSessions.load();
     if (!_imageSessions.isLoaded) await _imageSessions.load();
     if (!_videoSessions.isLoaded) await _videoSessions.load();
+    final mcp = _mcpServers;
+    if (mcp != null && !mcp.isLoaded) await mcp.load();
     final logs = _logs;
     if (logs != null && !logs.isLoaded) await logs.load();
   }
