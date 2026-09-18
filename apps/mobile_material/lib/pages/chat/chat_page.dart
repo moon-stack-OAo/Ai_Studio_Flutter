@@ -24,7 +24,6 @@ class ChatPage extends StatefulWidget {
     this.mcpServerRepository,
     this.mcpSessionFactory,
     this.onOpenProviders,
-    this.onOpenMcp,
   });
 
   final ProviderRepository providerRepository;
@@ -36,7 +35,6 @@ class ChatPage extends StatefulWidget {
   final McpServerRepository? mcpServerRepository;
   final McpSessionFactory? mcpSessionFactory;
   final VoidCallback? onOpenProviders;
-  final VoidCallback? onOpenMcp;
 
   @override
   State<ChatPage> createState() => _ChatPageState();
@@ -274,18 +272,6 @@ class _ChatPageState extends State<ChatPage> {
                   liveToolTraces: _controller.liveToolTraces,
                 ),
               ),
-              if (_controller.mcpStatusHint != null)
-                _McpStatusBanner(
-                  message: _controller.mcpStatusHint!,
-                  tokens: tokens,
-                  onOpenMcp: widget.onOpenMcp,
-                  onDismiss: _controller.mcpStatusHintDismissible
-                      ? () {
-                          // ignore: discarded_futures
-                          _controller.dismissMcpStatusHint();
-                        }
-                      : null,
-                ),
               Composer(
                 enabled: _controller.canSend,
                 streaming: streamingHere,
@@ -305,59 +291,6 @@ class _ChatPageState extends State<ChatPage> {
           ),
         );
       },
-    );
-  }
-}
-
-class _McpStatusBanner extends StatelessWidget {
-  const _McpStatusBanner({
-    required this.message,
-    required this.tokens,
-    this.onOpenMcp,
-    this.onDismiss,
-  });
-
-  final String message;
-  final MaterialTokens tokens;
-  final VoidCallback? onOpenMcp;
-  final VoidCallback? onDismiss;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Color.lerp(tokens.warning, tokens.surface, 0.9),
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.fromLTRB(16, 8, 4, 8),
-        decoration: BoxDecoration(
-          border: Border(top: BorderSide(color: tokens.border)),
-        ),
-        child: Row(
-          children: [
-            Expanded(
-              child: Text(
-                message,
-                style: TextStyle(
-                  fontSize: 12,
-                  color: tokens.inkSecondary,
-                  fontFamily: tokens.fontFamily,
-                ),
-              ),
-            ),
-            if (onOpenMcp != null)
-              TextButton(
-                onPressed: onOpenMcp,
-                child: const Text('打开 MCP'),
-              ),
-            if (onDismiss != null)
-              IconButton(
-                tooltip: '不再提示',
-                icon: const Icon(Icons.close, size: 18),
-                onPressed: onDismiss,
-              ),
-          ],
-        ),
-      ),
     );
   }
 }

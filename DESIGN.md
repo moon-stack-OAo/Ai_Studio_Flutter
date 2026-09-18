@@ -581,7 +581,7 @@ Flutter 落点：`packages/design_fluent` 与 `packages/design_material` 的 `Th
 | Server 来源 | 用户配置的**业务 Server**（自建 / 内网 / 受控公网 / 桌面本地命令）；非应用内置市场目录                                      |
 | 首批场景      | 自定义业务 tool（查询 + 写入）；具体 tool 名由业务 Server 的 `tools/list` 决定                                  |
 | 对话集成      | 仅挂在**对话**链路；生图 / 生视频**不**经 MCP 编排（本期）                                                      |
-| 提供商前提     | 活跃对话模型须支持 OpenAI 兼容 `tools` / `tool_calls`；不支持则关闭 MCP 并向用户说明                               |
+| 提供商前提     | 活跃对话模型须支持 OpenAI 兼容 `tools` / `tool_calls`；不支持则**不挂载** tools、不走 MCP；对话页**不**展示 MCP 配置/能力降级横幅（配置入口仅在设置） |
 
 #### 5.11.2 能力表
 
@@ -843,15 +843,15 @@ Flutter 落点：`packages/design_fluent` 与 `packages/design_material` 的 `Th
 1. **规格冻结**：§5.11 / 本分期；Q7–Q9 已决（实现默认）。
 2. **P6-1（core · 协议骨架）**：**已落地** — `tools` / `tool_choice` 可选请求；SSE 解析并累积 `tool_calls`；`ChatRole.tool` + `ChatToolCall` / `toolCallId`；`buildApiMessages` / trim 保留成对 tool 轨迹；`supportsChatTools` 启发式。
 3. **P6-2（core · MCP Client）**：**已落地（HTTP 子集）** — `HttpSseMcpSession`：对 `baseUrl` **POST JSON-RPC**（Streamable HTTP 最小集：`initialize` / `tools/list` / `tools/call`；JSON 或 SSE 响应）；`none`+`bearer`；`PrefsMcpServerStorage`+SecretStore；`DefaultToolCallOrchestrator` 串行；`ChatSessionFacade` 注入挂载编排循环（上限默认 8）。**本切片不做**：stdio、OAuth、`x-mcp-header`、完整双向长 SSE、UI（stdio 见 **P6-S**）。
-4. **P6-3（desktop_fluent）**：**已落地** — 设置侧栏「业务 MCP」（`SET-MCP*`）；对话 `CHAT-TOOL-CALL` 轨迹卡 + `CHAT-TOOL-AUTH` ContentDialog；Facade DI（prefs/SecretStore/`HttpSseMcpSessionFactory`/`toolAuthPrompter`）；降级横幅。
-5. **P6-4（mobile_material）**：**已落地** — 设置「提供商」Tab 内「管理业务 MCP」子页（`SET-MCP*`）；对话 `CHAT-TOOL-CALL` 轨迹卡 + `CHAT-TOOL-AUTH` AlertDialog；Facade DI 同构；降级横幅可跳转 MCP。
+4. **P6-3（desktop_fluent）**：**已落地** — 设置侧栏「业务 MCP」（`SET-MCP*`）；对话 `CHAT-TOOL-CALL` 轨迹卡 + `CHAT-TOOL-AUTH` ContentDialog；Facade DI（prefs/SecretStore/`HttpSseMcpSessionFactory`/`toolAuthPrompter`）。对话页不展示 MCP 配置降级横幅。
+5. **P6-4（mobile_material）**：**已落地** — 设置「提供商」Tab 内「管理业务 MCP」子页（`SET-MCP*`）；对话 `CHAT-TOOL-CALL` 轨迹卡 + `CHAT-TOOL-AUTH` AlertDialog；Facade DI 同构。对话页不展示 MCP 配置降级横幅。
 6. **P6-5（收口）**：**已落地** — `SET-DATA` 备份默认 omit MCP Bearer（`includeSecrets` 显式含 token）；导入合并 MCP 元数据、secrets 仅 `importSecrets`；清密钥清 MCP secret、清全部/清提供商清 Server 列表；旧备份无 mcp 段兼容；日志/轨迹脱敏复核；`architecture` 补 MCP 落点。OD 大改不做（本收口）。
 7. **P6-S（桌面 stdio · 增强项）**：**规格已写入 §5.11；P6-S2 已落地 stdio UI/注入；配置 JSON 导入已落地** — `transport: http|stdio`；stdio 字段 `command`/`args`/`env`/`cwd?`；core `StdioMcpSession` + `ProcessHost`；桌面注入；mobile 不注入；默认拒绝任意命令、用户确认、退出杀进程、备份 omit env 密钥；OpenCode / Cursor / 本 App `mcpServers` **JSON 一键导入**（§5.11.5）。
 
 **验收（P6 主路径）**：
 
 - 配置 ≥1 个业务 MCP Server（HTTP）→ 探测成功 → 对话中模型可发起 tool → 读操作按策略静默或确认 → **写操作每次确认** → 结果回灌后助手继续回复。
-- 用户拒绝 / 停止生成 / 超时 / 不安全 URL / 无 tools 能力的提供商：均有可读降级，不崩溃、不泄密。
+- 用户拒绝 / 停止生成 / 超时 / 不安全 URL / 无 tools 能力的提供商：静默或不挂载 tools、有可读错误（授权拒绝等），不崩溃、不泄密；对话页不因「未配置 MCP / 模型无 tools」弹配置横幅。
 - HTTP 双端能力对等、UI 分端；旧无 tool 会话兼容。
 - 备份默认无 MCP token；清密钥/清全部后 MCP secret 无残留。
 

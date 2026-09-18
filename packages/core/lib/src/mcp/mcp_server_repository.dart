@@ -160,6 +160,27 @@ class McpServerRepository extends ChangeNotifier {
     await _storage.save(McpServerStoreSnapshot(servers: _servers));
   }
 
+  Future<void>? _persistChain;
+
+  /// 内存已改后立刻通知；落盘串行排队，不阻塞返回。
+  void _commitMemory() {
+    _lastError = null;
+    notifyListeners();
+    _persistChain = (_persistChain ?? Future<void>.value()).then((_) async {
+      try {
+        await _persist();
+      } catch (e) {
+        _lastError = e.toString();
+        notifyListeners();
+      }
+    });
+  }
+
+  @visibleForTesting
+  Future<void> waitForPersist() async {
+    await (_persistChain ?? Future<void>.value());
+  }
+
   /// 新建 Server；返回分配的 id。
   ///
   /// [transport] 默认 http；stdio 时用 [command]/[args]/[env]/[cwd]，
@@ -201,8 +222,7 @@ class McpServerRepository extends ChangeNotifier {
       authSecretRef: secretRef,
     );
     _servers = [..._servers, server];
-    await _persist();
-    notifyListeners();
+    _commitMemory();
     return id;
   }
 
@@ -212,8 +232,7 @@ class McpServerRepository extends ChangeNotifier {
     final next = List<McpServerConfig>.from(_servers);
     next[i] = server;
     _servers = next;
-    await _persist();
-    notifyListeners();
+    _commitMemory();
   }
 
   Future<void> setEnabled(String id, bool enabled) async {
@@ -327,23 +346,22 @@ class McpServerRepository extends ChangeNotifier {
       await _secrets.delete(ref);
     }
     _servers = [for (final e in _servers) if (e.id != id) e];
-    await _persist();
-    notifyListeners();
+    _commitMemory();
   }
 
   /// 整体替换 Server 列表（导入备份用）；不自动迁移密钥。
   Future<void> replaceAll(List<McpServerConfig> servers) async {
     _servers = List<McpServerConfig>.from(servers);
-    await _persist();
-    notifyListeners();
+    _commitMemory();
+    await waitForPersist();
   }
 
   /// 清空全部 Server 元数据并删除对应 SecretStore 条目（SET-DATA 清提供商/全部）。
   Future<void> clearAllServers() async {
     await clearAllSecrets();
     _servers = const [];
-    await _persist();
-    notifyListeners();
+    _commitMemory();
+    await waitForPersist();
   }
 
   /// 清密钥引用对应的 SecretStore 条目（对齐 SET-DATA 清密钥）。

@@ -70,7 +70,6 @@ class AppShell extends StatefulWidget {
 class _AppShellState extends State<AppShell> {
   AppSection _section = AppSection.chat;
   int _settingsTabIndex = 0;
-  int _openMcpRequestId = 0;
   late final UpdatePrefs _updatePrefs;
   late final MobileUpdateController _updater;
   late final bool _ownsUpdater;
@@ -163,15 +162,6 @@ class _AppShellState extends State<AppShell> {
     setState(() {
       _section = AppSection.settings;
       _settingsTabIndex = 0;
-    });
-  }
-
-  /// 设置 → 提供商 Tab → 业务 MCP 子页（不另开底栏 Tab）。
-  void _openMcp() {
-    setState(() {
-      _section = AppSection.settings;
-      _settingsTabIndex = 0;
-      _openMcpRequestId++;
     });
   }
 
@@ -305,7 +295,6 @@ class _AppShellState extends State<AppShell> {
                     mcpServerRepository: widget.mcpServerRepository,
                     mcpSessionFactory: widget.mcpSessionFactory,
                     onOpenProviders: _openProviders,
-                    onOpenMcp: _openMcp,
                   )
                 else if (section == AppSection.image)
                   ImagePage(
@@ -343,7 +332,6 @@ class _AppShellState extends State<AppShell> {
                     updateController: _updater,
                     mcpServerRepository: widget.mcpServerRepository,
                     mcpSessionFactory: widget.mcpSessionFactory,
-                    openMcpRequestId: _openMcpRequestId,
                   )
                 else
                   const SizedBox.shrink(),

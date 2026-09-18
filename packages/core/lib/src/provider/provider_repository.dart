@@ -168,11 +168,33 @@ class ProviderRepository extends ChangeNotifier {
     );
   }
 
+  Future<void>? _persistChain;
+
+  /// 内存已改后立刻通知；落盘串行排队，不阻塞返回。
+  /// macOS Keychain 挂起时列表/表单仍能刷新；失败写入 [lastError]。
+  void _commitMemory() {
+    _lastError = null;
+    notifyListeners();
+    _persistChain = (_persistChain ?? Future<void>.value()).then((_) async {
+      try {
+        await _persist();
+      } catch (e) {
+        _lastError = '保存提供商失败：$e';
+        notifyListeners();
+      }
+    });
+  }
+
+  /// 测试/导入等需要等落盘完成时调用。
+  @visibleForTesting
+  Future<void> waitForPersist() async {
+    await (_persistChain ?? Future<void>.value());
+  }
+
   Future<void> setActiveProvider(String id) async {
     if (!_providers.any((p) => p.id == id)) return;
     _activeProviderId = id;
-    await _persist();
-    notifyListeners();
+    _commitMemory();
   }
 
   /// 新增自定义提供商并选中。
@@ -197,8 +219,7 @@ class ProviderRepository extends ChangeNotifier {
     );
     _providers = [..._providers, item];
     _activeProviderId = item.id;
-    await _persist();
-    notifyListeners();
+    _commitMemory();
     return item;
   }
 
@@ -241,8 +262,7 @@ class ProviderRepository extends ChangeNotifier {
     final list = List<ProviderConfig>.from(_providers);
     list[index] = next;
     _providers = list;
-    await _persist();
-    notifyListeners();
+    _commitMemory();
     return next;
   }
 
@@ -265,8 +285,7 @@ class ProviderRepository extends ChangeNotifier {
       list[index] = merged;
       _providers = list;
     }
-    await _persist();
-    notifyListeners();
+    _commitMemory();
     return _providers.firstWhere((p) => p.id == config.id);
   }
 
@@ -286,16 +305,15 @@ class ProviderRepository extends ChangeNotifier {
     if (_activeProviderId == id) {
       _activeProviderId = _providers.first.id;
     }
-    await _persist();
-    notifyListeners();
+    _commitMemory();
     return true;
   }
 
   Future<void> resetPresets() async {
     _providers = builtinProviderPresets();
     _activeProviderId = _providers.first.id;
-    await _persist();
-    notifyListeners();
+    _commitMemory();
+    await waitForPersist();
   }
 
   /// 用快照整体替换（导入备份用）。
@@ -311,8 +329,8 @@ class ProviderRepository extends ChangeNotifier {
     _providers = providers;
     _activeProviderId = activeId;
     _loaded = true;
-    await _persist();
-    notifyListeners();
+    _commitMemory();
+    await waitForPersist();
   }
 
   ProviderConfig? _findById(String id) {

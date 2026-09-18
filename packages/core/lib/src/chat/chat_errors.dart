@@ -42,6 +42,33 @@ bool isAbortLike(Object? error) {
 
 ChatAbortException toAbortError() => const ChatAbortException();
 
+/// 将常见上游英文错误映射为可读中文（未命中则原样返回）。
+String friendlyUpstreamErrorMessage(String text) {
+  final s = text.trim();
+  if (s.isEmpty) return s;
+  final lower = s.toLowerCase();
+
+  // 例：video queue is full, please retry later (request id: …)
+  if (RegExp(r'queue\s+is\s+full').hasMatch(lower) ||
+      (lower.contains('queue') &&
+          lower.contains('full') &&
+          (lower.contains('retry') || lower.contains('later')))) {
+    return '视频生成队列已满，请稍后再试';
+  }
+  if (RegExp(r'rate\s*limit|too\s+many\s+requests').hasMatch(lower) &&
+      !s.contains('请求过于频繁')) {
+    return '请求过于频繁，请稍后重试';
+  }
+  if (RegExp(r'insufficient\s+(credits?|quota|balance)|quota\s+exceeded')
+      .hasMatch(lower)) {
+    return '额度不足或已用尽，请检查账户余额后重试';
+  }
+  if (RegExp(r'content\s+polic|safety\s+system|moderation').hasMatch(lower)) {
+    return '内容未通过安全审核，请修改提示词后重试';
+  }
+  return s;
+}
+
 /// 脱敏密钥 / 截断过长文案。
 String sanitizeErrorText(String? text, [String fallback = '']) {
   var s = (text ?? '').trim();
@@ -57,6 +84,7 @@ String sanitizeErrorText(String? text, [String fallback = '']) {
     return fallback.isNotEmpty ? fallback : '请求失败，请稍后重试';
   }
   s = applySecretRedaction(s);
+  s = friendlyUpstreamErrorMessage(s);
   if (s.length > _maxErrorTextLen) {
     s = '${s.substring(0, _maxErrorTextLen)}…';
   }

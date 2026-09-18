@@ -1415,7 +1415,7 @@ VideoJob normalizeVideoJob(Object? data, {String fallbackId = ''}) {
       }
     }
     if (msg.isEmpty) msg = '视频生成失败';
-    errorMessage = msg;
+    errorMessage = sanitizeErrorText(msg, '视频生成失败');
   }
   final posterUrl = extractVideoPosterUrl(data);
   return VideoJob(

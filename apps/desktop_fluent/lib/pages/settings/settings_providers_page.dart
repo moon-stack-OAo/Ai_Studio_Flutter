@@ -36,6 +36,7 @@ class _SettingsProvidersPageState extends State<SettingsProvidersPage> {
   List<ProviderModelInfo> _modelHints = const [];
   bool _dirty = false;
   bool _syncingForm = false;
+  String? _lastShownPersistError;
 
   ProviderRepository get _repo => widget.repository;
 
@@ -43,6 +44,12 @@ class _SettingsProvidersPageState extends State<SettingsProvidersPage> {
   void initState() {
     super.initState();
     _repo.addListener(_onRepoChanged);
+    // 名称/模型：仅标脏（已脏则不 setState，避免每键重建）。
+    _nameCtrl.addListener(_onDirtyOnly);
+    _chatModelCtrl.addListener(_onDirtyOnly);
+    _imageModelCtrl.addListener(_onDirtyOnly);
+    _videoModelCtrl.addListener(_onDirtyOnly);
+    // Base URL / Key：还要刷新「测试连接」可用性。
     _baseUrlCtrl.addListener(_onProbeFieldsChanged);
     _apiKeyCtrl.addListener(_onProbeFieldsChanged);
     _selectedId = _repo.activeProviderId;
@@ -52,6 +59,10 @@ class _SettingsProvidersPageState extends State<SettingsProvidersPage> {
   @override
   void dispose() {
     _repo.removeListener(_onRepoChanged);
+    _nameCtrl.removeListener(_onDirtyOnly);
+    _chatModelCtrl.removeListener(_onDirtyOnly);
+    _imageModelCtrl.removeListener(_onDirtyOnly);
+    _videoModelCtrl.removeListener(_onDirtyOnly);
     _baseUrlCtrl.removeListener(_onProbeFieldsChanged);
     _apiKeyCtrl.removeListener(_onProbeFieldsChanged);
     _nameCtrl.dispose();
@@ -63,8 +74,14 @@ class _SettingsProvidersPageState extends State<SettingsProvidersPage> {
     super.dispose();
   }
 
+  void _onDirtyOnly() {
+    if (!mounted || _syncingForm) return;
+    _markDirty();
+  }
+
   void _onProbeFieldsChanged() {
-    if (!mounted) return;
+    if (!mounted || _syncingForm) return;
+    _markDirty();
     setState(() {});
   }
 
@@ -76,7 +93,14 @@ class _SettingsProvidersPageState extends State<SettingsProvidersPage> {
       _selectedId = _repo.activeProviderId;
       _loadFormFromSelected();
     }
+    final err = _repo.lastError;
     setState(() {});
+    if (err == null || err.isEmpty) {
+      _lastShownPersistError = null;
+    } else if (err != _lastShownPersistError) {
+      _lastShownPersistError = err;
+      _showInfoBar(err, InfoBarSeverity.error);
+    }
   }
 
   ProviderConfig? get _selected {
@@ -162,6 +186,7 @@ class _SettingsProvidersPageState extends State<SettingsProvidersPage> {
       if (discard != true) return;
     }
     final created = await _repo.addProvider();
+    if (!mounted) return;
     setState(() {
       _selectedId = created.id;
       _loadFormFromSelected();
@@ -194,6 +219,7 @@ class _SettingsProvidersPageState extends State<SettingsProvidersPage> {
       _showInfoBar(e.message, InfoBarSeverity.error);
       return;
     }
+    if (!mounted) return;
     setState(() {
       _dirty = false;
       _loadFormFromSelected();

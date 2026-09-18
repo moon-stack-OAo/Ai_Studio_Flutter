@@ -156,37 +156,52 @@ class _SettingsShellState extends State<SettingsShell> {
               ),
             ),
           ),
-          Expanded(child: _buildContent(selected)),
+          Expanded(
+            // 分类切换保活：避免提供商/MCP 表单切走即 dispose，导致「要切页才看见」的错觉。
+            child: IndexedStack(
+              index: () {
+                final i = categories.indexOf(selected);
+                return i < 0 ? 0 : i;
+              }(),
+              sizing: StackFit.expand,
+              children: [
+                for (final item in categories) _pageFor(item),
+              ],
+            ),
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildContent(SettingsCategory category) {
-    return switch (category) {
-      SettingsCategory.providers => SettingsProvidersPage(
-          repository: widget.providerRepository,
-        ),
-      SettingsCategory.mcp => _buildMcpPage(),
-      SettingsCategory.chatDefaults => SettingsChatDefaultsPage(
-          repository: widget.chatDefaultsRepository,
-        ),
-      SettingsCategory.appearance => SettingsAppearancePage(
-          themeController: widget.themeController,
-        ),
-      SettingsCategory.logs => SettingsLogsPage(
-          repository: widget.appLogRepository,
-        ),
-      SettingsCategory.about => SettingsAboutPage(
-          appearanceRepository: widget.appearanceRepository,
-          dataBackupService: widget.dataBackupService,
-          themeController: widget.themeController,
-          generation: widget.generation,
-          updateController: widget.updateController,
-          onUnlockHiddenPortal: _toggleLab,
-        ),
-      SettingsCategory.lab => const HiddenPortalPage(),
-    };
+  Widget _pageFor(SettingsCategory category) {
+    return KeyedSubtree(
+      key: ValueKey('settings_page_${category.name}'),
+      child: switch (category) {
+        SettingsCategory.providers => SettingsProvidersPage(
+            repository: widget.providerRepository,
+          ),
+        SettingsCategory.mcp => _buildMcpPage(),
+        SettingsCategory.chatDefaults => SettingsChatDefaultsPage(
+            repository: widget.chatDefaultsRepository,
+          ),
+        SettingsCategory.appearance => SettingsAppearancePage(
+            themeController: widget.themeController,
+          ),
+        SettingsCategory.logs => SettingsLogsPage(
+            repository: widget.appLogRepository,
+          ),
+        SettingsCategory.about => SettingsAboutPage(
+            appearanceRepository: widget.appearanceRepository,
+            dataBackupService: widget.dataBackupService,
+            themeController: widget.themeController,
+            generation: widget.generation,
+            updateController: widget.updateController,
+            onUnlockHiddenPortal: _toggleLab,
+          ),
+        SettingsCategory.lab => const HiddenPortalPage(),
+      },
+    );
   }
 
   Widget _buildMcpPage() {

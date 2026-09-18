@@ -28,11 +28,9 @@ class ChatController extends ChangeNotifier {
     McpSessionFactory? mcpSessionFactory,
     Future<bool> Function(ToolAuthPrompt prompt)? toolAuthPrompter,
     ImagePicker? imagePicker,
-    McpUiPrefs? mcpUiPrefs,
   })  : _providers = providerRepository,
         _sessions = sessionRepository,
         _mcpServers = mcpServerRepository,
-        _mcpUiPrefs = mcpUiPrefs ?? McpUiPrefs(),
         _picker = imagePicker ?? ImagePicker() {
     _facade = ChatSessionFacade(
       providers: providerRepository,
@@ -48,17 +46,11 @@ class ChatController extends ChangeNotifier {
       onToolTrace: _onToolTrace,
     );
     _mcpServers?.addListener(_onMcpChanged);
-    _mcpUiPrefs.addListener(_onMcpChanged);
-    // ignore: discarded_futures
-    _mcpUiPrefs.ensureLoaded().then((_) {
-      if (hasListeners) notifyListeners();
-    });
   }
 
   final ProviderRepository _providers;
   final ChatSessionRepository _sessions;
   final McpServerRepository? _mcpServers;
-  final McpUiPrefs _mcpUiPrefs;
   final GenerationRuntime generation;
   final ImagePicker _picker;
   late final ChatSessionFacade _facade;
@@ -101,38 +93,6 @@ class ChatController extends ChangeNotifier {
   bool get activeChatSupportsTools => _facade.activeChatSupportsTools;
 
   bool get isMcpWiringEnabled => _facade.isMcpWiringEnabled;
-
-  /// 是否为「未配置」类提示（可关闭并记住）。
-  bool get mcpStatusHintDismissible {
-    if (!isMcpWiringEnabled) return false;
-    final repo = _mcpServers;
-    if (repo == null) return false;
-    return repo.enabledServers.isEmpty;
-  }
-
-  /// MCP 降级提示（未配置 / 未探测 / 模型不支持）；无则 null。
-  String? get mcpStatusHint {
-    if (!isMcpWiringEnabled) return null;
-    final repo = _mcpServers;
-    if (repo == null) return null;
-    final enabled = repo.enabledServers;
-    if (enabled.isEmpty) {
-      if (_mcpUiPrefs.dismissUnconfiguredHint) return null;
-      return '未配置已启用的业务 MCP；可在设置中添加 Server。';
-    }
-    if (repo.exposedTools.isEmpty) {
-      return '已启用 MCP，但尚未拉取 tools；请在设置中「测试连接 / 刷新 tools」。';
-    }
-    if (!activeChatSupportsTools) {
-      return '当前模型可能不支持工具调用；更换支持 tools 的对话模型后即可使用 MCP。';
-    }
-    return null;
-  }
-
-  Future<void> dismissMcpStatusHint() async {
-    if (!mcpStatusHintDismissible) return;
-    await _mcpUiPrefs.dismissUnconfiguredHintBanner();
-  }
 
   bool get modelsLoading => _facade.modelsCache.loading;
 
@@ -182,11 +142,6 @@ class ChatController extends ChangeNotifier {
   }
 
   void _onMcpChanged() {
-    if ((_mcpServers?.enabledServers.isNotEmpty ?? false) &&
-        _mcpUiPrefs.dismissUnconfiguredHint) {
-      // ignore: discarded_futures
-      _mcpUiPrefs.clearDismissUnconfiguredHint();
-    }
     notifyListeners();
   }
 
@@ -364,7 +319,6 @@ class ChatController extends ChangeNotifier {
   @override
   void dispose() {
     _mcpServers?.removeListener(_onMcpChanged);
-    _mcpUiPrefs.removeListener(_onMcpChanged);
     _facade.dispose();
     super.dispose();
   }

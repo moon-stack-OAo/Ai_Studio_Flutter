@@ -36,7 +36,6 @@ export 'src/mcp/mcp_openai_tools.dart';
 export 'src/mcp/mcp_sanitize.dart';
 export 'src/mcp/mcp_server_repository.dart';
 export 'src/mcp/mcp_tool_policy.dart';
-export 'src/mcp/mcp_ui_prefs.dart';
 export 'src/mcp/process_host.dart';
 export 'src/mcp/stdio_mcp_session.dart';
 export 'src/mcp/tool_call_orchestrator.dart';

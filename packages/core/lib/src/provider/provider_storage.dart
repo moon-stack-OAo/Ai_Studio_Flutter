@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
@@ -217,7 +218,13 @@ class SecureProviderStorage implements ProviderStorage {
         keys[p.id] = key;
       }
     }
-    await _writeSecureKeys(keys);
+    // macOS Keychain 偶发弹窗/挂起；元数据已落 prefs，密钥写入限时，避免整页 UI 卡住。
+    try {
+      await _writeSecureKeys(keys).timeout(const Duration(seconds: 8));
+    } on TimeoutException catch (e) {
+      debugPrint('[SecureProviderStorage] secure keys write timed out: $e');
+      throw StateError('密钥写入超时（Keychain 无响应），元数据已保存');
+    }
 
     // 若仍有明文残留（例如上次迁移失败后用户又保存了），在安全写入成功后清除。
     if (prefs.containsKey(keysStorageKey)) {

@@ -28,7 +28,6 @@ class SettingsPage extends StatefulWidget {
     this.updateController,
     this.mcpServerRepository,
     this.mcpSessionFactory,
-    this.openMcpRequestId = 0,
     this.hiddenPortalPrefs,
   });
 
@@ -43,9 +42,6 @@ class SettingsPage extends StatefulWidget {
   final MobileUpdateController? updateController;
   final McpServerRepository? mcpServerRepository;
   final McpSessionFactory? mcpSessionFactory;
-
-  /// 递增时触发打开 MCP 子页（对话降级横幅跳转）。
-  final int openMcpRequestId;
 
   final HiddenPortalPrefs? hiddenPortalPrefs;
 
@@ -184,7 +180,6 @@ class _SettingsPageState extends State<SettingsPage>
             repository: widget.providerRepository,
             mcpServerRepository: widget.mcpServerRepository,
             mcpSessionFactory: widget.mcpSessionFactory,
-            openMcpRequestId: widget.openMcpRequestId,
           ),
           SettingsChatDefaultsTab(repository: widget.chatDefaultsRepository),
           SettingsAppearanceTab(themeController: widget.themeController),

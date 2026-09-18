@@ -109,7 +109,6 @@ class _AppShellState extends State<AppShell> {
         mcpServerRepository: widget.mcpServerRepository,
         mcpSessionFactory: widget.mcpSessionFactory,
         onOpenProviders: _openProviders,
-        onOpenMcp: _openMcp,
       ),
       ImagePage(
         providerRepository: widget.providerRepository,
@@ -132,7 +131,6 @@ class _AppShellState extends State<AppShell> {
         videoPosterService: widget.videoPosterService,
         onOpenProviders: _openProviders,
       ),
-      // SettingsShell 依赖可变 category，单独在 build 中组装。
     ];
     final coordinator = widget.closeCoordinator;
     if (coordinator != null && supportsCustomTitleBar) {
@@ -331,13 +329,6 @@ class _AppShellState extends State<AppShell> {
     });
   }
 
-  void _openMcp() {
-    setState(() {
-      _section = AppSection.settings;
-      _settingsCategory = SettingsCategory.mcp;
-    });
-  }
-
   void _onPaneChanged(int index) {
     final next = switch (index) {
       0 => AppSection.chat,
@@ -394,7 +385,9 @@ class _AppShellState extends State<AppShell> {
                   sizing: StackFit.expand,
                   children: [
                     ..._sectionPages,
+                    // key 稳定：更新 badge 等 setState 时复用同一设置子树。
                     SettingsShell(
+                      key: const ValueKey('desktop_settings_shell'),
                       category: _settingsCategory,
                       onCategoryChanged: (value) {
                         setState(() => _settingsCategory = value);

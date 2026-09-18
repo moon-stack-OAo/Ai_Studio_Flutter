@@ -26,6 +26,7 @@ void main() {
         authKind: McpAuthKind.bearer,
         bearerToken: 'tok-plain-xyz',
       );
+      await repo.waitForPersist();
       final raw = prefs.getString(PrefsMcpServerStorage.prefsKey)!;
       expect(raw, isNot(contains('tok-plain-xyz')));
       expect(raw, contains(id));
@@ -58,8 +59,10 @@ void main() {
         authKind: McpAuthKind.bearer,
         bearerToken: 'secret',
       );
+      await repo.waitForPersist();
       final ref = repo.findById(id)!.authSecretRef!;
       await repo.delete(id);
+      await repo.waitForPersist();
       expect(await secrets.read(ref), isNull);
       expect(repo.servers, isEmpty);
     });
@@ -76,6 +79,7 @@ void main() {
         authKind: McpAuthKind.bearer,
         bearerToken: 'tok-b',
       );
+      await repo.waitForPersist();
       final ref = repo.findById(id)!.authSecretRef!;
       await repo.clearAllSecrets();
       expect(repo.servers, hasLength(1));
@@ -83,6 +87,7 @@ void main() {
       expect(await repo.hasBearerSecret(id), isFalse);
 
       await repo.writeBearerSecret(id, 'tok-b2');
+      await repo.waitForPersist();
       await repo.clearAllServers();
       expect(repo.servers, isEmpty);
       expect(await secrets.read(ref), isNull);

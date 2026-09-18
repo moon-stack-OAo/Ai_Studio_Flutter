@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:core/core.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -44,6 +46,30 @@ void main() {
     expect(repo.providers.any((p) => p.id == added.id), isFalse);
   });
 
+  test('addProvider notifies before persist completes', () async {
+    final gate = Completer<void>();
+    final storage = _BlockingProviderStorage(gate.future);
+    final slow = ProviderRepository(
+      storage: storage,
+      connectionTester: StubProviderConnectionTester(),
+    );
+    await slow.load();
+    await slow.waitForPersist();
+
+    var notified = 0;
+    slow.addListener(() => notified++);
+
+    final pending = slow.addProvider(name: '慢存');
+    // 内存已改且已通知，即使落盘仍阻塞。
+    expect(slow.providers.any((p) => p.name == '慢存'), isTrue);
+    expect(notified, greaterThan(0));
+
+    gate.complete();
+    await pending;
+    await slow.waitForPersist();
+    expect(storage.saveCount, greaterThan(0));
+  });
+
   test('cannot remove builtin or last provider', () async {
     expect(await repo.removeProvider('openai'), isFalse);
 
@@ -68,6 +94,7 @@ void main() {
       baseUrl: 'https://x.test/v1',
       chatModel: 'm1',
     );
+    await a.waitForPersist();
 
     final b = ProviderRepository(
       storage: storage,
@@ -175,4 +202,29 @@ void main() {
     expect(videoReady.any((p) => p.id == videoOnly.id), isTrue);
     expect(videoReady.any((p) => p.id == chatOnly.id), isFalse);
   });
+}
+
+/// 模拟 macOS Keychain 挂起：save 等到 [gate] 完成才返回。
+class _BlockingProviderStorage implements ProviderStorage {
+  _BlockingProviderStorage(this._gate);
+
+  final Future<void> _gate;
+  int saveCount = 0;
+  ProviderStoreSnapshot? _snap;
+
+  @override
+  Future<ProviderStoreSnapshot> load() async {
+    return _snap ??
+        ProviderStoreSnapshot(
+          providers: builtinProviderPresets(),
+          activeProviderId: builtinProviderPresets().first.id,
+        );
+  }
+
+  @override
+  Future<void> save(ProviderStoreSnapshot snapshot) async {
+    await _gate;
+    saveCount++;
+    _snap = snapshot;
+  }
 }

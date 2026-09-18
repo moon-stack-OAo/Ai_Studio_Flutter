@@ -14,13 +14,11 @@ class SettingsProvidersTab extends StatefulWidget {
     required this.repository,
     this.mcpServerRepository,
     this.mcpSessionFactory,
-    this.openMcpRequestId = 0,
   });
 
   final ProviderRepository repository;
   final McpServerRepository? mcpServerRepository;
   final McpSessionFactory? mcpSessionFactory;
-  final int openMcpRequestId;
 
   @override
   State<SettingsProvidersTab> createState() => _SettingsProvidersTabState();
@@ -28,7 +26,6 @@ class SettingsProvidersTab extends StatefulWidget {
 
 class _SettingsProvidersTabState extends State<SettingsProvidersTab> {
   String? _selectedId;
-  int _handledOpenMcpRequestId = 0;
 
   ProviderRepository get _repo => widget.repository;
 
@@ -37,24 +34,6 @@ class _SettingsProvidersTabState extends State<SettingsProvidersTab> {
     super.initState();
     _repo.addListener(_onRepoChanged);
     _selectedId = _repo.activeProviderId;
-    if (widget.openMcpRequestId > 0) {
-      _handledOpenMcpRequestId = widget.openMcpRequestId;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) _openMcp();
-      });
-    }
-  }
-
-  @override
-  void didUpdateWidget(covariant SettingsProvidersTab oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (widget.openMcpRequestId != oldWidget.openMcpRequestId &&
-        widget.openMcpRequestId > _handledOpenMcpRequestId) {
-      _handledOpenMcpRequestId = widget.openMcpRequestId;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) _openMcp();
-      });
-    }
   }
 
   @override
