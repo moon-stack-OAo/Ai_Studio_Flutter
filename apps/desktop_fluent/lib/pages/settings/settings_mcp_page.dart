@@ -1146,270 +1146,317 @@ class _McpForm extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ColoredBox(
-      color: tokens.surface,
-      child: BackToTopHost(
-        builder: (context, scroll) => ListView(
-          controller: scroll,
-          padding: const EdgeInsets.fromLTRB(28, 20, 28, 28),
+    final formSections = <Widget>[
+      Text(
+        '编辑 MCP Server',
+        style: TextStyle(
+          fontSize: 18,
+          fontWeight: FontWeight.w600,
+          color: tokens.ink,
+          fontFamily: tokens.fontFamily,
+        ),
+      ),
+      const SizedBox(height: 4),
+      Text(
+        _isStdio
+            ? '本地 stdio 仅桌面可用；将启动本机子进程。移动端不支持。元数据存本机。'
+            : '元数据存本机；Bearer Token 存 OS 凭据库。HTTP/SSE（Streamable JSON-RPC）。',
+        style: TextStyle(
+          fontSize: 13,
+          color: tokens.inkMuted,
+          fontFamily: tokens.fontFamily,
+        ),
+      ),
+      const SizedBox(height: 20),
+      _Section(
+        title: '基本信息',
+        child: Column(
           children: [
-            Text(
-              '编辑 MCP Server',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w600,
-                color: tokens.ink,
-                fontFamily: tokens.fontFamily,
+            _LabeledField(
+              label: '显示名称',
+              child: TextBox(
+                controller: nameCtrl,
+                placeholder: '例如 业务查询 MCP',
+                onChanged: onFieldChanged,
               ),
             ),
-            const SizedBox(height: 4),
-            Text(
-              _isStdio
-                  ? '本地 stdio 仅桌面可用；将启动本机子进程。移动端不支持。元数据存本机。'
-                  : '元数据存本机；Bearer Token 存 OS 凭据库。HTTP/SSE（Streamable JSON-RPC）。',
-              style: TextStyle(
-                fontSize: 13,
-                color: tokens.inkMuted,
-                fontFamily: tokens.fontFamily,
-              ),
-            ),
-            const SizedBox(height: 20),
-            _Section(
-              title: '基本信息',
-              child: Column(
-                children: [
-                  _LabeledField(
-                    label: '显示名称',
-                    child: TextBox(
-                      controller: nameCtrl,
-                      placeholder: '例如 业务查询 MCP',
-                      onChanged: onFieldChanged,
-                    ),
+            const SizedBox(height: 12),
+            _LabeledField(
+              label: '传输方式',
+              hint: '移动端仅支持 HTTP/SSE；stdio 仅 Windows / macOS',
+              child: ComboBox<McpTransport>(
+                value: transport,
+                isExpanded: true,
+                items: const [
+                  ComboBoxItem(
+                    value: McpTransport.http,
+                    child: Text('HTTP/SSE'),
                   ),
-                  const SizedBox(height: 12),
-                  _LabeledField(
-                    label: '传输方式',
-                    hint: '移动端仅支持 HTTP/SSE；stdio 仅 Windows / macOS',
-                    child: ComboBox<McpTransport>(
-                      value: transport,
-                      isExpanded: true,
-                      items: const [
-                        ComboBoxItem(
-                          value: McpTransport.http,
-                          child: Text('HTTP/SSE'),
-                        ),
-                        ComboBoxItem(
-                          value: McpTransport.stdio,
-                          child: Text('本地 stdio（仅桌面）'),
-                        ),
-                      ],
-                      onChanged: (v) {
-                        if (v != null) onTransportChanged(v);
-                      },
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  if (_isStdio) ...[
-                    _LabeledField(
-                      label: '可执行文件（command）',
-                      hint: '如 node、npx 或绝对路径',
-                      child: TextBox(
-                        controller: commandCtrl,
-                        placeholder: 'node',
-                        onChanged: onFieldChanged,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    _LabeledField(
-                      label: '参数（args）',
-                      hint: '每行一个参数',
-                      child: TextBox(
-                        controller: argsCtrl,
-                        maxLines: 4,
-                        placeholder: 'path/to/server.js',
-                        onChanged: onFieldChanged,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    _LabeledField(
-                      label: '工作目录（cwd，可选）',
-                      child: TextBox(
-                        controller: cwdCtrl,
-                        placeholder: '留空则用进程默认目录',
-                        onChanged: onFieldChanged,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    _LabeledField(
-                      label: '环境变量（env，可选）',
-                      hint: '每行 KEY=VALUE；含密钥时勿依赖默认备份',
-                      child: TextBox(
-                        controller: envCtrl,
-                        maxLines: 4,
-                        placeholder: 'API_KEY=…',
-                        onChanged: onFieldChanged,
-                      ),
-                    ),
-                  ] else
-                    _LabeledField(
-                      label: 'Base URL',
-                      hint: 'MCP 单一入口，如 https://host/mcp',
-                      child: TextBox(
-                        controller: baseUrlCtrl,
-                        placeholder: 'https://mcp.example.com/mcp',
-                        onChanged: onFieldChanged,
-                      ),
-                    ),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      Text(
-                        '启用',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: tokens.inkSecondary,
-                          fontFamily: tokens.fontFamily,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      ToggleSwitch(
-                        checked: enabled,
-                        onChanged: onEnabledChanged,
-                      ),
-                      const Spacer(),
-                      Text(
-                        enabled ? '对话可暴露其 tools' : '已停用，不参与对话',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: tokens.inkMuted,
-                          fontFamily: tokens.fontFamily,
-                        ),
-                      ),
-                    ],
+                  ComboBoxItem(
+                    value: McpTransport.stdio,
+                    child: Text('本地 stdio（仅桌面）'),
                   ),
                 ],
+                onChanged: (v) {
+                  if (v != null) onTransportChanged(v);
+                },
               ),
             ),
-            if (!_isStdio) ...[
-              const SizedBox(height: 14),
-              _Section(
-                title: '鉴权',
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    ComboBox<McpAuthKind>(
-                      value: authKind == McpAuthKind.oauth
-                          ? McpAuthKind.none
-                          : authKind,
-                      isExpanded: true,
-                      items: const [
-                        ComboBoxItem(
-                          value: McpAuthKind.none,
-                          child: Text('无鉴权'),
-                        ),
-                        ComboBoxItem(
-                          value: McpAuthKind.bearer,
-                          child: Text('Bearer Token'),
-                        ),
-                      ],
-                      onChanged: (v) {
-                        if (v != null) onAuthKindChanged(v);
-                      },
-                    ),
-                    if (authKind == McpAuthKind.bearer) ...[
-                      const SizedBox(height: 12),
-                      _LabeledField(
-                        label: 'Bearer Token',
-                        hint: hasStoredToken && tokenCtrl.text.isEmpty
-                            ? '已保存（留空保持不变）'
-                            : null,
-                        child: TextBox(
-                          controller: tokenCtrl,
-                          obscureText: obscureToken,
-                          placeholder: hasStoredToken ? '••••••••' : 'token…',
-                          onChanged: onFieldChanged,
-                          suffix: IconButton(
-                            icon: Icon(
-                              obscureToken
-                                  ? FluentIcons.view
-                                  : FluentIcons.hide3,
-                              size: 14,
-                            ),
-                            onPressed: onToggleObscure,
-                          ),
-                        ),
+            const SizedBox(height: 12),
+            if (_isStdio) ...[
+              _LabeledField(
+                label: '可执行文件（command）',
+                hint: '如 node、npx 或绝对路径',
+                child: TextBox(
+                  controller: commandCtrl,
+                  placeholder: 'node',
+                  onChanged: onFieldChanged,
+                ),
+              ),
+              const SizedBox(height: 12),
+              _LabeledField(
+                label: '参数（args）',
+                hint: '每行一个参数',
+                child: TextBox(
+                  controller: argsCtrl,
+                  maxLines: 4,
+                  placeholder: 'path/to/server.js',
+                  onChanged: onFieldChanged,
+                ),
+              ),
+              const SizedBox(height: 12),
+              _LabeledField(
+                label: '工作目录（cwd，可选）',
+                child: TextBox(
+                  controller: cwdCtrl,
+                  placeholder: '留空则用进程默认目录',
+                  onChanged: onFieldChanged,
+                ),
+              ),
+              const SizedBox(height: 12),
+              _LabeledField(
+                label: '环境变量（env，可选）',
+                hint: '每行 KEY=VALUE；含密钥时勿依赖默认备份',
+                child: TextBox(
+                  controller: envCtrl,
+                  maxLines: 4,
+                  placeholder: 'API_KEY=…',
+                  onChanged: onFieldChanged,
+                ),
+              ),
+            ] else
+              _LabeledField(
+                label: 'Base URL',
+                hint: 'MCP 单一入口，如 https://host/mcp',
+                child: TextBox(
+                  controller: baseUrlCtrl,
+                  placeholder: 'https://mcp.example.com/mcp',
+                  onChanged: onFieldChanged,
+                ),
+              ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Text(
+                  '启用',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: tokens.inkSecondary,
+                    fontFamily: tokens.fontFamily,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                ToggleSwitch(
+                  checked: enabled,
+                  onChanged: onEnabledChanged,
+                ),
+                const Spacer(),
+                Text(
+                  enabled ? '对话可暴露其 tools' : '已停用，不参与对话',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: tokens.inkMuted,
+                    fontFamily: tokens.fontFamily,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+      if (!_isStdio) ...[
+        const SizedBox(height: 14),
+        _Section(
+          title: '鉴权',
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              ComboBox<McpAuthKind>(
+                value: authKind == McpAuthKind.oauth
+                    ? McpAuthKind.none
+                    : authKind,
+                isExpanded: true,
+                items: const [
+                  ComboBoxItem(
+                    value: McpAuthKind.none,
+                    child: Text('无鉴权'),
+                  ),
+                  ComboBoxItem(
+                    value: McpAuthKind.bearer,
+                    child: Text('Bearer Token'),
+                  ),
+                ],
+                onChanged: (v) {
+                  if (v != null) onAuthKindChanged(v);
+                },
+              ),
+              if (authKind == McpAuthKind.bearer) ...[
+                const SizedBox(height: 12),
+                _LabeledField(
+                  label: 'Bearer Token',
+                  hint: hasStoredToken && tokenCtrl.text.isEmpty
+                      ? '已保存（留空保持不变）'
+                      : null,
+                  child: TextBox(
+                    controller: tokenCtrl,
+                    obscureText: obscureToken,
+                    placeholder: hasStoredToken ? '••••••••' : 'token…',
+                    onChanged: onFieldChanged,
+                    suffix: IconButton(
+                      icon: Icon(
+                        obscureToken ? FluentIcons.view : FluentIcons.hide3,
+                        size: 14,
                       ),
-                    ],
-                  ],
+                      onPressed: onToggleObscure,
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ],
+      const SizedBox(height: 14),
+      _Section(
+        title: '连接与工具',
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                FilledButton(
+                  onPressed: (!canProbe || probing) ? null : onProbe,
+                  child: Text(probing ? '探测中…' : '测试连接 / 刷新 tools'),
+                ),
+                if (!canProbe)
+                  Text(
+                    _isStdio ? '需先填写 command' : '需先填写 Base URL',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: tokens.inkMuted,
+                      fontFamily: tokens.fontFamily,
+                    ),
+                  )
+                else if (statusText != null)
+                  Text(
+                    '● $statusText',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: statusOk ? tokens.success : tokens.danger,
+                      fontFamily: tokens.fontFamily,
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            _ServerDefaultPolicyRow(
+              tokens: tokens,
+              value: defaultToolPolicy,
+              onChanged: onDefaultPolicyChanged,
+            ),
+            if (tools.isEmpty) ...[
+              const SizedBox(height: 14),
+              Text(
+                _isStdio
+                    ? '尚未拉取工具列表。保存 command 后点「测试连接 / 刷新 tools」。'
+                    : '尚未拉取工具列表。保存 URL 后点「测试连接 / 刷新 tools」。',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: tokens.inkMuted,
+                  fontFamily: tokens.fontFamily,
                 ),
               ),
             ],
-            const SizedBox(height: 14),
-            _Section(
-              title: '连接与工具',
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    children: [
-                      FilledButton(
-                        onPressed: (!canProbe || probing) ? null : onProbe,
-                        child: Text(probing ? '探测中…' : '测试连接 / 刷新 tools'),
+          ],
+        ),
+      ),
+    ];
+
+    return ColoredBox(
+      color: tokens.surface,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(28, 20, 28, 0),
+              child: tools.isEmpty
+                  ? BackToTopHost(
+                      builder: (context, scroll) => ListView(
+                        controller: scroll,
+                        padding: const EdgeInsets.only(bottom: 16),
+                        children: formSections,
                       ),
-                      if (!canProbe)
-                        Text(
-                          _isStdio ? '需先填写 command' : '需先填写 Base URL',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: tokens.inkMuted,
-                            fontFamily: tokens.fontFamily,
+                    )
+                  : Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Flexible(
+                          flex: 2,
+                          child: BackToTopHost(
+                            builder: (context, scroll) => ListView(
+                              controller: scroll,
+                              padding: EdgeInsets.zero,
+                              children: formSections,
+                            ),
                           ),
-                        )
-                      else if (statusText != null)
+                        ),
+                        const SizedBox(height: 12),
                         Text(
-                          '● $statusText',
+                          '按工具覆盖（可选）',
                           style: TextStyle(
-                            fontSize: 12,
-                            color: statusOk ? tokens.success : tokens.danger,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: tokens.ink,
                             fontFamily: tokens.fontFamily,
                           ),
                         ),
-                    ],
-                  ),
-                  const SizedBox(height: 14),
-                  _ServerDefaultPolicyRow(
-                    tokens: tokens,
-                    value: defaultToolPolicy,
-                    onChanged: onDefaultPolicyChanged,
-                  ),
-                  const SizedBox(height: 14),
-                  if (tools.isEmpty)
-                    Text(
-                      _isStdio
-                          ? '尚未拉取工具列表。保存 command 后点「测试连接 / 刷新 tools」。'
-                          : '尚未拉取工具列表。保存 URL 后点「测试连接 / 刷新 tools」。',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: tokens.inkMuted,
-                        fontFamily: tokens.fontFamily,
-                      ),
-                    )
-                  else
-                    _ToolsPolicyTable(
-                      tokens: tokens,
-                      tools: tools,
-                      defaultToolPolicy: defaultToolPolicy,
-                      overrides: policyOverrides,
-                      onPolicyChanged: onPolicyChanged,
+                        const SizedBox(height: 8),
+                        Expanded(
+                          flex: 3,
+                          child: _ToolsPolicyTable(
+                            tokens: tokens,
+                            tools: tools,
+                            defaultToolPolicy: defaultToolPolicy,
+                            overrides: policyOverrides,
+                            onPolicyChanged: onPolicyChanged,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                      ],
                     ),
-                ],
-              ),
             ),
-            const SizedBox(height: 20),
-            Row(
+          ),
+          Container(
+            padding: const EdgeInsets.fromLTRB(28, 12, 28, 16),
+            decoration: BoxDecoration(
+              color: tokens.surface,
+              border: Border(top: BorderSide(color: tokens.border)),
+            ),
+            child: Row(
               children: [
                 FilledButton(
                   onPressed: dirty ? onSave : null,
@@ -1430,8 +1477,8 @@ class _McpForm extends StatelessWidget {
                 ),
               ],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -1569,25 +1616,23 @@ class _ToolsPolicyTable extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Text(
-          '按工具覆盖（可选）',
-          style: TextStyle(
-            fontSize: 13,
-            fontWeight: FontWeight.w600,
-            color: tokens.ink,
-            fontFamily: tokens.fontFamily,
-          ),
-        ),
-        const SizedBox(height: 8),
-        for (final tool in tools) ...[
-          Container(
-            margin: const EdgeInsets.only(bottom: 8),
+    return Container(
+      decoration: BoxDecoration(
+        color: tokens.canvas,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: tokens.border),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: ListView.separated(
+        padding: const EdgeInsets.all(8),
+        itemCount: tools.length,
+        separatorBuilder: (_, _) => const SizedBox(height: 8),
+        itemBuilder: (context, index) {
+          final tool = tools[index];
+          return Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: tokens.canvas,
+              color: tokens.surface,
               borderRadius: BorderRadius.circular(8),
               border: Border.all(color: tokens.border),
             ),
@@ -1710,9 +1755,9 @@ class _ToolsPolicyTable extends StatelessWidget {
                 ),
               ],
             ),
-          ),
-        ],
-      ],
+          );
+        },
+      ),
     );
   }
 }

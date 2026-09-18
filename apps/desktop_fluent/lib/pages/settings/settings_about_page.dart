@@ -24,6 +24,7 @@ class SettingsAboutPage extends StatefulWidget {
     this.generation,
     this.updateController,
     this.packageInfo,
+    this.onUnlockHiddenPortal,
   });
 
   final AppearanceRepository appearanceRepository;
@@ -34,6 +35,9 @@ class SettingsAboutPage extends StatefulWidget {
 
   /// 测试可注入；生产为 null 时异步 `PackageInfo.fromPlatform()`。
   final PackageInfo? packageInfo;
+
+  /// 连点版本号切换「实验室」；返回操作后是否解锁。由 SettingsShell 注入。
+  final Future<bool> Function()? onUnlockHiddenPortal;
 
   @override
   State<SettingsAboutPage> createState() => _SettingsAboutPageState();
@@ -47,10 +51,36 @@ class _SettingsAboutPageState extends State<SettingsAboutPage> {
   bool _busy = false;
   String _bundledChangelog = kBundledChangelogMarkdown;
   bool _changelogLoading = true;
+  int _portalTapCount = 0;
+  DateTime? _portalTapAt;
 
   AppearanceRepository get _repo => widget.appearanceRepository;
   DataBackupService get _backup => widget.dataBackupService;
   UpdateController? get _updater => widget.updateController;
+
+  void _onVersionPortalTap() {
+    final unlock = widget.onUnlockHiddenPortal;
+    if (unlock == null) return;
+    final now = DateTime.now();
+    final last = _portalTapAt;
+    if (last == null || now.difference(last) > const Duration(seconds: 2)) {
+      _portalTapCount = 1;
+    } else {
+      _portalTapCount += 1;
+    }
+    _portalTapAt = now;
+    if (_portalTapCount < 7) return;
+    _portalTapCount = 0;
+    _portalTapAt = null;
+    unawaited(() async {
+      final unlocked = await unlock();
+      if (!mounted) return;
+      _showInfoBar(
+        unlocked ? '已解锁「实验室」' : '已隐藏「实验室」',
+        InfoBarSeverity.info,
+      );
+    }());
+  }
 
   @override
   void initState() {
@@ -775,12 +805,16 @@ class _SettingsAboutPageState extends State<SettingsAboutPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  '版本 $_versionLabel · ${updateInstallPlatformLabel()}',
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: tokens.inkSecondary,
-                    fontFamily: tokens.fontFamily,
+                GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: _onVersionPortalTap,
+                  child: Text(
+                    '版本 $_versionLabel · ${updateInstallPlatformLabel()}',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: tokens.inkSecondary,
+                      fontFamily: tokens.fontFamily,
+                    ),
                   ),
                 ),
                 const SizedBox(height: 4),

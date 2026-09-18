@@ -367,6 +367,231 @@ class _McpEditSheetState extends State<_McpEditSheet> {
     if (discard && mounted) Navigator.of(context).maybePop();
   }
 
+  List<Widget> _buildFormSections(
+    MaterialTokens tokens,
+    McpServerConfig selected,
+  ) {
+    return [
+      Text(
+        '元数据存本机；Bearer Token 存 OS 凭据库。仅支持 HTTP/SSE（Streamable JSON-RPC）。本地 stdio 仅桌面可用。',
+        style: TextStyle(
+          fontSize: 12,
+          color: tokens.inkMuted,
+        ),
+      ),
+      if (_isStdioUnsupported) ...[
+        const SizedBox(height: 12),
+        Card(
+          color: Color.lerp(
+            tokens.danger,
+            tokens.surface,
+            0.9,
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Text(
+              '此 Server 为本地 stdio，仅桌面可用。移动端无法探测或调用；请在桌面端管理，或改用 HTTP/SSE。',
+              style: TextStyle(
+                fontSize: 13,
+                color: tokens.danger,
+              ),
+            ),
+          ),
+        ),
+      ],
+      const SizedBox(height: 16),
+      Text(
+        '基本信息',
+        style: TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
+          color: tokens.inkSecondary,
+        ),
+      ),
+      const SizedBox(height: 8),
+      TextField(
+        controller: _nameCtrl,
+        decoration: const InputDecoration(
+          labelText: '显示名称',
+          hintText: '例如 业务查询 MCP',
+        ),
+        onChanged: (_) => _markDirty(),
+      ),
+      const SizedBox(height: 12),
+      if (_isStdioUnsupported)
+        InputDecorator(
+          decoration: const InputDecoration(
+            labelText: '传输方式',
+            helperText: '只读；移动端不支持本地子进程',
+          ),
+          child: Text(
+            '本地 stdio（仅桌面）',
+            style: TextStyle(
+              fontSize: 14,
+              color: tokens.inkMuted,
+            ),
+          ),
+        )
+      else
+        TextField(
+          controller: _baseUrlCtrl,
+          decoration: const InputDecoration(
+            labelText: 'Base URL',
+            hintText: 'https://mcp.example.com/mcp',
+            helperText: 'MCP 单一入口，如 https://host/mcp',
+          ),
+          onChanged: (_) => _markDirty(),
+        ),
+      const SizedBox(height: 8),
+      SwitchListTile(
+        contentPadding: EdgeInsets.zero,
+        title: const Text('启用'),
+        subtitle: Text(
+          _isStdioUnsupported
+              ? '本地 stdio 仅桌面可用，移动端不可启用'
+              : (_enabled ? '对话可暴露其 tools' : '已停用，不参与对话'),
+          style: TextStyle(
+            fontSize: 12,
+            color: tokens.inkMuted,
+          ),
+        ),
+        value: _isStdioUnsupported ? false : _enabled,
+        onChanged: _isStdioUnsupported
+            ? null
+            : (v) {
+                setState(() {
+                  _enabled = v;
+                  _dirty = true;
+                });
+              },
+      ),
+      const SizedBox(height: 12),
+      Text(
+        '鉴权',
+        style: TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
+          color: tokens.inkSecondary,
+        ),
+      ),
+      const SizedBox(height: 8),
+      DropdownButtonFormField<McpAuthKind>(
+        key: ValueKey(_authKind),
+        initialValue: _authKind == McpAuthKind.oauth
+            ? McpAuthKind.none
+            : _authKind,
+        decoration: const InputDecoration(labelText: '鉴权方式'),
+        items: const [
+          DropdownMenuItem(
+            value: McpAuthKind.none,
+            child: Text('无鉴权'),
+          ),
+          DropdownMenuItem(
+            value: McpAuthKind.bearer,
+            child: Text('Bearer Token'),
+          ),
+        ],
+        onChanged: (v) {
+          if (v == null) return;
+          setState(() {
+            _authKind = v;
+            _dirty = true;
+            if (v != McpAuthKind.bearer) {
+              _tokenCtrl.clear();
+            }
+          });
+        },
+      ),
+      if (_authKind == McpAuthKind.bearer) ...[
+        const SizedBox(height: 12),
+        TextField(
+          controller: _tokenCtrl,
+          obscureText: _obscureToken,
+          decoration: InputDecoration(
+            labelText: 'Bearer Token',
+            hintText: _hasStoredToken ? '••••••••' : 'token…',
+            helperText: _hasStoredToken && _tokenCtrl.text.isEmpty
+                ? '已保存（留空保持不变）'
+                : null,
+            suffixIcon: IconButton(
+              tooltip: _obscureToken ? '显示' : '隐藏',
+              icon: Icon(
+                _obscureToken
+                    ? Icons.visibility_outlined
+                    : Icons.visibility_off_outlined,
+              ),
+              onPressed: () => setState(
+                () => _obscureToken = !_obscureToken,
+              ),
+            ),
+          ),
+          onChanged: (_) => _markDirty(),
+        ),
+      ],
+      const SizedBox(height: 16),
+      Text(
+        '连接与工具',
+        style: TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
+          color: tokens.inkSecondary,
+        ),
+      ),
+      const SizedBox(height: 8),
+      FilledButton.tonalIcon(
+        onPressed: (!_canProbe || _probing) ? null : _probeAndRefreshTools,
+        icon: _probing
+            ? const SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            : const Icon(Icons.wifi_tethering),
+        label: Text(_probing ? '探测中…' : '测试连接 / 刷新 tools'),
+        style: FilledButton.styleFrom(
+          minimumSize: const Size.fromHeight(44),
+        ),
+      ),
+      if (!_canProbe)
+        Padding(
+          padding: const EdgeInsets.only(top: 8),
+          child: Text(
+            '需先填写 Base URL',
+            style: TextStyle(
+              fontSize: 12,
+              color: tokens.inkMuted,
+            ),
+          ),
+        )
+      else if (_statusText != null)
+        Padding(
+          padding: const EdgeInsets.only(top: 8),
+          child: Text(
+            '● $_statusText',
+            style: TextStyle(
+              fontSize: 12,
+              color: _statusOk ? tokens.success : tokens.danger,
+            ),
+          ),
+        ),
+      const SizedBox(height: 14),
+      _ServerDefaultPolicyBlock(
+        value: selected.defaultToolPolicy,
+        onChanged: _setDefaultToolPolicy,
+      ),
+      if (selected.toolsCache.isEmpty) ...[
+        const SizedBox(height: 14),
+        Text(
+          '尚未拉取工具列表。保存 URL 后点「测试连接 / 刷新 tools」。',
+          style: TextStyle(
+            fontSize: 12,
+            color: tokens.inkMuted,
+          ),
+        ),
+      ],
+    ];
+  }
+
   @override
   Widget build(BuildContext context) {
     final tokens = materialTokensOf(context);
@@ -414,250 +639,78 @@ class _McpEditSheetState extends State<_McpEditSheet> {
                 ),
               ),
               Expanded(
-                child: BackToTopHost(
-                  builder: (context, scroll) => ListView(
-                    controller: scroll,
-                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                    children: [
-                      Text(
-                        '元数据存本机；Bearer Token 存 OS 凭据库。仅支持 HTTP/SSE（Streamable JSON-RPC）。本地 stdio 仅桌面可用。',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: tokens.inkMuted,
-                        ),
-                      ),
-                      if (_isStdioUnsupported) ...[
-                        const SizedBox(height: 12),
-                        Card(
-                          color: Color.lerp(
-                            tokens.danger,
-                            tokens.surface,
-                            0.9,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: selected.toolsCache.isEmpty
+                      ? BackToTopHost(
+                          builder: (context, scroll) => ListView(
+                            controller: scroll,
+                            padding: const EdgeInsets.only(bottom: 16),
+                            children: [
+                              ..._buildFormSections(tokens, selected),
+                              const SizedBox(height: 16),
+                              OutlinedButton.icon(
+                                onPressed: _delete,
+                                icon: const Icon(Icons.delete_outline),
+                                label: const Text('删除此 Server'),
+                                style: OutlinedButton.styleFrom(
+                                  minimumSize: const Size.fromHeight(44),
+                                  foregroundColor: tokens.danger,
+                                  side: BorderSide(color: tokens.danger),
+                                ),
+                              ),
+                            ],
                           ),
-                          child: Padding(
-                            padding: const EdgeInsets.all(12),
-                            child: Text(
-                              '此 Server 为本地 stdio，仅桌面可用。移动端无法探测或调用；请在桌面端管理，或改用 HTTP/SSE。',
+                        )
+                      : Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Flexible(
+                              flex: 2,
+                              child: BackToTopHost(
+                                builder: (context, scroll) => ListView(
+                                  controller: scroll,
+                                  padding: EdgeInsets.zero,
+                                  children: _buildFormSections(
+                                    tokens,
+                                    selected,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            Text(
+                              '按工具覆盖（可选）',
                               style: TextStyle(
                                 fontSize: 13,
-                                color: tokens.danger,
+                                fontWeight: FontWeight.w600,
+                                color: tokens.ink,
                               ),
                             ),
-                          ),
-                        ),
-                      ],
-                      const SizedBox(height: 16),
-                      Text(
-                        '基本信息',
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: tokens.inkSecondary,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      TextField(
-                        controller: _nameCtrl,
-                        decoration: const InputDecoration(
-                          labelText: '显示名称',
-                          hintText: '例如 业务查询 MCP',
-                        ),
-                        onChanged: (_) => _markDirty(),
-                      ),
-                      const SizedBox(height: 12),
-                      if (_isStdioUnsupported)
-                        InputDecorator(
-                          decoration: const InputDecoration(
-                            labelText: '传输方式',
-                            helperText: '只读；移动端不支持本地子进程',
-                          ),
-                          child: Text(
-                            '本地 stdio（仅桌面）',
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: tokens.inkMuted,
-                            ),
-                          ),
-                        )
-                      else
-                        TextField(
-                          controller: _baseUrlCtrl,
-                          decoration: const InputDecoration(
-                            labelText: 'Base URL',
-                            hintText: 'https://mcp.example.com/mcp',
-                            helperText: 'MCP 单一入口，如 https://host/mcp',
-                          ),
-                          onChanged: (_) => _markDirty(),
-                        ),
-                      const SizedBox(height: 8),
-                      SwitchListTile(
-                        contentPadding: EdgeInsets.zero,
-                        title: const Text('启用'),
-                        subtitle: Text(
-                          _isStdioUnsupported
-                              ? '本地 stdio 仅桌面可用，移动端不可启用'
-                              : (_enabled ? '对话可暴露其 tools' : '已停用，不参与对话'),
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: tokens.inkMuted,
-                          ),
-                        ),
-                        value: _isStdioUnsupported ? false : _enabled,
-                        onChanged: _isStdioUnsupported
-                            ? null
-                            : (v) {
-                                setState(() {
-                                  _enabled = v;
-                                  _dirty = true;
-                                });
-                              },
-                      ),
-                      const SizedBox(height: 12),
-                      Text(
-                        '鉴权',
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: tokens.inkSecondary,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      DropdownButtonFormField<McpAuthKind>(
-                        key: ValueKey(_authKind),
-                        initialValue: _authKind == McpAuthKind.oauth
-                            ? McpAuthKind.none
-                            : _authKind,
-                        decoration: const InputDecoration(labelText: '鉴权方式'),
-                        items: const [
-                          DropdownMenuItem(
-                            value: McpAuthKind.none,
-                            child: Text('无鉴权'),
-                          ),
-                          DropdownMenuItem(
-                            value: McpAuthKind.bearer,
-                            child: Text('Bearer Token'),
-                          ),
-                        ],
-                        onChanged: (v) {
-                          if (v == null) return;
-                          setState(() {
-                            _authKind = v;
-                            _dirty = true;
-                            if (v != McpAuthKind.bearer) {
-                              _tokenCtrl.clear();
-                            }
-                          });
-                        },
-                      ),
-                      if (_authKind == McpAuthKind.bearer) ...[
-                        const SizedBox(height: 12),
-                        TextField(
-                          controller: _tokenCtrl,
-                          obscureText: _obscureToken,
-                          decoration: InputDecoration(
-                            labelText: 'Bearer Token',
-                            hintText: _hasStoredToken ? '••••••••' : 'token…',
-                            helperText: _hasStoredToken &&
-                                    _tokenCtrl.text.isEmpty
-                                ? '已保存（留空保持不变）'
-                                : null,
-                            suffixIcon: IconButton(
-                              tooltip: _obscureToken ? '显示' : '隐藏',
-                              icon: Icon(
-                                _obscureToken
-                                    ? Icons.visibility_outlined
-                                    : Icons.visibility_off_outlined,
-                              ),
-                              onPressed: () => setState(
-                                () => _obscureToken = !_obscureToken,
+                            const SizedBox(height: 8),
+                            Expanded(
+                              flex: 3,
+                              child: _ToolsPolicyList(
+                                tools: selected.toolsCache,
+                                defaultToolPolicy: selected.defaultToolPolicy,
+                                overrides: selected.toolPolicyOverrides,
+                                onPolicyChanged: _setToolPolicy,
                               ),
                             ),
-                          ),
-                          onChanged: (_) => _markDirty(),
-                        ),
-                      ],
-                      const SizedBox(height: 16),
-                      Text(
-                        '连接与工具',
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: tokens.inkSecondary,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      FilledButton.tonalIcon(
-                        onPressed: (!_canProbe || _probing)
-                            ? null
-                            : _probeAndRefreshTools,
-                        icon: _probing
-                            ? const SizedBox(
-                                width: 16,
-                                height: 16,
-                                child: CircularProgressIndicator(strokeWidth: 2),
-                              )
-                            : const Icon(Icons.wifi_tethering),
-                        label: Text(_probing ? '探测中…' : '测试连接 / 刷新 tools'),
-                        style: FilledButton.styleFrom(
-                          minimumSize: const Size.fromHeight(44),
-                        ),
-                      ),
-                      if (!_canProbe)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 8),
-                          child: Text(
-                            '需先填写 Base URL',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: tokens.inkMuted,
+                            const SizedBox(height: 12),
+                            OutlinedButton.icon(
+                              onPressed: _delete,
+                              icon: const Icon(Icons.delete_outline),
+                              label: const Text('删除此 Server'),
+                              style: OutlinedButton.styleFrom(
+                                minimumSize: const Size.fromHeight(44),
+                                foregroundColor: tokens.danger,
+                                side: BorderSide(color: tokens.danger),
+                              ),
                             ),
-                          ),
-                        )
-                      else if (_statusText != null)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 8),
-                          child: Text(
-                            '● $_statusText',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: _statusOk ? tokens.success : tokens.danger,
-                            ),
-                          ),
+                            const SizedBox(height: 8),
+                          ],
                         ),
-                      const SizedBox(height: 14),
-                      _ServerDefaultPolicyBlock(
-                        value: selected.defaultToolPolicy,
-                        onChanged: _setDefaultToolPolicy,
-                      ),
-                      const SizedBox(height: 14),
-                      if (selected.toolsCache.isEmpty)
-                        Text(
-                          '尚未拉取工具列表。保存 URL 后点「测试连接 / 刷新 tools」。',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: tokens.inkMuted,
-                          ),
-                        )
-                      else
-                        _ToolsPolicyList(
-                          tools: selected.toolsCache,
-                          defaultToolPolicy: selected.defaultToolPolicy,
-                          overrides: selected.toolPolicyOverrides,
-                          onPolicyChanged: _setToolPolicy,
-                        ),
-                      const SizedBox(height: 16),
-                      OutlinedButton.icon(
-                        onPressed: _delete,
-                        icon: const Icon(Icons.delete_outline),
-                        label: const Text('删除此 Server'),
-                        style: OutlinedButton.styleFrom(
-                          minimumSize: const Size.fromHeight(44),
-                          foregroundColor: tokens.danger,
-                          side: BorderSide(color: tokens.danger),
-                        ),
-                      ),
-                    ],
-                  ),
                 ),
               ),
               SafeArea(
@@ -831,129 +884,131 @@ class _ToolsPolicyList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final tokens = materialTokensOf(context);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Text(
-          '按工具覆盖（可选）',
-          style: TextStyle(
-            fontSize: 13,
-            fontWeight: FontWeight.w600,
-            color: tokens.ink,
-          ),
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: tokens.canvas,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: tokens.border),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(10),
+        child: ListView.separated(
+          padding: const EdgeInsets.all(8),
+          itemCount: tools.length,
+          separatorBuilder: (_, _) => const SizedBox(height: 8),
+          itemBuilder: (context, index) {
+            final tool = tools[index];
+            return Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: tokens.surface,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: tokens.border),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          tool.displayTitle,
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: tokens.ink,
+                          ),
+                        ),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: tokens.surfaceMuted,
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          _sideLabel(tool.sideEffect),
+                          style: TextStyle(
+                            fontSize: 10,
+                            color: tokens.inkMuted,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (tool.name != tool.displayTitle) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      tool.name,
+                      style: TextStyle(fontSize: 11, color: tokens.inkMuted),
+                    ),
+                  ],
+                  if (tool.description?.trim().isNotEmpty == true) ...[
+                    const SizedBox(height: 6),
+                    Text(
+                      tool.description!.trim(),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: tokens.inkSecondary,
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 10),
+                  DropdownButtonFormField<String>(
+                    initialValue: overrides.containsKey(tool.name)
+                        ? overrides[tool.name]!.wire
+                        : 'default',
+                    decoration: const InputDecoration(
+                      labelText: '授权',
+                      isDense: true,
+                    ),
+                    items: [
+                      DropdownMenuItem(
+                        value: 'default',
+                        child: Text(
+                          _policyLabel(null, tool, defaultToolPolicy),
+                        ),
+                      ),
+                      const DropdownMenuItem(
+                        value: 'deny',
+                        child: Text('拒绝'),
+                      ),
+                      const DropdownMenuItem(
+                        value: 'confirm_always',
+                        child: Text('每次确认'),
+                      ),
+                      const DropdownMenuItem(
+                        value: 'confirm_once',
+                        child: Text('本会话确认一次'),
+                      ),
+                      const DropdownMenuItem(
+                        value: 'auto_allow',
+                        child: Text('自动允许'),
+                      ),
+                    ],
+                    onChanged: (v) {
+                      if (v == null) return;
+                      if (v == 'default') {
+                        onPolicyChanged(tool.name, null);
+                      } else {
+                        onPolicyChanged(
+                          tool.name,
+                          McpToolPolicyLevel.tryParse(v),
+                        );
+                      }
+                    },
+                  ),
+                ],
+              ),
+            );
+          },
         ),
-        const SizedBox(height: 8),
-        for (final tool in tools)
-          Container(
-            margin: const EdgeInsets.only(bottom: 8),
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: tokens.canvas,
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: tokens.border),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        tool.displayTitle,
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          color: tokens.ink,
-                        ),
-                      ),
-                    ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 6,
-                        vertical: 2,
-                      ),
-                      decoration: BoxDecoration(
-                        color: tokens.surfaceMuted,
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: Text(
-                        _sideLabel(tool.sideEffect),
-                        style: TextStyle(
-                          fontSize: 10,
-                          color: tokens.inkMuted,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                if (tool.name != tool.displayTitle) ...[
-                  const SizedBox(height: 2),
-                  Text(
-                    tool.name,
-                    style: TextStyle(fontSize: 11, color: tokens.inkMuted),
-                  ),
-                ],
-                if (tool.description?.trim().isNotEmpty == true) ...[
-                  const SizedBox(height: 6),
-                  Text(
-                    tool.description!.trim(),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: tokens.inkSecondary,
-                    ),
-                  ),
-                ],
-                const SizedBox(height: 10),
-                DropdownButtonFormField<String>(
-                  initialValue: overrides.containsKey(tool.name)
-                      ? overrides[tool.name]!.wire
-                      : 'default',
-                  decoration: const InputDecoration(
-                    labelText: '授权',
-                    isDense: true,
-                  ),
-                  items: [
-                    DropdownMenuItem(
-                      value: 'default',
-                      child: Text(
-                        _policyLabel(null, tool, defaultToolPolicy),
-                      ),
-                    ),
-                    const DropdownMenuItem(
-                      value: 'deny',
-                      child: Text('拒绝'),
-                    ),
-                    const DropdownMenuItem(
-                      value: 'confirm_always',
-                      child: Text('每次确认'),
-                    ),
-                    const DropdownMenuItem(
-                      value: 'confirm_once',
-                      child: Text('本会话确认一次'),
-                    ),
-                    const DropdownMenuItem(
-                      value: 'auto_allow',
-                      child: Text('自动允许'),
-                    ),
-                  ],
-                  onChanged: (v) {
-                    if (v == null) return;
-                    if (v == 'default') {
-                      onPolicyChanged(tool.name, null);
-                    } else {
-                      onPolicyChanged(
-                        tool.name,
-                        McpToolPolicyLevel.tryParse(v),
-                      );
-                    }
-                  },
-                ),
-              ],
-            ),
-          ),
-      ],
+      ),
     );
   }
 }

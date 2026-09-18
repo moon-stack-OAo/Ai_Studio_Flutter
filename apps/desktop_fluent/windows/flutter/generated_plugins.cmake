@@ -10,6 +10,7 @@ list(APPEND FLUTTER_PLUGIN_LIST
   media_kit_video
   screen_retriever_windows
   tray_manager
+  webview_flutter_windows
   window_manager
 )
 

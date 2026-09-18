@@ -1,7 +1,7 @@
 name: desktop_fluent
 description: AI Studio desktop app (Fluent Design).
 publish_to: 'none'
-version: 1.0.7+1789639641
+version: 1.0.8+1789718109
 
 environment:
   sdk: ^3.12.2
@@ -30,7 +30,8 @@ dependencies:
   desktop_drop: ^0.8.4
   flutter_native_splash: ^2.4.8
   flutter_single_instance: ^1.7.0
-
+  webview_flutter_windows: ^1.2.0
+  webview_flutter: ^4.14.1
 dev_dependencies:
   flutter_test:
     sdk: flutter

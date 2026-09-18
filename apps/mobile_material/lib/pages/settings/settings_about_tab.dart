@@ -25,6 +25,7 @@ class SettingsAboutTab extends StatefulWidget {
     this.generation,
     this.packageInfo,
     this.updateController,
+    this.onUnlockHiddenPortal,
   });
 
   final DataBackupService dataBackupService;
@@ -36,6 +37,9 @@ class SettingsAboutTab extends StatefulWidget {
 
   /// 测试可注入；生产为 null 时内部创建 [MobileUpdateController]。
   final MobileUpdateController? updateController;
+
+  /// 连点版本号切换「实验室」；返回操作后是否解锁。由 SettingsPage 注入。
+  final Future<bool> Function()? onUnlockHiddenPortal;
 
   @override
   State<SettingsAboutTab> createState() => _SettingsAboutTabState();
@@ -51,8 +55,31 @@ class _SettingsAboutTabState extends State<SettingsAboutTab> {
   bool _busy = false;
   String _bundledChangelog = kBundledChangelogMarkdown;
   bool _changelogLoading = true;
+  int _portalTapCount = 0;
+  DateTime? _portalTapAt;
 
   DataBackupService get _backup => widget.dataBackupService;
+
+  void _onVersionPortalTap() {
+    final unlock = widget.onUnlockHiddenPortal;
+    if (unlock == null) return;
+    final now = DateTime.now();
+    final last = _portalTapAt;
+    if (last == null || now.difference(last) > const Duration(seconds: 2)) {
+      _portalTapCount = 1;
+    } else {
+      _portalTapCount += 1;
+    }
+    _portalTapAt = now;
+    if (_portalTapCount < 7) return;
+    _portalTapCount = 0;
+    _portalTapAt = null;
+    unawaited(() async {
+      final unlocked = await unlock();
+      if (!mounted) return;
+      _snack(unlocked ? '已解锁「实验室」' : '已隐藏「实验室」');
+    }());
+  }
 
   @override
   void initState() {
@@ -781,9 +808,13 @@ class _SettingsAboutTabState extends State<SettingsAboutTab> {
                   ),
                 ),
                 const SizedBox(height: 6),
-                Text(
-                  '版本 $_versionLabel · Android / iOS',
-                  style: TextStyle(fontSize: 13, color: tokens.inkSecondary),
+                GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: _onVersionPortalTap,
+                  child: Text(
+                    '版本 $_versionLabel · Android / iOS',
+                    style: TextStyle(fontSize: 13, color: tokens.inkSecondary),
+                  ),
                 ),
                 const SizedBox(height: 8),
                 _statusPill(tokens),

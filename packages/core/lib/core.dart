@@ -66,6 +66,7 @@ export 'src/settings/chat_defaults_repository.dart';
 export 'src/settings/chat_defaults_storage.dart';
 export 'src/settings/data_backup.dart';
 export 'src/settings/data_backup_service.dart';
+export 'src/settings/hidden_portal_prefs.dart';
 export 'src/settings/third_party_licenses.dart';
 export 'src/update/android_update_client.dart';
 export 'src/update/sha256_util.dart';

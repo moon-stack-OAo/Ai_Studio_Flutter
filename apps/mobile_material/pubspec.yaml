@@ -1,7 +1,7 @@
 name: mobile_material
 description: AI Studio mobile app (Material Design).
 publish_to: 'none'
-version: 1.0.7+1789639641
+version: 1.0.8+1789718109
 
 environment:
   sdk: ^3.12.2
@@ -31,6 +31,7 @@ dependencies:
   media_kit: ^1.2.6
   media_kit_video: ^2.0.1
   media_kit_libs_video: ^1.0.7
+  webview_flutter: ^4.14.1
 
 
 dev_dependencies:

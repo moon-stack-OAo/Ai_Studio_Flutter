@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:core/core.dart';
 import 'package:design_fluent/design_fluent.dart';
 import 'package:fluent_ui/fluent_ui.dart';
@@ -5,6 +7,7 @@ import 'package:fluent_ui/fluent_ui.dart';
 import '../../app/theme_controller.dart';
 import '../../shell/app_section.dart';
 import '../../update/update_controller.dart';
+import 'hidden_portal_page.dart';
 import 'settings_about_page.dart';
 import 'settings_appearance_page.dart';
 import 'settings_chat_defaults_page.dart';
@@ -12,7 +15,7 @@ import 'settings_logs_page.dart';
 import 'settings_mcp_page.dart';
 import 'settings_providers_page.dart';
 
-class SettingsShell extends StatelessWidget {
+class SettingsShell extends StatefulWidget {
   const SettingsShell({
     super.key,
     required this.category,
@@ -27,6 +30,7 @@ class SettingsShell extends StatelessWidget {
     this.updateController,
     this.mcpServerRepository,
     this.mcpSessionFactory,
+    this.hiddenPortalPrefs,
   });
 
   final SettingsCategory category;
@@ -41,12 +45,66 @@ class SettingsShell extends StatelessWidget {
   final UpdateController? updateController;
   final McpServerRepository? mcpServerRepository;
   final McpSessionFactory? mcpSessionFactory;
+  final HiddenPortalPrefs? hiddenPortalPrefs;
+
+  @override
+  State<SettingsShell> createState() => _SettingsShellState();
+}
+
+class _SettingsShellState extends State<SettingsShell> {
+  late final HiddenPortalPrefs _portalPrefs;
+
+  @override
+  void initState() {
+    super.initState();
+    _portalPrefs = widget.hiddenPortalPrefs ?? HiddenPortalPrefs();
+    _portalPrefs.addListener(_onPortalPrefsChanged);
+    unawaited(_portalPrefs.ensureLoaded());
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // 进入/停留设置时按 TTL 过期（不在 build 内 notify）。
+    unawaited(_portalPrefs.ensureLoaded());
+  }
+
+  void _onPortalPrefsChanged() {
+    if (!mounted) return;
+    if (!_portalPrefs.unlocked && widget.category == SettingsCategory.lab) {
+      widget.onCategoryChanged(SettingsCategory.about);
+    }
+    setState(() {});
+  }
+
+  @override
+  void dispose() {
+    _portalPrefs.removeListener(_onPortalPrefsChanged);
+    super.dispose();
+  }
+
+  List<SettingsCategory> get _categories {
+    if (_portalPrefs.unlocked) {
+      return [...SettingsCategory.visibleByDefault, SettingsCategory.lab];
+    }
+    return SettingsCategory.visibleByDefault;
+  }
+
+  /// 连点切换：返回操作后是否处于解锁态。
+  Future<bool> _toggleLab() async {
+    return _portalPrefs.toggle();
+  }
 
   @override
   Widget build(BuildContext context) {
     final tokens = fluentTokensOf(context);
     final density =
         UiDensity.fromVisualDensity(FluentTheme.of(context).visualDensity);
+    final categories = _categories;
+    final selected = categories.contains(widget.category)
+        ? widget.category
+        : SettingsCategory.about;
+
     return FocusTraversalGroup(
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -84,12 +142,12 @@ class SettingsShell extends StatelessWidget {
                     child: ListView(
                       padding: const EdgeInsets.fromLTRB(8, 0, 8, 12),
                       children: [
-                        for (final item in SettingsCategory.values)
+                        for (final item in categories)
                           _SettingsCatTile(
                             category: item,
-                            selected: item == category,
+                            selected: item == selected,
                             tileVPad: density.settingsCatTileVertical,
-                            onPressed: () => onCategoryChanged(item),
+                            onPressed: () => widget.onCategoryChanged(item),
                           ),
                       ],
                     ),
@@ -98,40 +156,42 @@ class SettingsShell extends StatelessWidget {
               ),
             ),
           ),
-          Expanded(child: _buildContent()),
+          Expanded(child: _buildContent(selected)),
         ],
       ),
     );
   }
 
-  Widget _buildContent() {
+  Widget _buildContent(SettingsCategory category) {
     return switch (category) {
       SettingsCategory.providers => SettingsProvidersPage(
-          repository: providerRepository,
+          repository: widget.providerRepository,
         ),
       SettingsCategory.mcp => _buildMcpPage(),
       SettingsCategory.chatDefaults => SettingsChatDefaultsPage(
-          repository: chatDefaultsRepository,
+          repository: widget.chatDefaultsRepository,
         ),
       SettingsCategory.appearance => SettingsAppearancePage(
-          themeController: themeController,
+          themeController: widget.themeController,
         ),
       SettingsCategory.logs => SettingsLogsPage(
-          repository: appLogRepository,
+          repository: widget.appLogRepository,
         ),
       SettingsCategory.about => SettingsAboutPage(
-          appearanceRepository: appearanceRepository,
-          dataBackupService: dataBackupService,
-          themeController: themeController,
-          generation: generation,
-          updateController: updateController,
+          appearanceRepository: widget.appearanceRepository,
+          dataBackupService: widget.dataBackupService,
+          themeController: widget.themeController,
+          generation: widget.generation,
+          updateController: widget.updateController,
+          onUnlockHiddenPortal: _toggleLab,
         ),
+      SettingsCategory.lab => const HiddenPortalPage(),
     };
   }
 
   Widget _buildMcpPage() {
-    final repo = mcpServerRepository;
-    final factory = mcpSessionFactory;
+    final repo = widget.mcpServerRepository;
+    final factory = widget.mcpSessionFactory;
     if (repo == null || factory == null) {
       return const Center(
         child: Padding(

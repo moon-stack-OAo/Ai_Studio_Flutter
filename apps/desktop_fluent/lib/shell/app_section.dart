@@ -18,7 +18,18 @@ enum SettingsCategory {
   chatDefaults,
   appearance,
   logs,
-  about;
+  about,
+  lab;
+
+  /// 默认可见分类；[lab] 需 HiddenPortalPrefs 解锁后才出现。
+  static const visibleByDefault = <SettingsCategory>[
+    providers,
+    mcp,
+    chatDefaults,
+    appearance,
+    logs,
+    about,
+  ];
 
   String get label => switch (this) {
         SettingsCategory.providers => '提供商',
@@ -27,6 +38,7 @@ enum SettingsCategory {
         SettingsCategory.appearance => '外观',
         SettingsCategory.logs => '日志',
         SettingsCategory.about => '关于与更新',
+        SettingsCategory.lab => '实验室',
       };
 
   String get description => switch (this) {
@@ -36,5 +48,6 @@ enum SettingsCategory {
         SettingsCategory.appearance => '主题 · 字号 · 密度',
         SettingsCategory.logs => '筛选 · 复制 · 清空',
         SettingsCategory.about => '版本 · 关闭 · 更新',
+        SettingsCategory.lab => '实验功能',
       };
 }
