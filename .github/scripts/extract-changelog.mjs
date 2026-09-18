@@ -78,6 +78,7 @@ const notes = [
   '',
   '- 不要下 `.sig` / `latest.json` / `android-latest.json` 当安装包（它们供应用内更新校验）。',
   '- macOS 未做 Apple 公证：首次打开若被拦截，请在 Finder 中右键 `.app` →「打开」。',
+  '- 若仍无法打开，可在「终端」执行（路径换成你的 `.app`）：`xattr -cr "/Applications/AI Studio.app"`，然后再打开。',
   '- Android 需允许「安装未知应用」。',
   '',
   '已安装用户可在应用内「设置 → 关于与更新」检查更新（桌面：直链清单；Android：侧载清单）。',
