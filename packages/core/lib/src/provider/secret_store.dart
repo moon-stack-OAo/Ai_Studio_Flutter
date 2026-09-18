@@ -28,6 +28,12 @@ class FlutterSecureSecretStore implements SecretStore {
               // Windows：加密文件 + Credential Manager 中的 AES 密钥；
               // 编译需 VS「C++ ATL」（atlstr.h）。
               wOptions: WindowsOptions(useBackwardCompatibility: false),
+              // macOS 侧载/未公证：不用 Data Protection Keychain，避免依赖
+              // keychain-access-groups（空数组会导致他机 Launchd 153）。
+              mOptions: MacOsOptions(
+                accessibility: KeychainAccessibility.first_unlock_this_device,
+                usesDataProtectionKeychain: false,
+              ),
             );
 
   final FlutterSecureStorage _storage;

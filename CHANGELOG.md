@@ -26,10 +26,12 @@
 ### 用户摘要
 
 - MCP 设置编辑页布局整理，表单滚动与回到顶部更顺畅
+- 修复 macOS 侧载包在他机无法打开（Launchd 153）
 
 ### Changed
 
 - **MCP 设置表单**：桌面 / 移动编辑页抽取表单分段，统一 `BackToTopHost` 滚动宿主
+- **macOS 侧载**：去掉空的 `keychain-access-groups`；密钥存储改用非 Data Protection Keychain，避免他机无法启动
 
 ---
 

@@ -50,7 +50,8 @@
 
 - **Windows**：需 VS Build Tools 的 **C++ ATL**（`atlstr.h`）；运行时用 Credential Manager 存 AES 密钥 + 本地加密文件。
 - **Android**：minSdk ≥ 23（本工程默认 24）；`allowBackup="false"` 降低云备份导致密钥解包失败风险；v10+ 默认 RSA-OAEP + AES-GCM（`encryptedSharedPreferences` 已弃用）。
-- **iOS / macOS**：Keychain；macOS Runner 需 `keychain-access-groups` entitlement。
+- **iOS**：Keychain；Runner 可保留 `keychain-access-groups`（空数组即可）。
+- **macOS（侧载 / 未公证）**：**不要**在 entitlements 写空的 `keychain-access-groups`（易嵌入仅本机可用的 provisioning，他机 Launchd 153）。`FlutterSecureSecretStore` 使用 `MacOsOptions(usesDataProtectionKeychain: false)` 走登录钥匙串。若日后 Developer ID + 公证分发，再评估 Keychain Sharing。
 
 禁止：把完整 Key 写入日志、`toString`、崩溃上报或剪贴板默认文案。
 
