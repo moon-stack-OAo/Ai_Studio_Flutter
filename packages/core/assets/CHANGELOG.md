@@ -19,10 +19,6 @@
 
 ### Fixed
 
-- **提供商设置（macOS 尤甚）**：添加/保存时内存先刷新再异步落盘；Keychain 写入 8s 超时，避免列表不更新、无「已保存」、放弃确认不弹出；设置分类页 IndexedStack 保活；表单脏标记改用 controller 监听
-- **视频生成错误文案**：上游「queue is full / please retry later」等映射为「视频生成队列已满，请稍后再试」
-- **对话 MCP 横幅**：未配置 MCP / 模型不支持 tools 时对话页不再展示配置降级横幅（入口仅在设置）
-
 ---
 
 ## [1.0.8] — 2026-09-18
@@ -31,11 +27,20 @@
 
 - MCP 设置编辑页布局整理，表单滚动与回到顶部更顺畅
 - 修复 macOS 侧载包在他机无法打开（Launchd 153）
+- 修复提供商添加/保存无反馈（尤其 macOS Keychain）
+- 视频「队列已满」等上游英文错误改为中文提示
+- 对话页不再弹出 MCP 配置降级横幅
 
 ### Changed
 
 - **MCP 设置表单**：桌面 / 移动编辑页抽取表单分段，统一 `BackToTopHost` 滚动宿主
 - **macOS 侧载**：去掉空的 `keychain-access-groups`；密钥存储改用非 Data Protection Keychain，避免他机无法启动
+
+### Fixed
+
+- **提供商设置（macOS 尤甚）**：添加/保存时内存先刷新再异步落盘；Keychain 写入 8s 超时，避免列表不更新、无「已保存」、放弃确认不弹出；设置分类页 IndexedStack 保活；表单脏标记改用 controller 监听
+- **视频生成错误文案**：上游「queue is full / please retry later」等映射为「视频生成队列已满，请稍后再试」
+- **对话 MCP 横幅**：未配置 MCP / 模型不支持 tools 时对话页不再展示配置降级横幅（入口仅在设置）
 
 ---
 
