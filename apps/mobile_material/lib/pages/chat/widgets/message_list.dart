@@ -125,13 +125,16 @@ class _MessageListState extends State<MessageList> {
           alignment: msg.role == ChatRole.user
               ? Alignment.centerRight
               : Alignment.centerLeft,
-          child: MessageBubble(
-            message: msg,
-            recallEnabled: canRecall,
-            hideToolCallsStrip: msgItem.hideToolCallsStrip,
-            onRecall: canRecall && widget.onRecallUser != null
-                ? () => widget.onRecallUser!(msg.id)
-                : null,
+          child: RepaintBoundary(
+            child: MessageBubble(
+              key: ValueKey(msg.id),
+              message: msg,
+              recallEnabled: canRecall,
+              hideToolCallsStrip: msgItem.hideToolCallsStrip,
+              onRecall: canRecall && widget.onRecallUser != null
+                  ? () => widget.onRecallUser!(msg.id)
+                  : null,
+            ),
           ),
         );
       },

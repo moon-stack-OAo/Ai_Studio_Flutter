@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 
 import '../image/image_asset_store.dart';
@@ -6,6 +8,9 @@ import '../util/id.dart';
 import 'chat_attach.dart';
 import 'chat_models.dart';
 import 'chat_session_storage.dart';
+
+/// 流式 content 刷新 UI 的最小间隔（合批 delta，降低 Markdown/列表重建频率）。
+const Duration kChatStreamingUiMinInterval = Duration(milliseconds: 64);
 
 /// 对话会话仓库：CRUD、activeId、流式更新、撤回、持久化、CHAT-ATTACH 资产。
 class ChatSessionRepository extends ChangeNotifier {
@@ -25,6 +30,9 @@ class ChatSessionRepository extends ChangeNotifier {
   bool _loaded = false;
   bool _loading = false;
   String? _lastError;
+
+  DateTime? _lastUiNotifyAt;
+  Timer? _pendingUiNotify;
 
   bool get isLoaded => _loaded;
   bool get isLoading => _loading;
@@ -50,6 +58,38 @@ class ChatSessionRepository extends ChangeNotifier {
   }
 
   int _now() => DateTime.now().millisecondsSinceEpoch;
+
+  /// 立即通知；取消未触发的节流定时器。
+  void _notifyUiNow() {
+    _pendingUiNotify?.cancel();
+    _pendingUiNotify = null;
+    _lastUiNotifyAt = DateTime.now();
+    notifyListeners();
+  }
+
+  /// 流式 content 合批通知；间隔内只排一次后续 flush。
+  void _notifyUiThrottled() {
+    final now = DateTime.now();
+    final last = _lastUiNotifyAt;
+    if (last == null || now.difference(last) >= kChatStreamingUiMinInterval) {
+      _notifyUiNow();
+      return;
+    }
+    if (_pendingUiNotify != null) return;
+    final wait = kChatStreamingUiMinInterval - now.difference(last);
+    _pendingUiNotify = Timer(wait, () {
+      _pendingUiNotify = null;
+      _lastUiNotifyAt = DateTime.now();
+      notifyListeners();
+    });
+  }
+
+  @override
+  void dispose() {
+    _pendingUiNotify?.cancel();
+    _pendingUiNotify = null;
+    super.dispose();
+  }
 
   Future<void> load() async {
     if (_loading) return;
@@ -324,12 +364,21 @@ class ChatSessionRepository extends ChangeNotifier {
       toolCallId: toolCallId,
       clearToolCallId: clearToolCallId,
     );
+    // 流式 content 合批刷 UI，且不 bump updatedAt，避免侧栏签名抖动。
+    final streamingTick = streaming == true && stopped != true && error != true;
     _replace(
       index,
-      session.copyWith(messages: msgs, updatedAt: _now()),
+      session.copyWith(
+        messages: msgs,
+        updatedAt: streamingTick ? session.updatedAt : _now(),
+      ),
     );
     if (persist) await _persist();
-    notifyListeners();
+    if (streamingTick) {
+      _notifyUiThrottled();
+    } else {
+      _notifyUiNow();
+    }
   }
 
   /// 追加流式内容到指定 assistant 消息。

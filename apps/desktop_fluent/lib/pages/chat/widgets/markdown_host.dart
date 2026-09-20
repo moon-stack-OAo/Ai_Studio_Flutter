@@ -5,7 +5,9 @@ import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:markdown/markdown.dart' as md;
 
 /// CHAT-MD Fluent 包装：助手气泡 Markdown + 代码块角标复制。
-class MarkdownHost extends StatelessWidget {
+///
+/// 相同 data/主题下复用已构建子树，避免父级流式刷新时重复解析。
+class MarkdownHost extends StatefulWidget {
   const MarkdownHost({
     super.key,
     required this.data,
@@ -20,24 +22,46 @@ class MarkdownHost extends StatelessWidget {
   final bool compact;
 
   @override
+  State<MarkdownHost> createState() => _MarkdownHostState();
+}
+
+class _MarkdownHostState extends State<MarkdownHost> {
+  Widget? _cachedBody;
+  String? _cacheKey;
+
+  String _themeKey(FluentTokens tokens) =>
+      '${tokens.ink.toARGB32()}:${tokens.primary.toARGB32()}:'
+      '${tokens.surfaceMuted.toARGB32()}:${tokens.border.toARGB32()}:'
+      '${tokens.inkSecondary.toARGB32()}:${tokens.danger.toARGB32()}';
+
+  String _buildCacheKey(FluentTokens tokens) =>
+      '${widget.error}|${widget.compact}|${_themeKey(tokens)}|${widget.data}';
+
+  @override
   Widget build(BuildContext context) {
     final tokens = fluentTokensOf(context);
-    final ink = error ? tokens.danger : tokens.ink;
+    final ink = widget.error ? tokens.danger : tokens.ink;
     final base = TextStyle(
-      fontSize: compact ? 13 : 14,
-      height: compact ? 1.5 : 1.65,
-      color: compact ? tokens.inkSecondary : ink,
+      fontSize: widget.compact ? 13 : 14,
+      height: widget.compact ? 1.5 : 1.65,
+      color: widget.compact ? tokens.inkSecondary : ink,
       fontFamily: tokens.fontFamily,
       fontFamilyFallback: kFluentFontFamilyFallback,
     );
 
-    if (data.isEmpty) {
+    if (widget.data.isEmpty) {
+      _cachedBody = null;
+      _cacheKey = null;
       return const SizedBox.shrink();
     }
 
+    final key = _buildCacheKey(tokens);
+    final hit = _cachedBody;
+    if (hit != null && _cacheKey == key) return hit;
+
     final styleSheet = MarkdownStyleSheet(
       p: base,
-      pPadding: compact
+      pPadding: widget.compact
           ? const EdgeInsets.only(bottom: 2)
           : EdgeInsets.zero,
       a: base.copyWith(
@@ -45,48 +69,48 @@ class MarkdownHost extends StatelessWidget {
         decoration: TextDecoration.underline,
       ),
       h1: base.copyWith(
-        fontSize: compact ? 15 : 22,
+        fontSize: widget.compact ? 15 : 22,
         fontWeight: FontWeight.w700,
         height: 1.3,
         color: ink,
       ),
-      h1Padding: compact
+      h1Padding: widget.compact
           ? const EdgeInsets.only(bottom: 4)
           : EdgeInsets.zero,
       h2: base.copyWith(
-        fontSize: compact ? 14 : 18,
-        fontWeight: compact ? FontWeight.w600 : FontWeight.w700,
+        fontSize: widget.compact ? 14 : 18,
+        fontWeight: widget.compact ? FontWeight.w600 : FontWeight.w700,
         height: 1.35,
         color: ink,
       ),
-      h2Padding: compact
+      h2Padding: widget.compact
           ? const EdgeInsets.only(bottom: 4)
           : EdgeInsets.zero,
       h3: base.copyWith(
-        fontSize: compact ? 12 : 16,
+        fontSize: widget.compact ? 12 : 16,
         fontWeight: FontWeight.w600,
         height: 1.35,
         color: ink,
       ),
-      h3Padding: compact
+      h3Padding: widget.compact
           ? const EdgeInsets.fromLTRB(0, 2, 0, 0)
           : EdgeInsets.zero,
       h4: base.copyWith(
-        fontSize: compact ? 12 : 15,
+        fontSize: widget.compact ? 12 : 15,
         fontWeight: FontWeight.w600,
         height: 1.35,
-        color: compact ? tokens.inkSecondary : ink,
+        color: widget.compact ? tokens.inkSecondary : ink,
       ),
-      h4Padding: compact
+      h4Padding: widget.compact
           ? const EdgeInsets.fromLTRB(0, 2, 0, 0)
           : EdgeInsets.zero,
       h5: base.copyWith(
-        fontSize: compact ? 12 : 14,
+        fontSize: widget.compact ? 12 : 14,
         fontWeight: FontWeight.w600,
         color: ink,
       ),
       h6: base.copyWith(
-        fontSize: compact ? 11.5 : 13,
+        fontSize: widget.compact ? 11.5 : 13,
         fontWeight: FontWeight.w600,
         color: ink,
       ),
@@ -97,7 +121,7 @@ class MarkdownHost extends StatelessWidget {
       ),
       del: base.copyWith(decoration: TextDecoration.lineThrough),
       listBullet: base,
-      listBulletPadding: compact
+      listBulletPadding: widget.compact
           ? const EdgeInsets.only(right: 6)
           : const EdgeInsets.only(right: 4),
       tableHead: base.copyWith(fontWeight: FontWeight.w600),
@@ -111,7 +135,7 @@ class MarkdownHost extends StatelessWidget {
       ),
       blockquotePadding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
       code: TextStyle(
-        fontSize: compact ? 11.5 : 12.5,
+        fontSize: widget.compact ? 11.5 : 12.5,
         height: 1.45,
         color: ink,
         backgroundColor: tokens.surfaceMuted,
@@ -123,12 +147,12 @@ class MarkdownHost extends StatelessWidget {
           top: BorderSide(color: tokens.border, width: 1),
         ),
       ),
-      blockSpacing: compact ? 4 : 10,
-      listIndent: compact ? 16 : 24,
+      blockSpacing: widget.compact ? 4 : 10,
+      listIndent: widget.compact ? 16 : 24,
     );
 
-    return MarkdownBody(
-      data: data,
+    final body = MarkdownBody(
+      data: widget.data,
       selectable: true,
       shrinkWrap: true,
       softLineBreak: true,
@@ -137,6 +161,9 @@ class MarkdownHost extends StatelessWidget {
         'pre': _CodeBlockBuilder(tokens: tokens),
       },
     );
+    _cachedBody = body;
+    _cacheKey = key;
+    return body;
   }
 }
 

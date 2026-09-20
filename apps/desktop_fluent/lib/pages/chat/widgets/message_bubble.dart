@@ -121,7 +121,7 @@ class _MessageBubbleState extends State<MessageBubble> {
     try {
       if (ref.type == ImageRefType.file) {
         final file = File(ref.src);
-        if (await file.exists()) return file.readAsBytes();
+        if (await file.exists()) return await file.readAsBytes();
       }
       if (ref.type == ImageRefType.b64 && ref.src.isNotEmpty) {
         return Uint8List.fromList(base64Decode(ref.src));
@@ -531,13 +531,27 @@ class _AssistantBody extends StatelessWidget {
       return const _StreamCursor();
     }
 
+    // 流式中用纯文本，结束后再解析 Markdown，避免每 delta 全量重排。
+    final streamingPlain = message.streaming && data.isNotEmpty;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         if (message.hasToolCalls && !hideToolCallsStrip)
           ToolCallsInvokedStrip(toolCalls: message.toolCalls),
-        if (data.isNotEmpty || message.error)
+        if (streamingPlain)
+          SelectableText(
+            data,
+            style: TextStyle(
+              fontSize: 14,
+              height: 1.65,
+              color: message.error ? tokens.danger : tokens.ink,
+              fontFamily: tokens.fontFamily,
+            ),
+          )
+        else if (data.isNotEmpty || message.error)
           MarkdownHost(
+            key: ValueKey('md-${message.id}'),
             data: data,
             error: message.error,
           ),

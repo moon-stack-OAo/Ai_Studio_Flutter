@@ -123,12 +123,10 @@ class _ChatPageState extends State<ChatPage> {
   @override
   Widget build(BuildContext context) {
     final tokens = fluentTokensOf(context);
+    // 提供商配置变化较少；与会话流式刷新拆开，避免整页跟着 delta 重建。
     return ListenableBuilder(
       listenable: Listenable.merge([
         widget.providerRepository,
-        widget.sessionRepository,
-        widget.generation,
-        _controller,
         ?widget.mcpServerRepository,
       ]),
       builder: (context, _) {
@@ -143,12 +141,6 @@ class _ChatPageState extends State<ChatPage> {
           );
         }
 
-        final session = widget.sessionRepository.activeSession;
-        final messages = session?.messages ?? const <ChatMessage>[];
-        final streamingHere = _controller.isStreamingActiveSession;
-        final hasOverrides = session != null && !session.overrides.isEmpty;
-        _flashBannerIfNeeded();
-
         return ColoredBox(
           color: tokens.canvas,
           child: FocusTraversalGroup(
@@ -157,17 +149,10 @@ class _ChatPageState extends State<ChatPage> {
               children: [
                 SizedBox(
                   width: tokens.settingsCatWidth,
-                  child: SessionListPane(
-                    sessions: [
-                      for (final s in widget.sessionRepository.sortedSessions)
-                        SessionListItem(
-                          id: s.id,
-                          title: s.title,
-                          subtitle: _sessionSubtitle(s),
-                        ),
-                    ],
-                    selectedId: widget.sessionRepository.activeId,
-                    busySessionId: widget.generation.sessionId,
+                  child: _SessionSidebar(
+                    sessionRepository: widget.sessionRepository,
+                    generation: widget.generation,
+                    subtitleOf: _sessionSubtitle,
                     onSelect: (id) => _controller.setActiveSession(id),
                     onCreate: () => _controller.createSession(),
                     onDelete: (id) => _controller.removeSession(id),
@@ -180,43 +165,67 @@ class _ChatPageState extends State<ChatPage> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      _ChatHeader(
-                        title: session?.title ?? '新对话',
+                      _ChatHeaderHost(
                         tokens: tokens,
+                        sessionRepository: widget.sessionRepository,
                         controller: _controller,
-                        hasOverrides: hasOverrides,
-                        onOpenOverrides: session == null
-                            ? null
-                            : () => _openOverrides(session),
+                        onOpenOverrides: _openOverrides,
                       ),
                       Expanded(
-                        child: MessageList(
-                          messages: messages,
-                          recallEnabled: !streamingHere,
-                          onRecallUser: (id) =>
-                              _controller.recallUserMessage(id),
-                          emptyHint: '开始第一条对话',
-                          emptySubtitle: '当前会话还没有消息，在下方输入即可开始。',
-                          liveToolTraces: _controller.liveToolTraces,
+                        child: ListenableBuilder(
+                          listenable: Listenable.merge([
+                            widget.sessionRepository,
+                            widget.generation,
+                            _controller,
+                          ]),
+                          builder: (context, _) {
+                            _flashBannerIfNeeded();
+                            final session =
+                                widget.sessionRepository.activeSession;
+                            final messages =
+                                session?.messages ?? const <ChatMessage>[];
+                            final streamingHere =
+                                _controller.isStreamingActiveSession;
+                            return MessageList(
+                              messages: messages,
+                              recallEnabled: !streamingHere,
+                              onRecallUser: (id) =>
+                                  _controller.recallUserMessage(id),
+                              emptyHint: '开始第一条对话',
+                              emptySubtitle: '当前会话还没有消息，在下方输入即可开始。',
+                              liveToolTraces: _controller.liveToolTraces,
+                            );
+                          },
                         ),
                       ),
-                      Composer(
-                        enabled: _controller.canSend,
-                        streaming: streamingHere,
-                        onSend: _controller.send,
-                        onStop: _controller.stop,
-                        visionSupported: _controller.activeChatSupportsVision,
-                        draftAttachments: _controller.draftAttachments,
-                        onPickAttachments: streamingHere
-                            ? null
-                            : () => _controller.pickAttachments(),
-                        onDropAttachment: streamingHere
-                            ? null
-                            : _controller.dropAttachment,
-                        onRemoveDraftAttachment:
-                            _controller.removeDraftAttachmentAt,
-                        canSendWithDraft: (text) =>
-                            _controller.canSendWith(textDraft: text),
+                      ListenableBuilder(
+                        listenable: Listenable.merge([
+                          widget.generation,
+                          _controller,
+                        ]),
+                        builder: (context, _) {
+                          final streamingHere =
+                              _controller.isStreamingActiveSession;
+                          return Composer(
+                            enabled: _controller.canSend,
+                            streaming: streamingHere,
+                            onSend: _controller.send,
+                            onStop: _controller.stop,
+                            visionSupported:
+                                _controller.activeChatSupportsVision,
+                            draftAttachments: _controller.draftAttachments,
+                            onPickAttachments: streamingHere
+                                ? null
+                                : () => _controller.pickAttachments(),
+                            onDropAttachment: streamingHere
+                                ? null
+                                : _controller.dropAttachment,
+                            onRemoveDraftAttachment:
+                                _controller.removeDraftAttachmentAt,
+                            canSendWithDraft: (text) =>
+                                _controller.canSendWith(textDraft: text),
+                          );
+                        },
                       ),
                     ],
                   ),
@@ -226,6 +235,166 @@ class _ChatPageState extends State<ChatPage> {
           ),
         );
       },
+    );
+  }
+}
+
+/// 侧栏：仅在会话列表签名变化时 setState（流式 content 不 bump updatedAt）。
+class _SessionSidebar extends StatefulWidget {
+  const _SessionSidebar({
+    required this.sessionRepository,
+    required this.generation,
+    required this.subtitleOf,
+    required this.onSelect,
+    required this.onCreate,
+    required this.onDelete,
+    required this.onRename,
+  });
+
+  final ChatSessionRepository sessionRepository;
+  final GenerationRuntime generation;
+  final String Function(ChatSession) subtitleOf;
+  final ValueChanged<String> onSelect;
+  final VoidCallback onCreate;
+  final ValueChanged<String> onDelete;
+  final Future<void> Function(String id, String title) onRename;
+
+  @override
+  State<_SessionSidebar> createState() => _SessionSidebarState();
+}
+
+class _SessionSidebarState extends State<_SessionSidebar> {
+  String _sig = '';
+
+  @override
+  void initState() {
+    super.initState();
+    widget.sessionRepository.addListener(_onChange);
+    widget.generation.addListener(_onChange);
+    _sig = _computeSig();
+  }
+
+  @override
+  void didUpdateWidget(covariant _SessionSidebar oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.sessionRepository != widget.sessionRepository) {
+      oldWidget.sessionRepository.removeListener(_onChange);
+      widget.sessionRepository.addListener(_onChange);
+    }
+    if (oldWidget.generation != widget.generation) {
+      oldWidget.generation.removeListener(_onChange);
+      widget.generation.addListener(_onChange);
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.sessionRepository.removeListener(_onChange);
+    widget.generation.removeListener(_onChange);
+    super.dispose();
+  }
+
+  String _computeSig() {
+    final busy = widget.generation.sessionId ?? '';
+    final buf = StringBuffer('${widget.sessionRepository.activeId}|$busy|');
+    for (final s in widget.sessionRepository.sortedSessions) {
+      buf.write('${s.id}:${s.title}:${s.updatedAt};');
+    }
+    return buf.toString();
+  }
+
+  void _onChange() {
+    final next = _computeSig();
+    if (next == _sig) return;
+    setState(() => _sig = next);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SessionListPane(
+      sessions: [
+        for (final s in widget.sessionRepository.sortedSessions)
+          SessionListItem(
+            id: s.id,
+            title: s.title,
+            subtitle: widget.subtitleOf(s),
+          ),
+      ],
+      selectedId: widget.sessionRepository.activeId,
+      busySessionId: widget.generation.sessionId,
+      onSelect: widget.onSelect,
+      onCreate: widget.onCreate,
+      onDelete: widget.onDelete,
+      onRename: widget.onRename,
+    );
+  }
+}
+
+class _ChatHeaderHost extends StatefulWidget {
+  const _ChatHeaderHost({
+    required this.tokens,
+    required this.sessionRepository,
+    required this.controller,
+    required this.onOpenOverrides,
+  });
+
+  final FluentTokens tokens;
+  final ChatSessionRepository sessionRepository;
+  final ChatController controller;
+  final Future<void> Function(ChatSession session) onOpenOverrides;
+
+  @override
+  State<_ChatHeaderHost> createState() => _ChatHeaderHostState();
+}
+
+class _ChatHeaderHostState extends State<_ChatHeaderHost> {
+  String _sig = '';
+
+  @override
+  void initState() {
+    super.initState();
+    widget.sessionRepository.addListener(_onChange);
+    _sig = _computeSig();
+  }
+
+  @override
+  void didUpdateWidget(covariant _ChatHeaderHost oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.sessionRepository != widget.sessionRepository) {
+      oldWidget.sessionRepository.removeListener(_onChange);
+      widget.sessionRepository.addListener(_onChange);
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.sessionRepository.removeListener(_onChange);
+    super.dispose();
+  }
+
+  String _computeSig() {
+    final s = widget.sessionRepository.activeSession;
+    if (s == null) return '';
+    return '${s.id}|${s.title}|${s.overrides.isEmpty}';
+  }
+
+  void _onChange() {
+    final next = _computeSig();
+    if (next == _sig) return;
+    setState(() => _sig = next);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final session = widget.sessionRepository.activeSession;
+    final hasOverrides = session != null && !session.overrides.isEmpty;
+    return _ChatHeader(
+      title: session?.title ?? '新对话',
+      tokens: widget.tokens,
+      controller: widget.controller,
+      hasOverrides: hasOverrides,
+      onOpenOverrides:
+          session == null ? null : () => widget.onOpenOverrides(session),
     );
   }
 }

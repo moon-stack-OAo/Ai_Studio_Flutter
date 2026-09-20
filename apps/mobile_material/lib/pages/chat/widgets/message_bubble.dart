@@ -92,7 +92,7 @@ class MessageBubble extends StatelessWidget {
     try {
       if (ref.type == ImageRefType.file) {
         final file = File(ref.src);
-        if (await file.exists()) return file.readAsBytes();
+        if (await file.exists()) return await file.readAsBytes();
       }
       if (ref.type == ImageRefType.b64 && ref.src.isNotEmpty) {
         return Uint8List.fromList(base64Decode(ref.src));
@@ -293,23 +293,37 @@ class _AssistantBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final tokens = materialTokensOf(context);
     if (emptyStreaming) {
       return Text(
         '…',
         style: TextStyle(
           fontSize: 14,
-          color: materialTokensOf(context).inkMuted,
+          color: tokens.inkMuted,
         ),
       );
     }
+
+    // 流式中用纯文本，结束后再解析 Markdown。
+    final streamingPlain = message.streaming && bodyText.isNotEmpty;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         if (message.hasToolCalls && !hideToolCallsStrip)
           ToolCallsInvokedStrip(toolCalls: message.toolCalls),
-        if (bodyText.isNotEmpty || message.error)
+        if (streamingPlain)
+          SelectableText(
+            bodyText,
+            style: TextStyle(
+              fontSize: 14,
+              height: 1.55,
+              color: message.error ? tokens.danger : tokens.ink,
+            ),
+          )
+        else if (bodyText.isNotEmpty || message.error)
           MarkdownHost(
+            key: ValueKey('md-${message.id}'),
             data: bodyText,
             error: message.error,
           ),

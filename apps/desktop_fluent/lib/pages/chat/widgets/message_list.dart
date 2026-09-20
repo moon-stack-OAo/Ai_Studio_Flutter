@@ -142,6 +142,7 @@ class _MessageListState extends State<MessageList> {
           alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
           child: RepaintBoundary(
             child: MessageBubble(
+              key: ValueKey(msg.id),
               message: msg,
               recallEnabled: canRecall,
               hideToolCallsStrip: msgItem.hideToolCallsStrip,
