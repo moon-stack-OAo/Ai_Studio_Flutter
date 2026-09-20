@@ -30,18 +30,20 @@ class _BackToTopHostState extends State<BackToTopHost> {
   @override
   void initState() {
     super.initState();
-    _scroll.addListener(_onScroll);
+    _scroll.addListener(_syncVisibility);
   }
 
   @override
   void dispose() {
-    _scroll.removeListener(_onScroll);
+    _scroll.removeListener(_syncVisibility);
     _scroll.dispose();
     super.dispose();
   }
 
-  void _onScroll() {
-    final show = _scroll.hasClients && _scroll.offset > widget.threshold;
+  void _syncVisibility() {
+    final show = _scroll.hasClients &&
+        _scroll.position.maxScrollExtent > 0 &&
+        _scroll.offset > widget.threshold;
     if (show != _show) setState(() => _show = show);
   }
 
@@ -56,22 +58,28 @@ class _BackToTopHostState extends State<BackToTopHost> {
 
   @override
   Widget build(BuildContext context) {
-    return Stack(
-      children: [
-        Positioned.fill(child: widget.builder(context, _scroll)),
-        Positioned(
-          right: widget.right,
-          bottom: widget.bottom,
-          child: IgnorePointer(
-            ignoring: !_show,
-            child: AnimatedOpacity(
-              opacity: _show ? 1 : 0,
-              duration: const Duration(milliseconds: 160),
-              child: BackToTopButton(onPressed: _scrollToTop),
+    return NotificationListener<ScrollMetricsNotification>(
+      onNotification: (_) {
+        _syncVisibility();
+        return false;
+      },
+      child: Stack(
+        children: [
+          Positioned.fill(child: widget.builder(context, _scroll)),
+          Positioned(
+            right: widget.right,
+            bottom: widget.bottom,
+            child: IgnorePointer(
+              ignoring: !_show,
+              child: AnimatedOpacity(
+                opacity: _show ? 1 : 0,
+                duration: const Duration(milliseconds: 160),
+                child: BackToTopButton(onPressed: _scrollToTop),
+              ),
             ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }

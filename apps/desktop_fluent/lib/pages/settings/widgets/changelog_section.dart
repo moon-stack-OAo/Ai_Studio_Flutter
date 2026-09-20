@@ -102,7 +102,9 @@ class _ChangelogHistoryDialogState extends State<_ChangelogHistoryDialog> {
   }
 
   void _onScroll() {
-    final show = _scroll.hasClients && _scroll.offset > 80;
+    final show = _scroll.hasClients &&
+        _scroll.position.maxScrollExtent > 0 &&
+        _scroll.offset > 80;
     if (show != _showBackToTop) {
       setState(() => _showBackToTop = show);
     }
@@ -148,31 +150,37 @@ class _ChangelogHistoryDialogState extends State<_ChangelogHistoryDialog> {
                   border: Border.all(color: tokens.border),
                 ),
                 clipBehavior: Clip.antiAlias,
-                child: Stack(
-                  children: [
-                    Positioned.fill(
-                      child: Padding(
-                        padding: const EdgeInsets.all(10),
-                        child: ChangelogEntryList(
-                          entries: widget.entries,
-                          scrollable: true,
-                          controller: _scroll,
+                child: NotificationListener<ScrollMetricsNotification>(
+                  onNotification: (_) {
+                    _onScroll();
+                    return false;
+                  },
+                  child: Stack(
+                    children: [
+                      Positioned.fill(
+                        child: Padding(
+                          padding: const EdgeInsets.all(10),
+                          child: ChangelogEntryList(
+                            entries: widget.entries,
+                            scrollable: true,
+                            controller: _scroll,
+                          ),
                         ),
                       ),
-                    ),
-                    Positioned(
-                      right: 20,
-                      bottom: 20,
-                      child: IgnorePointer(
-                        ignoring: !_showBackToTop,
-                        child: AnimatedOpacity(
-                          opacity: _showBackToTop ? 1 : 0,
-                          duration: const Duration(milliseconds: 160),
-                          child: BackToTopButton(onPressed: _scrollToTop),
+                      Positioned(
+                        right: 20,
+                        bottom: 20,
+                        child: IgnorePointer(
+                          ignoring: !_showBackToTop,
+                          child: AnimatedOpacity(
+                            opacity: _showBackToTop ? 1 : 0,
+                            duration: const Duration(milliseconds: 160),
+                            child: BackToTopButton(onPressed: _scrollToTop),
+                          ),
                         ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),

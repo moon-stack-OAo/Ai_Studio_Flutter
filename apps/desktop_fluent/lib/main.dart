@@ -26,7 +26,13 @@ Future<void> main() async {
   // VID-PLAYER：须在创建 Player 之前；次实例已退出则不必初始化。
   MediaKit.ensureInitialized();
 
-  await bootstrapDesktopWindow();
+  // 先读外观，再开窗：原生窗底须不透明并贴合主题，否则最大化会闪透桌面。
+  final appearance =
+      AppearanceRepository(storage: PrefsAppearanceStorage());
+  await appearance.load();
+  final themeController = ThemeController(repository: appearance);
+  themeController.loadFrom(appearance.settings);
+  await bootstrapDesktopWindow(brightness: themeController.windowBrightness);
 
   final secretStore = FlutterSecureSecretStore();
   final providers = ProviderRepository(
@@ -78,10 +84,6 @@ Future<void> main() async {
       ChatDefaultsRepository(storage: PrefsChatDefaultsStorage());
   await chatDefaults.load();
 
-  final appearance =
-      AppearanceRepository(storage: PrefsAppearanceStorage());
-  await appearance.load();
-
   final appLogs = AppLogRepository(storage: PrefsAppLogStorage());
   await appLogs.load();
   await appLogs.append(
@@ -98,9 +100,6 @@ Future<void> main() async {
       message: pending,
     );
   }
-
-  final themeController = ThemeController(repository: appearance);
-  themeController.loadFrom(appearance.settings);
 
   final generation = GenerationRuntime();
   final chatClient = OpenAiCompatibleChatClient();

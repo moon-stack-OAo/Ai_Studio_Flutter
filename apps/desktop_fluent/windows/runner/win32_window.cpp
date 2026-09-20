@@ -91,13 +91,15 @@ const wchar_t* WindowClassRegistrar::GetWindowClass() {
     WNDCLASS window_class{};
     window_class.hCursor = LoadCursor(nullptr, IDC_ARROW);
     window_class.lpszClassName = kWindowClassName;
-    window_class.style = CS_HREDRAW | CS_VREDRAW;
+    // Skip HREDRAW/VREDRAW: maximize must not invalidate the whole frame
+    // before the Flutter child catches up.
+    window_class.style = 0;
     window_class.cbClsExtra = 0;
     window_class.cbWndExtra = 0;
     window_class.hInstance = GetModuleHandle(nullptr);
     window_class.hIcon =
         LoadIcon(window_class.hInstance, MAKEINTRESOURCE(IDI_APP_ICON));
-    window_class.hbrBackground = 0;
+    window_class.hbrBackground = nullptr;
     window_class.lpszMenuName = nullptr;
     window_class.lpfnWndProc = Win32Window::WndProc;
     RegisterClass(&window_class);
@@ -206,6 +208,10 @@ Win32Window::MessageHandler(HWND hwnd,
       }
       return 0;
     }
+
+    case WM_ERASEBKGND:
+      // Do not let DefWindowProc paint a solid brush; Flutter owns the surface.
+      return 1;
 
     case WM_ACTIVATE:
       if (child_content_ != nullptr) {

@@ -676,206 +676,229 @@ class _ProviderForm extends StatelessWidget {
   Widget build(BuildContext context) {
     return ColoredBox(
       color: tokens.surface,
-      child: BackToTopHost(
-        builder: (context, scroll) => ListView(
-          controller: scroll,
-          padding: const EdgeInsets.fromLTRB(28, 20, 28, 28),
-          children: [
-          Text(
-            '编辑提供商',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w600,
-              color: tokens.ink,
-              fontFamily: tokens.fontFamily,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            '元数据存本机；密钥存 OS 凭据库（不上传）；完整 Key 不写入日志。',
-            style: TextStyle(
-              fontSize: 13,
-              color: tokens.inkMuted,
-              fontFamily: tokens.fontFamily,
-            ),
-          ),
-          const SizedBox(height: 20),
-          _Section(
-            title: '基本信息',
-            child: Column(
-              children: [
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      child: _LabeledField(
-                        label: '显示名称',
-                        child: TextBox(
-                          controller: nameCtrl,
-                          placeholder: '例如 OpenAI 兼容 · 自建',
-                          onChanged: onFieldChanged,
-                        ),
-                      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Expanded(
+            child: BackToTopHost(
+              builder: (context, scroll) => ListView(
+                controller: scroll,
+                padding: const EdgeInsets.fromLTRB(28, 20, 28, 16),
+                children: [
+                  Text(
+                    '编辑提供商',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
+                      color: tokens.ink,
+                      fontFamily: tokens.fontFamily,
                     ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: _LabeledField(
-                        label: '类型',
-                        child: ComboBox<ProviderType>(
-                          value: type,
-                          isExpanded: true,
-                          items: [
-                            for (final t in ProviderType.values)
-                              ComboBoxItem(value: t, child: Text(t.label)),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    '元数据存本机；密钥存 OS 凭据库（不上传）；完整 Key 不写入日志。',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: tokens.inkMuted,
+                      fontFamily: tokens.fontFamily,
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  _Section(
+                    title: '基本信息',
+                    child: Column(
+                      children: [
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
+                              child: _LabeledField(
+                                label: '显示名称',
+                                child: TextBox(
+                                  controller: nameCtrl,
+                                  placeholder: '例如 OpenAI 兼容 · 自建',
+                                  onChanged: onFieldChanged,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: _LabeledField(
+                                label: '类型',
+                                child: ComboBox<ProviderType>(
+                                  value: type,
+                                  isExpanded: true,
+                                  items: [
+                                    for (final t in ProviderType.values)
+                                      ComboBoxItem(
+                                        value: t,
+                                        child: Text(t.label),
+                                      ),
+                                  ],
+                                  onChanged: (v) {
+                                    if (v != null) onTypeChanged(v);
+                                  },
+                                ),
+                              ),
+                            ),
                           ],
-                          onChanged: (v) {
-                            if (v != null) onTypeChanged(v);
-                          },
                         ),
-                      ),
+                        const SizedBox(height: 12),
+                        _LabeledField(
+                          label: 'Base URL',
+                          child: TextBox(
+                            controller: baseUrlCtrl,
+                            placeholder: 'https://api.example.com/v1',
+                            onChanged: onFieldChanged,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        _LabeledField(
+                          label: 'API Key',
+                          child: TextBox(
+                            controller: apiKeyCtrl,
+                            obscureText: obscureKey,
+                            placeholder: 'sk-…',
+                            onChanged: onFieldChanged,
+                            suffix: IconButton(
+                              icon: Icon(
+                                obscureKey
+                                    ? FluentIcons.view
+                                    : FluentIcons.hide3,
+                                size: 14,
+                              ),
+                              onPressed: onToggleObscure,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                _LabeledField(
-                  label: 'Base URL',
-                  child: TextBox(
-                    controller: baseUrlCtrl,
-                    placeholder: 'https://api.example.com/v1',
-                    onChanged: onFieldChanged,
                   ),
-                ),
-                const SizedBox(height: 12),
-                _LabeledField(
-                  label: 'API Key',
-                  child: TextBox(
-                    controller: apiKeyCtrl,
-                    obscureText: obscureKey,
-                    placeholder: 'sk-…',
-                    onChanged: onFieldChanged,
-                    suffix: IconButton(
-                      icon: Icon(
-                        obscureKey ? FluentIcons.view : FluentIcons.hide3,
-                        size: 14,
-                      ),
-                      onPressed: onToggleObscure,
+                  const SizedBox(height: 14),
+                  _Section(
+                    title: '连接与模型',
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          children: [
+                            Button(
+                              onPressed:
+                                  (!canProbe || testing) ? null : onTest,
+                              child: Text(testing ? '测试中…' : '测试连接'),
+                            ),
+                            FilledButton(
+                              onPressed: (!canProbe || listingModels)
+                                  ? null
+                                  : onPullModels,
+                              child:
+                                  Text(listingModels ? '拉取中…' : '拉取模型'),
+                            ),
+                            if (!canProbe)
+                              Text(
+                                '需先填写 Base URL 与 API Key',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: tokens.inkMuted,
+                                  fontFamily: tokens.fontFamily,
+                                ),
+                              )
+                            else if (statusText != null)
+                              Text(
+                                '● $statusText',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: statusOk
+                                      ? tokens.success
+                                      : tokens.danger,
+                                  fontFamily: tokens.fontFamily,
+                                ),
+                              ),
+                          ],
+                        ),
+                        const SizedBox(height: 14),
+                        _LabeledField(
+                          label: '对话模型',
+                          hint: '用于对话 /chat/completions（含流式）',
+                          child: FilterableModelPicker(
+                            controller: chatModelCtrl,
+                            options: chatModelOptions,
+                            placeholder: 'gpt-4o / grok-4.5',
+                            onChanged: onFieldChanged,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        _LabeledField(
+                          label: '生图模型',
+                          hint: '文生图 / 图生图；可留空',
+                          child: FilterableModelPicker(
+                            controller: imageModelCtrl,
+                            options: imageModelOptions,
+                            placeholder: 'gpt-image-1 / grok-imagine-image',
+                            onChanged: onFieldChanged,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        _LabeledField(
+                          label: '视频模型',
+                          hint: '文生视频 / 图生视频；可留空表示不支持',
+                          child: FilterableModelPicker(
+                            controller: videoModelCtrl,
+                            options: videoModelOptions,
+                            placeholder: 'sora-2 / grok-imagine-video',
+                            onChanged: onFieldChanged,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          '先「拉取模型」；列表可搜索筛选，也可直接输入自定义模型名。',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: tokens.inkMuted,
+                            fontFamily: tokens.fontFamily,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
-          const SizedBox(height: 14),
-          _Section(
-            title: '连接与模型',
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+          Container(
+            padding: const EdgeInsets.fromLTRB(28, 12, 28, 16),
+            decoration: BoxDecoration(
+              color: tokens.surface,
+              border: Border(top: BorderSide(color: tokens.border)),
+            ),
+            child: Row(
               children: [
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  children: [
-                    Button(
-                      onPressed: (!canProbe || testing) ? null : onTest,
-                      child: Text(testing ? '测试中…' : '测试连接'),
+                FilledButton(
+                  onPressed: dirty ? onSave : null,
+                  child: const Text('保存'),
+                ),
+                const SizedBox(width: 8),
+                Button(
+                  onPressed: dirty ? onCancel : null,
+                  child: const Text('取消'),
+                ),
+                const Spacer(),
+                if (canDelete)
+                  Button(
+                    onPressed: onDelete,
+                    style: ButtonStyle(
+                      foregroundColor:
+                          WidgetStatePropertyAll(tokens.danger),
                     ),
-                    FilledButton(
-                      onPressed:
-                          (!canProbe || listingModels) ? null : onPullModels,
-                      child: Text(listingModels ? '拉取中…' : '拉取模型'),
-                    ),
-                    if (!canProbe)
-                      Text(
-                        '需先填写 Base URL 与 API Key',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: tokens.inkMuted,
-                          fontFamily: tokens.fontFamily,
-                        ),
-                      )
-                    else if (statusText != null)
-                      Text(
-                        '● $statusText',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: statusOk ? tokens.success : tokens.danger,
-                          fontFamily: tokens.fontFamily,
-                        ),
-                      ),
-                  ],
-                ),
-                const SizedBox(height: 14),
-                _LabeledField(
-                  label: '对话模型',
-                  hint: '用于对话 /chat/completions（含流式）',
-                  child: FilterableModelPicker(
-                    controller: chatModelCtrl,
-                    options: chatModelOptions,
-                    placeholder: 'gpt-4o / grok-4.5',
-                    onChanged: onFieldChanged,
+                    child: const Text('删除'),
                   ),
-                ),
-                const SizedBox(height: 12),
-                _LabeledField(
-                  label: '生图模型',
-                  hint: '文生图 / 图生图；可留空',
-                  child: FilterableModelPicker(
-                    controller: imageModelCtrl,
-                    options: imageModelOptions,
-                    placeholder: 'gpt-image-1 / grok-imagine-image',
-                    onChanged: onFieldChanged,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                _LabeledField(
-                  label: '视频模型',
-                  hint: '文生视频 / 图生视频；可留空表示不支持',
-                  child: FilterableModelPicker(
-                    controller: videoModelCtrl,
-                    options: videoModelOptions,
-                    placeholder: 'sora-2 / grok-imagine-video',
-                    onChanged: onFieldChanged,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  '先「拉取模型」；列表可搜索筛选，也可直接输入自定义模型名。',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: tokens.inkMuted,
-                    fontFamily: tokens.fontFamily,
-                  ),
-                ),
               ],
             ),
           ),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              FilledButton(
-                onPressed: dirty ? onSave : null,
-                child: const Text('保存'),
-              ),
-              const SizedBox(width: 8),
-              Button(
-                onPressed: dirty ? onCancel : null,
-                child: const Text('取消'),
-              ),
-            ],
-          ),
-          if (canDelete) ...[
-            const SizedBox(height: 18),
-            HyperlinkButton(
-              onPressed: onDelete,
-              style: ButtonStyle(
-                foregroundColor: WidgetStatePropertyAll(tokens.danger),
-              ),
-              child: const Text('删除此提供商…'),
-            ),
-          ],
         ],
-        ),
       ),
     );
   }

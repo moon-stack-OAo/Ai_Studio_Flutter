@@ -165,11 +165,15 @@ class _SettingsChatDefaultsPageState extends State<SettingsChatDefaultsPage> {
     final tokens = fluentTokensOf(context);
     return ColoredBox(
       color: tokens.canvas,
-      child: BackToTopHost(
-        builder: (context, scroll) => ListView(
-          controller: scroll,
-          padding: const EdgeInsets.fromLTRB(28, 20, 28, 28),
-          children: [
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Expanded(
+            child: BackToTopHost(
+              builder: (context, scroll) => ListView(
+                controller: scroll,
+                padding: const EdgeInsets.fromLTRB(28, 20, 28, 16),
+                children: [
           Text(
             '对话默认',
             style: TextStyle(
@@ -320,27 +324,36 @@ class _SettingsChatDefaultsPageState extends State<SettingsChatDefaultsPage> {
               ],
             ),
           ),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              FilledButton(
-                onPressed: (_dirty && !_saving) ? _save : null,
-                child: Text(_saving ? '保存中…' : '保存'),
+                ],
               ),
-              const SizedBox(width: 8),
-              Button(
-                onPressed: (_dirty && !_saving) ? _cancelEdits : null,
-                child: const Text('取消'),
-              ),
-              const SizedBox(width: 8),
-              Button(
-                onPressed: _saving ? null : _reset,
-                child: const Text('恢复推荐值'),
-              ),
-            ],
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.fromLTRB(28, 12, 28, 16),
+            decoration: BoxDecoration(
+              color: tokens.surface,
+              border: Border(top: BorderSide(color: tokens.border)),
+            ),
+            child: Row(
+              children: [
+                FilledButton(
+                  onPressed: (_dirty && !_saving) ? _save : null,
+                  child: Text(_saving ? '保存中…' : '保存'),
+                ),
+                const SizedBox(width: 8),
+                Button(
+                  onPressed: (_dirty && !_saving) ? _cancelEdits : null,
+                  child: const Text('取消'),
+                ),
+                const Spacer(),
+                Button(
+                  onPressed: _saving ? null : _reset,
+                  child: const Text('恢复推荐值'),
+                ),
+              ],
+            ),
           ),
         ],
-        ),
       ),
     );
   }

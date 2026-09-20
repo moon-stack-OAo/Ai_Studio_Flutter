@@ -1,5 +1,6 @@
 import 'dart:io' show Platform;
 
+import 'package:design_fluent/design_fluent.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/widgets.dart';
 import 'package:window_manager/window_manager.dart';
@@ -15,17 +16,24 @@ bool get supportsCustomTitleBar {
   }
 }
 
+/// 原生窗底色：须不透明。透明底在最大化拉大时会先露出桌面，整窗闪一下。
+Color desktopWindowBackgroundFor(Brightness brightness) =>
+    FluentTokens.ofBrightness(brightness).canvas;
+
 /// 无边框自定义标题栏初始化（方案 B）。
-Future<void> bootstrapDesktopWindow() async {
+Future<void> bootstrapDesktopWindow({
+  Brightness brightness = Brightness.light,
+}) async {
   if (!supportsCustomTitleBar) return;
 
   await windowManager.ensureInitialized();
 
-  const options = WindowOptions(
-    size: Size(1280, 820),
-    minimumSize: Size(960, 640),
+  final background = desktopWindowBackgroundFor(brightness);
+  final options = WindowOptions(
+    size: const Size(1280, 820),
+    minimumSize: const Size(960, 640),
     center: true,
-    backgroundColor: Color(0x00000000),
+    backgroundColor: background,
     skipTaskbar: false,
     titleBarStyle: TitleBarStyle.hidden,
     windowButtonVisibility: false,
@@ -37,8 +45,23 @@ Future<void> bootstrapDesktopWindow() async {
       TitleBarStyle.hidden,
       windowButtonVisibility: false,
     );
+    await windowManager.setBackgroundColor(background);
+    if (Platform.isWindows) {
+      await windowManager.setBrightness(brightness);
+    }
     await windowManager.setPreventClose(true);
     await windowManager.show();
     await windowManager.focus();
   });
+}
+
+/// 主题切换后同步原生窗底，避免暗色 UI 下仍闪浅色底（或反之）。
+Future<void> syncDesktopWindowBackground(Brightness brightness) async {
+  if (!supportsCustomTitleBar) return;
+  await windowManager.setBackgroundColor(
+    desktopWindowBackgroundFor(brightness),
+  );
+  if (Platform.isWindows) {
+    await windowManager.setBrightness(brightness);
+  }
 }

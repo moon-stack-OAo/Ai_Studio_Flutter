@@ -1,6 +1,9 @@
 import 'package:core/core.dart';
 import 'package:design_fluent/design_fluent.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
+
+import '../shell/window_bootstrap.dart';
 
 class ThemeController extends ChangeNotifier {
   ThemeController({AppearanceRepository? repository})
@@ -17,6 +20,9 @@ class ThemeController extends ChangeNotifier {
   ThemePreference get preference => _preference;
   AppFontScale get fontScale => _fontScale;
   UiDensity get density => _density;
+
+  Brightness get windowBrightness =>
+      _preference == ThemePreference.dark ? Brightness.dark : Brightness.light;
 
   /// 从仓库同步当前外观（main 在 `appearanceRepo.load()` 后调用）。
   void loadFrom(AppearanceSettings settings) {
@@ -38,6 +44,7 @@ class ThemeController extends ChangeNotifier {
     if (_preference == value) return;
     _preference = value;
     notifyListeners();
+    await syncDesktopWindowBackground(windowBrightness);
     await _persist();
   }
 
