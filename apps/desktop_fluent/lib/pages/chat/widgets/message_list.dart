@@ -69,6 +69,26 @@ class _MessageListState extends State<MessageList> {
     super.dispose();
   }
 
+  /// 消息区可用宽度的约 78%；小窗不低于 520，超宽屏封顶 1280。
+  static double _bubbleMaxWidth(double available) {
+    if (available <= 0) return 780;
+    return (available * 0.78).clamp(520.0, 1280.0);
+  }
+
+  Widget _constrainedBubble({
+    required Alignment alignment,
+    required double maxWidth,
+    required Widget child,
+  }) {
+    return Align(
+      alignment: alignment,
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxWidth: maxWidth),
+        child: child,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (widget.messages.isEmpty && widget.liveToolTraces.isEmpty) {
@@ -92,55 +112,55 @@ class _MessageListState extends State<MessageList> {
     final items = groupChatMessagesForDisplay(widget.messages);
     final live = widget.liveToolTraces;
     final extra = live.isEmpty ? 0 : 1;
-    return ListView.builder(
-      controller: _scroll,
-      padding: const EdgeInsets.fromLTRB(28, 20, 28, 12),
-      itemCount: items.length + extra,
-      itemBuilder: (context, index) {
-        if (index >= items.length) {
-          return Align(
-            alignment: Alignment.centerLeft,
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 780),
-              child: Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: ToolCallTraceGroup(traces: live),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final bubbleMax = _bubbleMaxWidth(constraints.maxWidth - 56);
+        return ListView.builder(
+          controller: _scroll,
+          padding: const EdgeInsets.fromLTRB(28, 20, 28, 12),
+          itemCount: items.length + extra,
+          itemBuilder: (context, index) {
+            if (index >= items.length) {
+              return _constrainedBubble(
+                alignment: Alignment.centerLeft,
+                maxWidth: bubbleMax,
+                child: Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: ToolCallTraceGroup(traces: live),
+                ),
+              );
+            }
+            final item = items[index];
+            if (item is ChatDisplayToolRound) {
+              return _constrainedBubble(
+                alignment: Alignment.centerLeft,
+                maxWidth: bubbleMax,
+                child: Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: ToolCallTraceGroup(traces: item.traces),
+                ),
+              );
+            }
+            final msgItem = item as ChatDisplayMessage;
+            final msg = msgItem.message;
+            final canRecall = widget.recallEnabled &&
+                msg.role == ChatRole.user &&
+                msg.id == lastUserId;
+            final isUser = msg.role == ChatRole.user;
+            return _constrainedBubble(
+              alignment:
+                  isUser ? Alignment.centerRight : Alignment.centerLeft,
+              maxWidth: bubbleMax,
+              child: MessageBubble(
+                message: msg,
+                recallEnabled: canRecall,
+                hideToolCallsStrip: msgItem.hideToolCallsStrip,
+                onRecall: canRecall && widget.onRecallUser != null
+                    ? () => widget.onRecallUser!(msg.id)
+                    : null,
               ),
-            ),
-          );
-        }
-        final item = items[index];
-        if (item is ChatDisplayToolRound) {
-          return Align(
-            alignment: Alignment.centerLeft,
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 780),
-              child: Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: ToolCallTraceGroup(traces: item.traces),
-              ),
-            ),
-          );
-        }
-        final msgItem = item as ChatDisplayMessage;
-        final msg = msgItem.message;
-        final canRecall = widget.recallEnabled &&
-            msg.role == ChatRole.user &&
-            msg.id == lastUserId;
-        final isUser = msg.role == ChatRole.user;
-        return Align(
-          alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 780),
-            child: MessageBubble(
-              message: msg,
-              recallEnabled: canRecall,
-              hideToolCallsStrip: msgItem.hideToolCallsStrip,
-              onRecall: canRecall && widget.onRecallUser != null
-                  ? () => widget.onRecallUser!(msg.id)
-                  : null,
-            ),
-          ),
+            );
+          },
         );
       },
     );

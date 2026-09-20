@@ -43,11 +43,13 @@ class _McpEditSheet extends StatefulWidget {
   State<_McpEditSheet> createState() => _McpEditSheetState();
 }
 
-class _McpEditSheetState extends State<_McpEditSheet> {
+class _McpEditSheetState extends State<_McpEditSheet>
+    with SingleTickerProviderStateMixin {
   late String _serverId;
   final _nameCtrl = TextEditingController();
   final _baseUrlCtrl = TextEditingController();
   final _tokenCtrl = TextEditingController();
+  late final TabController _tabController;
   McpAuthKind _authKind = McpAuthKind.none;
   bool _enabled = true;
   bool _obscureToken = true;
@@ -64,6 +66,7 @@ class _McpEditSheetState extends State<_McpEditSheet> {
   void initState() {
     super.initState();
     _serverId = widget.serverId;
+    _tabController = TabController(length: 2, vsync: this);
     _repo.addListener(_onRepoChanged);
     _baseUrlCtrl.addListener(_onFieldsChanged);
     _nameCtrl.addListener(_onFieldsChanged);
@@ -77,6 +80,7 @@ class _McpEditSheetState extends State<_McpEditSheet> {
     _baseUrlCtrl.removeListener(_onFieldsChanged);
     _nameCtrl.removeListener(_onFieldsChanged);
     _tokenCtrl.removeListener(_onFieldsChanged);
+    _tabController.dispose();
     _nameCtrl.dispose();
     _baseUrlCtrl.dispose();
     _tokenCtrl.dispose();
@@ -592,6 +596,57 @@ class _McpEditSheetState extends State<_McpEditSheet> {
     ];
   }
 
+  Widget _buildToolsPolicyTab(
+    MaterialTokens tokens,
+    McpServerConfig selected,
+  ) {
+    if (selected.toolsCache.isEmpty) {
+      return Align(
+        alignment: Alignment.topLeft,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+          child: Text(
+            '尚未拉取工具列表。请到「连接配置」保存 URL 后测试连接。',
+            style: TextStyle(
+              fontSize: 13,
+              color: tokens.inkMuted,
+            ),
+          ),
+        ),
+      );
+    }
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            '按工具覆盖（可选）',
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: tokens.ink,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Expanded(
+            child: BackToTopHost(
+              right: 8,
+              bottom: 8,
+              builder: (context, scroll) => _ToolsPolicyList(
+                scrollController: scroll,
+                tools: selected.toolsCache,
+                defaultToolPolicy: selected.defaultToolPolicy,
+                overrides: selected.toolPolicyOverrides,
+                onPolicyChanged: _setToolPolicy,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final tokens = materialTokensOf(context);
@@ -602,6 +657,8 @@ class _McpEditSheetState extends State<_McpEditSheet> {
     if (selected == null) {
       return const SizedBox.shrink();
     }
+
+    final toolsCount = selected.toolsCache.length;
 
     return PopScope(
       canPop: !_dirty,
@@ -617,7 +674,7 @@ class _McpEditSheetState extends State<_McpEditSheet> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 8, 8),
+                padding: const EdgeInsets.fromLTRB(16, 0, 8, 0),
                 child: Row(
                   children: [
                     Expanded(
@@ -638,79 +695,59 @@ class _McpEditSheetState extends State<_McpEditSheet> {
                   ],
                 ),
               ),
+              TabBar(
+                controller: _tabController,
+                labelColor: tokens.primaryPressed,
+                unselectedLabelColor: tokens.inkMuted,
+                indicatorColor: tokens.primary,
+                indicatorSize: TabBarIndicatorSize.tab,
+                dividerColor: tokens.border,
+                labelStyle: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  fontFamily: tokens.fontFamily,
+                ),
+                unselectedLabelStyle: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                  fontFamily: tokens.fontFamily,
+                ),
+                tabs: [
+                  const Tab(text: '连接配置', height: 40),
+                  Tab(
+                    text: toolsCount == 0
+                        ? '工具策略'
+                        : '工具策略（$toolsCount）',
+                    height: 40,
+                  ),
+                ],
+              ),
               Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: selected.toolsCache.isEmpty
-                      ? BackToTopHost(
-                          builder: (context, scroll) => ListView(
-                            controller: scroll,
-                            padding: const EdgeInsets.only(bottom: 16),
-                            children: [
-                              ..._buildFormSections(tokens, selected),
-                              const SizedBox(height: 16),
-                              OutlinedButton.icon(
-                                onPressed: _delete,
-                                icon: const Icon(Icons.delete_outline),
-                                label: const Text('删除此 Server'),
-                                style: OutlinedButton.styleFrom(
-                                  minimumSize: const Size.fromHeight(44),
-                                  foregroundColor: tokens.danger,
-                                  side: BorderSide(color: tokens.danger),
-                                ),
-                              ),
-                            ],
+                child: TabBarView(
+                  controller: _tabController,
+                  children: [
+                    BackToTopHost(
+                      builder: (context, scroll) => ListView(
+                        controller: scroll,
+                        padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+                        children: [
+                          ..._buildFormSections(tokens, selected),
+                          const SizedBox(height: 16),
+                          OutlinedButton.icon(
+                            onPressed: _delete,
+                            icon: const Icon(Icons.delete_outline),
+                            label: const Text('删除此 Server'),
+                            style: OutlinedButton.styleFrom(
+                              minimumSize: const Size.fromHeight(44),
+                              foregroundColor: tokens.danger,
+                              side: BorderSide(color: tokens.danger),
+                            ),
                           ),
-                        )
-                      : Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            Flexible(
-                              flex: 2,
-                              child: BackToTopHost(
-                                builder: (context, scroll) => ListView(
-                                  controller: scroll,
-                                  padding: EdgeInsets.zero,
-                                  children: _buildFormSections(
-                                    tokens,
-                                    selected,
-                                  ),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(height: 12),
-                            Text(
-                              '按工具覆盖（可选）',
-                              style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                                color: tokens.ink,
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            Expanded(
-                              flex: 3,
-                              child: _ToolsPolicyList(
-                                tools: selected.toolsCache,
-                                defaultToolPolicy: selected.defaultToolPolicy,
-                                overrides: selected.toolPolicyOverrides,
-                                onPolicyChanged: _setToolPolicy,
-                              ),
-                            ),
-                            const SizedBox(height: 12),
-                            OutlinedButton.icon(
-                              onPressed: _delete,
-                              icon: const Icon(Icons.delete_outline),
-                              label: const Text('删除此 Server'),
-                              style: OutlinedButton.styleFrom(
-                                minimumSize: const Size.fromHeight(44),
-                                foregroundColor: tokens.danger,
-                                side: BorderSide(color: tokens.danger),
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                          ],
-                        ),
+                        ],
+                      ),
+                    ),
+                    _buildToolsPolicyTab(tokens, selected),
+                  ],
                 ),
               ),
               SafeArea(
@@ -839,6 +876,7 @@ class _ToolsPolicyList extends StatelessWidget {
     required this.defaultToolPolicy,
     required this.overrides,
     required this.onPolicyChanged,
+    this.scrollController,
   });
 
   final List<McpToolDescriptor> tools;
@@ -846,6 +884,7 @@ class _ToolsPolicyList extends StatelessWidget {
   final Map<String, McpToolPolicyLevel> overrides;
   final void Function(String toolName, McpToolPolicyLevel? level)
       onPolicyChanged;
+  final ScrollController? scrollController;
 
   static String _sideLabel(McpToolSideEffect s) => switch (s) {
         McpToolSideEffect.read => '读',
@@ -893,6 +932,7 @@ class _ToolsPolicyList extends StatelessWidget {
       child: ClipRRect(
         borderRadius: BorderRadius.circular(10),
         child: ListView.separated(
+          controller: scrollController,
           padding: const EdgeInsets.all(8),
           itemCount: tools.length,
           separatorBuilder: (_, _) => const SizedBox(height: 8),

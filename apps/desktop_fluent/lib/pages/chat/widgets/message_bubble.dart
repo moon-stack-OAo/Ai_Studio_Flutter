@@ -176,7 +176,7 @@ class _MessageBubbleState extends State<MessageBubble> {
                 : (details) => _showContextMenu(details.globalPosition),
             child: Padding(
               padding: const EdgeInsets.symmetric(vertical: 9),
-              // 短消息随内容宽度；外层 Align 左右分侧 + maxWidth:780 约束长内容
+              // 短消息随内容宽度；外层 Align 左右分侧 + 按消息区约 78% 约束长内容
               child: Column(
                 crossAxisAlignment:
                     isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,

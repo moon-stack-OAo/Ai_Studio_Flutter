@@ -1072,7 +1072,7 @@ class _McpListTile extends StatelessWidget {
   }
 }
 
-class _McpForm extends StatelessWidget {
+class _McpForm extends StatefulWidget {
   const _McpForm({
     required this.tokens,
     required this.nameCtrl,
@@ -1142,32 +1142,18 @@ class _McpForm extends StatelessWidget {
   final void Function(String toolName, McpToolPolicyLevel? level)
       onPolicyChanged;
 
-  bool get _isStdio => transport == McpTransport.stdio;
-
   @override
-  Widget build(BuildContext context) {
-    final formSections = <Widget>[
-      Text(
-        '编辑 MCP Server',
-        style: TextStyle(
-          fontSize: 18,
-          fontWeight: FontWeight.w600,
-          color: tokens.ink,
-          fontFamily: tokens.fontFamily,
-        ),
-      ),
-      const SizedBox(height: 4),
-      Text(
-        _isStdio
-            ? '本地 stdio 仅桌面可用；将启动本机子进程。移动端不支持。元数据存本机。'
-            : '元数据存本机；Bearer Token 存 OS 凭据库。HTTP/SSE（Streamable JSON-RPC）。',
-        style: TextStyle(
-          fontSize: 13,
-          color: tokens.inkMuted,
-          fontFamily: tokens.fontFamily,
-        ),
-      ),
-      const SizedBox(height: 20),
+  State<_McpForm> createState() => _McpFormState();
+}
+
+class _McpFormState extends State<_McpForm> {
+  int _tabIndex = 0;
+
+  bool get _isStdio => widget.transport == McpTransport.stdio;
+
+  List<Widget> _buildConnectionSections() {
+    final tokens = widget.tokens;
+    return [
       _Section(
         title: '基本信息',
         child: Column(
@@ -1175,9 +1161,9 @@ class _McpForm extends StatelessWidget {
             _LabeledField(
               label: '显示名称',
               child: TextBox(
-                controller: nameCtrl,
+                controller: widget.nameCtrl,
                 placeholder: '例如 业务查询 MCP',
-                onChanged: onFieldChanged,
+                onChanged: widget.onFieldChanged,
               ),
             ),
             const SizedBox(height: 12),
@@ -1185,7 +1171,7 @@ class _McpForm extends StatelessWidget {
               label: '传输方式',
               hint: '移动端仅支持 HTTP/SSE；stdio 仅 Windows / macOS',
               child: ComboBox<McpTransport>(
-                value: transport,
+                value: widget.transport,
                 isExpanded: true,
                 items: const [
                   ComboBoxItem(
@@ -1198,7 +1184,7 @@ class _McpForm extends StatelessWidget {
                   ),
                 ],
                 onChanged: (v) {
-                  if (v != null) onTransportChanged(v);
+                  if (v != null) widget.onTransportChanged(v);
                 },
               ),
             ),
@@ -1208,9 +1194,9 @@ class _McpForm extends StatelessWidget {
                 label: '可执行文件（command）',
                 hint: '如 node、npx 或绝对路径',
                 child: TextBox(
-                  controller: commandCtrl,
+                  controller: widget.commandCtrl,
                   placeholder: 'node',
-                  onChanged: onFieldChanged,
+                  onChanged: widget.onFieldChanged,
                 ),
               ),
               const SizedBox(height: 12),
@@ -1218,19 +1204,19 @@ class _McpForm extends StatelessWidget {
                 label: '参数（args）',
                 hint: '每行一个参数',
                 child: TextBox(
-                  controller: argsCtrl,
+                  controller: widget.argsCtrl,
                   maxLines: 4,
                   placeholder: 'path/to/server.js',
-                  onChanged: onFieldChanged,
+                  onChanged: widget.onFieldChanged,
                 ),
               ),
               const SizedBox(height: 12),
               _LabeledField(
                 label: '工作目录（cwd，可选）',
                 child: TextBox(
-                  controller: cwdCtrl,
+                  controller: widget.cwdCtrl,
                   placeholder: '留空则用进程默认目录',
-                  onChanged: onFieldChanged,
+                  onChanged: widget.onFieldChanged,
                 ),
               ),
               const SizedBox(height: 12),
@@ -1238,10 +1224,10 @@ class _McpForm extends StatelessWidget {
                 label: '环境变量（env，可选）',
                 hint: '每行 KEY=VALUE；含密钥时勿依赖默认备份',
                 child: TextBox(
-                  controller: envCtrl,
+                  controller: widget.envCtrl,
                   maxLines: 4,
                   placeholder: 'API_KEY=…',
-                  onChanged: onFieldChanged,
+                  onChanged: widget.onFieldChanged,
                 ),
               ),
             ] else
@@ -1249,9 +1235,9 @@ class _McpForm extends StatelessWidget {
                 label: 'Base URL',
                 hint: 'MCP 单一入口，如 https://host/mcp',
                 child: TextBox(
-                  controller: baseUrlCtrl,
+                  controller: widget.baseUrlCtrl,
                   placeholder: 'https://mcp.example.com/mcp',
-                  onChanged: onFieldChanged,
+                  onChanged: widget.onFieldChanged,
                 ),
               ),
             const SizedBox(height: 12),
@@ -1267,12 +1253,12 @@ class _McpForm extends StatelessWidget {
                 ),
                 const SizedBox(width: 12),
                 ToggleSwitch(
-                  checked: enabled,
-                  onChanged: onEnabledChanged,
+                  checked: widget.enabled,
+                  onChanged: widget.onEnabledChanged,
                 ),
                 const Spacer(),
                 Text(
-                  enabled ? '对话可暴露其 tools' : '已停用，不参与对话',
+                  widget.enabled ? '对话可暴露其 tools' : '已停用，不参与对话',
                   style: TextStyle(
                     fontSize: 12,
                     color: tokens.inkMuted,
@@ -1292,9 +1278,9 @@ class _McpForm extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               ComboBox<McpAuthKind>(
-                value: authKind == McpAuthKind.oauth
+                value: widget.authKind == McpAuthKind.oauth
                     ? McpAuthKind.none
-                    : authKind,
+                    : widget.authKind,
                 isExpanded: true,
                 items: const [
                   ComboBoxItem(
@@ -1307,27 +1293,30 @@ class _McpForm extends StatelessWidget {
                   ),
                 ],
                 onChanged: (v) {
-                  if (v != null) onAuthKindChanged(v);
+                  if (v != null) widget.onAuthKindChanged(v);
                 },
               ),
-              if (authKind == McpAuthKind.bearer) ...[
+              if (widget.authKind == McpAuthKind.bearer) ...[
                 const SizedBox(height: 12),
                 _LabeledField(
                   label: 'Bearer Token',
-                  hint: hasStoredToken && tokenCtrl.text.isEmpty
+                  hint: widget.hasStoredToken && widget.tokenCtrl.text.isEmpty
                       ? '已保存（留空保持不变）'
                       : null,
                   child: TextBox(
-                    controller: tokenCtrl,
-                    obscureText: obscureToken,
-                    placeholder: hasStoredToken ? '••••••••' : 'token…',
-                    onChanged: onFieldChanged,
+                    controller: widget.tokenCtrl,
+                    obscureText: widget.obscureToken,
+                    placeholder:
+                        widget.hasStoredToken ? '••••••••' : 'token…',
+                    onChanged: widget.onFieldChanged,
                     suffix: IconButton(
                       icon: Icon(
-                        obscureToken ? FluentIcons.view : FluentIcons.hide3,
+                        widget.obscureToken
+                            ? FluentIcons.view
+                            : FluentIcons.hide3,
                         size: 14,
                       ),
-                      onPressed: onToggleObscure,
+                      onPressed: widget.onToggleObscure,
                     ),
                   ),
                 ),
@@ -1348,10 +1337,14 @@ class _McpForm extends StatelessWidget {
               crossAxisAlignment: WrapCrossAlignment.center,
               children: [
                 FilledButton(
-                  onPressed: (!canProbe || probing) ? null : onProbe,
-                  child: Text(probing ? '探测中…' : '测试连接 / 刷新 tools'),
+                  onPressed: (!widget.canProbe || widget.probing)
+                      ? null
+                      : widget.onProbe,
+                  child: Text(
+                    widget.probing ? '探测中…' : '测试连接 / 刷新 tools',
+                  ),
                 ),
-                if (!canProbe)
+                if (!widget.canProbe)
                   Text(
                     _isStdio ? '需先填写 command' : '需先填写 Base URL',
                     style: TextStyle(
@@ -1360,12 +1353,14 @@ class _McpForm extends StatelessWidget {
                       fontFamily: tokens.fontFamily,
                     ),
                   )
-                else if (statusText != null)
+                else if (widget.statusText != null)
                   Text(
-                    '● $statusText',
+                    '● ${widget.statusText}',
                     style: TextStyle(
                       fontSize: 12,
-                      color: statusOk ? tokens.success : tokens.danger,
+                      color: widget.statusOk
+                          ? tokens.success
+                          : tokens.danger,
                       fontFamily: tokens.fontFamily,
                     ),
                   ),
@@ -1374,10 +1369,10 @@ class _McpForm extends StatelessWidget {
             const SizedBox(height: 14),
             _ServerDefaultPolicyRow(
               tokens: tokens,
-              value: defaultToolPolicy,
-              onChanged: onDefaultPolicyChanged,
+              value: widget.defaultToolPolicy,
+              onChanged: widget.onDefaultPolicyChanged,
             ),
-            if (tools.isEmpty) ...[
+            if (widget.tools.isEmpty) ...[
               const SizedBox(height: 14),
               Text(
                 _isStdio
@@ -1394,6 +1389,47 @@ class _McpForm extends StatelessWidget {
         ),
       ),
     ];
+  }
+
+  Widget _buildTabChip(String label, int index) {
+    final tokens = widget.tokens;
+    final selected = _tabIndex == index;
+    return HoverButton(
+      onPressed: () => setState(() => _tabIndex = index),
+      builder: (context, states) {
+        final hovered = states.isHovered;
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 4),
+          decoration: BoxDecoration(
+            border: Border(
+              bottom: BorderSide(
+                color: selected ? tokens.primary : Colors.transparent,
+                width: 2,
+              ),
+            ),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
+            child: Text(
+              label,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+                color: selected
+                    ? tokens.primaryPressed
+                    : (hovered ? tokens.ink : tokens.inkMuted),
+                fontFamily: tokens.fontFamily,
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = widget.tokens;
 
     return ColoredBox(
       color: tokens.surface,
@@ -1403,51 +1439,118 @@ class _McpForm extends StatelessWidget {
           Expanded(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(28, 20, 28, 0),
-              child: tools.isEmpty
-                  ? BackToTopHost(
-                      builder: (context, scroll) => ListView(
-                        controller: scroll,
-                        padding: const EdgeInsets.only(bottom: 16),
-                        children: formSections,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    '编辑 MCP Server',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
+                      color: tokens.ink,
+                      fontFamily: tokens.fontFamily,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    _isStdio
+                        ? '本地 stdio 仅桌面可用；将启动本机子进程。移动端不支持。元数据存本机。'
+                        : '元数据存本机；Bearer Token 存 OS 凭据库。HTTP/SSE（Streamable JSON-RPC）。',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: tokens.inkMuted,
+                      fontFamily: tokens.fontFamily,
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  DecoratedBox(
+                    decoration: BoxDecoration(
+                      border: Border(
+                        bottom: BorderSide(color: tokens.border),
                       ),
-                    )
-                  : Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                    ),
+                    child: Row(
                       children: [
-                        Flexible(
-                          flex: 2,
-                          child: BackToTopHost(
-                            builder: (context, scroll) => ListView(
-                              controller: scroll,
-                              padding: EdgeInsets.zero,
-                              children: formSections,
-                            ),
-                          ),
+                        _buildTabChip('连接配置', 0),
+                        const SizedBox(width: 4),
+                        _buildTabChip(
+                          widget.tools.isEmpty
+                              ? '工具策略'
+                              : '工具策略（${widget.tools.length}）',
+                          1,
                         ),
-                        const SizedBox(height: 12),
-                        Text(
-                          '按工具覆盖（可选）',
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                            color: tokens.ink,
-                            fontFamily: tokens.fontFamily,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Expanded(
-                          flex: 3,
-                          child: _ToolsPolicyTable(
-                            tokens: tokens,
-                            tools: tools,
-                            defaultToolPolicy: defaultToolPolicy,
-                            overrides: policyOverrides,
-                            onPolicyChanged: onPolicyChanged,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
                       ],
                     ),
+                  ),
+                  const SizedBox(height: 12),
+                  Expanded(
+                    child: IndexedStack(
+                      index: _tabIndex,
+                      sizing: StackFit.expand,
+                      children: [
+                        BackToTopHost(
+                          builder: (context, scroll) => ListView(
+                            controller: scroll,
+                            padding: const EdgeInsets.only(bottom: 16),
+                            children: _buildConnectionSections(),
+                          ),
+                        ),
+                        widget.tools.isEmpty
+                            ? Align(
+                                alignment: Alignment.topLeft,
+                                child: Padding(
+                                  padding: const EdgeInsets.only(top: 8),
+                                  child: Text(
+                                    _isStdio
+                                        ? '尚未拉取工具列表。请到「连接配置」保存 command 后测试连接。'
+                                        : '尚未拉取工具列表。请到「连接配置」保存 URL 后测试连接。',
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      color: tokens.inkMuted,
+                                      fontFamily: tokens.fontFamily,
+                                    ),
+                                  ),
+                                ),
+                              )
+                            : Column(
+                                crossAxisAlignment:
+                                    CrossAxisAlignment.stretch,
+                                children: [
+                                  Text(
+                                    '按工具覆盖（可选）',
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w600,
+                                      color: tokens.ink,
+                                      fontFamily: tokens.fontFamily,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Expanded(
+                                    child: BackToTopHost(
+                                      right: 12,
+                                      bottom: 12,
+                                      builder: (context, scroll) =>
+                                          _ToolsPolicyTable(
+                                        tokens: tokens,
+                                        scrollController: scroll,
+                                        tools: widget.tools,
+                                        defaultToolPolicy:
+                                            widget.defaultToolPolicy,
+                                        overrides: widget.policyOverrides,
+                                        onPolicyChanged:
+                                            widget.onPolicyChanged,
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 8),
+                                ],
+                              ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
           Container(
@@ -1459,19 +1562,20 @@ class _McpForm extends StatelessWidget {
             child: Row(
               children: [
                 FilledButton(
-                  onPressed: dirty ? onSave : null,
+                  onPressed: widget.dirty ? widget.onSave : null,
                   child: const Text('保存'),
                 ),
                 const SizedBox(width: 8),
                 Button(
-                  onPressed: dirty ? onCancel : null,
+                  onPressed: widget.dirty ? widget.onCancel : null,
                   child: const Text('取消'),
                 ),
                 const Spacer(),
                 Button(
-                  onPressed: onDelete,
+                  onPressed: widget.onDelete,
                   style: ButtonStyle(
-                    foregroundColor: WidgetStatePropertyAll(tokens.danger),
+                    foregroundColor:
+                        WidgetStatePropertyAll(tokens.danger),
                   ),
                   child: const Text('删除'),
                 ),
@@ -1571,6 +1675,7 @@ class _ToolsPolicyTable extends StatelessWidget {
     required this.defaultToolPolicy,
     required this.overrides,
     required this.onPolicyChanged,
+    this.scrollController,
   });
 
   final FluentTokens tokens;
@@ -1579,6 +1684,7 @@ class _ToolsPolicyTable extends StatelessWidget {
   final Map<String, McpToolPolicyLevel> overrides;
   final void Function(String toolName, McpToolPolicyLevel? level)
       onPolicyChanged;
+  final ScrollController? scrollController;
 
   static String _sideLabel(McpToolSideEffect s) => switch (s) {
         McpToolSideEffect.read => '读',
@@ -1624,6 +1730,7 @@ class _ToolsPolicyTable extends StatelessWidget {
       ),
       clipBehavior: Clip.antiAlias,
       child: ListView.separated(
+        controller: scrollController,
         padding: const EdgeInsets.all(8),
         itemCount: tools.length,
         separatorBuilder: (_, _) => const SizedBox(height: 8),
