@@ -6,16 +6,26 @@ const String kAppDockBaseUrl = 'https://appdock.livancen.top';
 /// 本产品在 AppDock 中的应用 slug。
 const String kAppDockAppSlug = 'ai-studio';
 
-/// 默认桌面更新清单 URL。
+/// 默认桌面更新清单 URL（优先 AppDock）。
 ///
-/// 指向 AppDock 公开版本列表（非预发布），由客户端映射成内部 [UpdateManifest]。
+/// 指向 AppDock 公开版本列表，由客户端映射成内部 [UpdateManifest]。
+/// AppDock 没有该应用时回退 [kGithubDesktopUpdateManifestUrl]。
 const String kDesktopUpdateManifestUrl =
     '$kAppDockBaseUrl/api/v1/public/apps/$kAppDockAppSlug/versions';
+
+/// GitHub Releases 上的桌面 `latest.json`（AppDock 不可用时的回退）。
+const String kGithubDesktopUpdateManifestUrl =
+    'https://github.com/moon-stack-OAo/Ai_Studio_Flutter/releases/latest/download/latest.json';
 
 /// 默认 Android 侧载更新清单 URL（与桌面同一 AppDock 版本列表）。
 ///
 /// 平台资产须含 **`sha256`**（64 位 hex）；下载地址为 AppDock 相对路径，客户端会补全。
+/// AppDock 没有该应用时回退 [kGithubAndroidUpdateManifestUrl]。
 const String kAndroidUpdateManifestUrl = kDesktopUpdateManifestUrl;
+
+/// GitHub Releases 上的 Android `android-latest.json`。
+const String kGithubAndroidUpdateManifestUrl =
+    'https://github.com/moon-stack-OAo/Ai_Studio_Flutter/releases/latest/download/android-latest.json';
 
 /// 单平台安装包条目。
 class PlatformAsset {

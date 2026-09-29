@@ -131,7 +131,7 @@ core     → （无 Flutter UI；可依赖 foundation / 平台无关库）
 
 | | 桌面 | Android |
 |--|------|---------|
-| 清单 | AppDock `GET /api/v1/public/apps/ai-studio/versions`（`kAppDockBaseUrl`） | 同一接口 |
+| 清单 | 优先 AppDock `GET /api/v1/public/apps/ai-studio/versions`；404 / 不可达回退 GitHub `latest.json` | 同一 AppDock 接口；回退 `android-latest.json` |
 | 客户端 | `UpdateClient`（版本列表 → 内部清单） | `AndroidUpdateClient`（复用拉取/下载） |
 | 完整性 | 资产 `checksumSha256` → **sha256**（缺 sha256 且无 minisign 时阻断） | 同左 |
 | 平台键 | AppDock `windows`/`macos`/`linux` + arch 映射到 `windows-x86_64`、`darwin-aarch64` 等 | 文件名 / arch 映射到 `arm64-v8a` / `armeabi-v7a` / `x86_64` |

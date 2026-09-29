@@ -235,6 +235,69 @@ void main() {
       access.close();
     });
 
+    test('404 falls back to github latest.json', () async {
+      final requested = <String>[];
+      final mock = MockClient((request) async {
+        requested.add(request.url.toString());
+        if (request.url.host == 'appdock.livancen.top') {
+          return http.Response('{"error":{"code":"NOT_FOUND"}}', 404);
+        }
+        return http.Response.bytes(
+          utf8.encode(
+            jsonEncode({
+              'version': '1.0.8',
+              'notes': 'github',
+              'platforms': {
+                'windows-x86_64': {
+                  'signature': 'sig',
+                  'url':
+                      'https://github.com/moon-stack-OAo/Ai_Studio_Flutter/releases/download/v1.0.8/setup.exe',
+                },
+              },
+            }),
+          ),
+          200,
+        );
+      });
+      final client = UpdateClient(
+        client: mock,
+        manifestUrl: kDesktopUpdateManifestUrl,
+        fallbackManifestUrl: kGithubDesktopUpdateManifestUrl,
+      );
+      final result = await client.checkForUpdate(
+        currentVersion: '1.0.0',
+        platformCandidates: const ['windows-x86_64'],
+      );
+      expect(result.status, UpdateCheckStatus.available);
+      expect(result.asset!.url, contains('github.com'));
+      expect(requested.length, 2);
+      expect(requested.last, kGithubDesktopUpdateManifestUrl);
+      client.close();
+    });
+
+    test('password required does not fall back to github', () async {
+      var hits = 0;
+      final mock = MockClient((request) async {
+        hits += 1;
+        return http.Response.bytes(
+          utf8.encode('{"error":{"code":"PASSWORD_REQUIRED"}}'),
+          403,
+        );
+      });
+      final client = UpdateClient(
+        client: mock,
+        manifestUrl: kDesktopUpdateManifestUrl,
+        fallbackManifestUrl: kGithubDesktopUpdateManifestUrl,
+      );
+      final result = await client.checkForUpdate(
+        currentVersion: '1.0.0',
+        platformCandidates: const ['windows-x86_64'],
+      );
+      expect(result.errorMessage, kUpdateAccessRequiredMessage);
+      expect(hits, 1);
+      client.close();
+    });
+
     test('download verifies sha256', () async {
       final bytes = utf8.encode('appdock-installer');
       final digest = sha256HexOfBytes(bytes);

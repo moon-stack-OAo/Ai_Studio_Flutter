@@ -17,7 +17,7 @@
 
 ### Changed
 
-- **自动更新改走 AppDock**：桌面与 Android 从 `https://appdock.livancen.top` 拉取应用 `ai-studio` 的公开版本列表，按平台选包后经 AppDock 下载，并以清单 sha256 做完整性校验（不再请求 GitHub `latest.json` / minisign）
+- **自动更新优先 AppDock**：桌面与 Android 先拉 `https://appdock.livancen.top` 上应用 `ai-studio` 的版本列表；应用不存在或 AppDock 打不开时回退 GitHub `latest.json` / `android-latest.json`。需要访问口令时不回退
 - **更新口令**：AppDock 应用需要访问口令时，桌面与 Android 检查更新会弹出输入框；解锁后的会话写入本机安全存储，之后检查与下载自动携带
 
 ### Fixed

@@ -23,6 +23,7 @@ class UpdateClient {
   UpdateClient({
     http.Client? client,
     this.manifestUrl = kDesktopUpdateManifestUrl,
+    this.fallbackManifestUrl = kGithubDesktopUpdateManifestUrl,
     this.timeout = const Duration(seconds: 45),
     this.downloadDirectory,
     this.minisignPubkey = kDesktopUpdaterMinisignPubkey,
@@ -52,6 +53,11 @@ class UpdateClient {
   final http.Client _client;
   final bool _ownedClient;
   final String manifestUrl;
+
+  /// AppDock 没有该应用（404 / 网络失败）时改拉的 GitHub 清单。空则不回退。
+  ///
+  /// 需要访问口令时不回退，避免绕过 AppDock。
+  final String fallbackManifestUrl;
   final Duration timeout;
 
   bool get ownsClient => _ownedClient;
@@ -68,11 +74,44 @@ class UpdateClient {
   ///
   /// AppDock 版本列表（JSON 数组）会映射成内部清单；
   /// 旧 Tauri `latest.json`（JSON 对象）仍可解析，供测试与兼容。
+  ///
+  /// [manifestUrl] 为 404 或网络失败、且配置了 [fallbackManifestUrl] 时，
+  /// 再拉 GitHub 清单。需要访问口令时不回退。
   Future<UpdateManifest> fetchManifest({http.Client? client}) async {
     final url = manifestUrl.trim();
     if (url.isEmpty) {
       throw const UpdateException('未配置更新源');
     }
+    try {
+      return await _fetchManifestAt(url, client: client);
+    } on UpdateException catch (e) {
+      final fallback = fallbackManifestUrl.trim();
+      if (fallback.isEmpty ||
+          fallback == url ||
+          !_canFallbackToGithub(e)) {
+        rethrow;
+      }
+      return _fetchManifestAt(fallback, client: client);
+    }
+  }
+
+  /// 仅「没有这个应用 / 源暂时打不开」才回退；口令不足必须停在 AppDock。
+  bool _canFallbackToGithub(UpdateException error) {
+    final msg = error.message;
+    if (msg == kUpdateAccessRequiredMessage || msg.contains('访问口令')) {
+      return false;
+    }
+    return msg.contains('404') ||
+        msg.contains('更新清单为空') ||
+        msg.contains('无法访问更新源') ||
+        msg.contains('请求超时') ||
+        msg.contains('网络');
+  }
+
+  Future<UpdateManifest> _fetchManifestAt(
+    String url, {
+    http.Client? client,
+  }) async {
     final uri = Uri.tryParse(url);
     if (uri == null || !uri.hasScheme) {
       throw UpdateException('更新源地址无效：$url');

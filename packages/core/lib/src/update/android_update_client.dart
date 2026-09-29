@@ -28,6 +28,7 @@ class AndroidUpdateClient {
               timeout: timeout,
               downloadDirectory: downloadDirectory,
               accessSession: accessSession,
+              fallbackManifestUrl: kGithubAndroidUpdateManifestUrl,
               // Android 侧载用 sha256，不走桌面 minisign。
               requireSignature: false,
             ),
