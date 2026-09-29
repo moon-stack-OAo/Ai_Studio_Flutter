@@ -14,8 +14,11 @@ class UpdateController extends ChangeNotifier {
     UpdatePrefs? updatePrefs,
     String? currentVersion,
     List<String>? platformCandidates,
+    AppDockAccessSession? accessSession,
     this.onQuitAfterInstall,
   })  : _installer = installer ?? const DesktopUpdateInstaller(),
+        _access = accessSession ??
+            (_client.accessSession ?? AppDockAccessSession()),
         _appLogs = appLogRepository,
         _prefs = updatePrefs ?? UpdatePrefs(),
         _ownsPrefs = updatePrefs == null,
@@ -24,6 +27,7 @@ class UpdateController extends ChangeNotifier {
             platformCandidates ?? desktopUpdatePlatformCandidates();
 
   final UpdateClient _client;
+  final AppDockAccessSession _access;
   final UpdateInstaller _installer;
   final AppLogRepository? _appLogs;
   final UpdatePrefs _prefs;
@@ -79,6 +83,9 @@ class UpdateController extends ChangeNotifier {
 
   String? get lastError => _lastError;
 
+  /// 最近一次检查是否因为 AppDock 需要访问口令而失败。
+  bool get needsAccessCode => _lastError == kUpdateAccessRequiredMessage;
+
   File? get downloadedFile => _downloadedFile;
 
   bool get hasUpdate => _lastCheck?.hasUpdate ?? false;
@@ -108,6 +115,12 @@ class UpdateController extends ChangeNotifier {
   }
 
   Future<void> ensurePrefsLoaded() => _prefs.ensureLoaded();
+
+  /// 用口令解锁 AppDock 并记住会话。失败抛 [UpdateException]。
+  Future<void> unlockAccess(String accessCode) => _access.unlock(accessCode);
+
+  /// 清除已保存的访问口令会话。
+  Future<void> clearAccess() => _access.clear();
 
   Future<void> setAutoCheckUpdate(bool value) async {
     await _prefs.setAutoCheckUpdate(value);
@@ -378,6 +391,9 @@ class UpdateController extends ChangeNotifier {
 
   @override
   void dispose() {
+    if (!identical(_access, _client.accessSession)) {
+      _access.close();
+    }
     _client.close();
     if (_ownsPrefs) {
       _prefs.dispose();

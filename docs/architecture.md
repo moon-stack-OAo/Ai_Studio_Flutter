@@ -131,16 +131,16 @@ core     → （无 Flutter UI；可依赖 foundation / 平台无关库）
 
 | | 桌面 | Android |
 |--|------|---------|
-| 清单 | `latest.json`（`kDesktopUpdateManifestUrl`） | `android-latest.json`（`kAndroidUpdateManifestUrl`） |
-| 客户端 | `UpdateClient` | `AndroidUpdateClient`（复用拉取/下载，关 minisign） |
-| 完整性 | `platforms.*.signature` → **minisign**（Tauri 约定；公钥钉死） | `platforms.*.sha256` → **sha256** |
-| 平台键 | `windows-x86_64` 等；macOS `darwin-aarch64` / `darwin-x86_64`（`update_platform.dart`） | 按设备 ABI 选包（`arm64-v8a` / `armeabi-v7a` / `x86_64`） |
+| 清单 | AppDock `GET /api/v1/public/apps/ai-studio/versions`（`kAppDockBaseUrl`） | 同一接口 |
+| 客户端 | `UpdateClient`（版本列表 → 内部清单） | `AndroidUpdateClient`（复用拉取/下载） |
+| 完整性 | 资产 `checksumSha256` → **sha256**（缺 sha256 且无 minisign 时阻断） | 同左 |
+| 平台键 | AppDock `windows`/`macos`/`linux` + arch 映射到 `windows-x86_64`、`darwin-aarch64` 等 | 文件名 / arch 映射到 `arm64-v8a` / `armeabi-v7a` / `x86_64` |
 | 偏好 | `UpdatePrefs`（自动检查 / 跳过版本 / 可用版本） | 同语义 |
 | UI | 冷启动·托盘确认弹窗；设置 NEW 角标；关于页进度/可取消下载 | 冷启动弹窗；底栏 Badge；关于页 |
 
-失败安全：缺签名 / 验签失败 / sha256 不匹配 → **删除临时文件并阻断安装**（无默认 skip）。
+失败安全：缺 sha256 / sha256 不匹配 → **删除临时文件并阻断安装**（无默认 skip）。旧 Tauri 清单若带 `signature` 仍可走 minisign。
 
-发版：推送 `v*` tag → `.github/workflows/release.yml` 产出安装包并写两份清单。
+发版：推送 `v*` tag → GitHub Release；AppDock 同步该 Release 后，客户端才从 AppDock 看到新版本。应用须为公开可见，且安装包带 sha256。
 
 ## 7. 文档与规格对照 · 仍缺项
 

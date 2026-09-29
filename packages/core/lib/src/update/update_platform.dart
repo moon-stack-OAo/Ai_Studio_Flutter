@@ -56,6 +56,90 @@ List<String> desktopUpdatePlatformCandidates({
   return const [];
 }
 
+/// AppDock 资产 `platform` + `arch`（及文件名）到内部清单键的映射。
+///
+/// AppDock 平台枚举：`windows` / `macos` / `linux` / `android`。
+/// 架构：`x64` / `arm64` / `x86` / `universal` / `unknown`。
+/// Android 优先从文件名识别 ABI（`arm64-v8a` / `armeabi-v7a` / `x86_64`）。
+List<String> appDockAssetPlatformKeys({
+  required String platform,
+  required String arch,
+  String fileName = '',
+}) {
+  final plat = platform.trim().toLowerCase();
+  final arc = arch.trim().toLowerCase();
+  final name = fileName.trim().toLowerCase();
+
+  if (plat == 'android' || name.endsWith('.apk') || name.contains('.apk.')) {
+    final abi = _androidAbiFromName(name) ?? _androidAbiFromArch(arc);
+    if (abi == 'armeabi-v7a') {
+      return const ['armeabi-v7a', 'armv7-linux-androideabi'];
+    }
+    if (abi == 'x86_64') {
+      return const ['x86_64', 'x86_64-linux-android'];
+    }
+    if (abi == 'arm64-v8a') {
+      return const ['arm64-v8a', 'aarch64-linux-android'];
+    }
+    return const [];
+  }
+
+  if (plat == 'windows') {
+    return const [
+      'windows-x86_64',
+      'windows-x86_64-nsis',
+      'x86_64-pc-windows-msvc',
+    ];
+  }
+  if (plat == 'macos') {
+    if (arc == 'arm64' || name.contains('aarch64') || name.contains('arm64')) {
+      return const ['darwin-aarch64', 'aarch64-apple-darwin'];
+    }
+    if (arc == 'x64' ||
+        arc == 'x86_64' ||
+        name.contains('x86_64') ||
+        name.contains('x64')) {
+      return const ['darwin-x86_64', 'x86_64-apple-darwin'];
+    }
+    return const ['darwin-aarch64', 'darwin-x86_64'];
+  }
+  if (plat == 'linux') {
+    return const ['linux-x86_64', 'x86_64-unknown-linux-gnu'];
+  }
+  return const [];
+}
+
+String? _androidAbiFromName(String name) {
+  if (name.contains('armeabi-v7a') || name.contains('armv7')) {
+    return 'armeabi-v7a';
+  }
+  if (name.contains('x86_64') || name.contains('x64')) return 'x86_64';
+  if (name.contains('arm64-v8a') ||
+      name.contains('arm64') ||
+      name.contains('aarch64')) {
+    return 'arm64-v8a';
+  }
+  return null;
+}
+
+String? _androidAbiFromArch(String arch) {
+  switch (arch) {
+    case 'arm64':
+    case 'aarch64':
+      return 'arm64-v8a';
+    case 'x64':
+    case 'x86_64':
+    case 'amd64':
+      return 'x86_64';
+    case 'x86':
+    case 'armeabi-v7a':
+    case 'armv7':
+      return 'armeabi-v7a';
+    default:
+      return null;
+  }
+}
+
 /// 将运行时 ABI / 字符串归一为 Android ABI 提示（如 `arm64-v8a`）。
 String? normalizeAndroidAbiHint([String? raw]) {
   final hint = (raw ?? currentAndroidAbiHint() ?? '').trim().toLowerCase();

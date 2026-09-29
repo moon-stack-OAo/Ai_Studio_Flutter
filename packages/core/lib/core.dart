@@ -68,6 +68,8 @@ export 'src/settings/data_backup_service.dart';
 export 'src/settings/hidden_portal_prefs.dart';
 export 'src/settings/third_party_licenses.dart';
 export 'src/update/android_update_client.dart';
+export 'src/update/appdock_access.dart';
+export 'src/update/appdock_manifest.dart';
 export 'src/update/sha256_util.dart';
 export 'src/update/update_banner_prefs.dart';
 export 'src/update/update_prefs.dart';

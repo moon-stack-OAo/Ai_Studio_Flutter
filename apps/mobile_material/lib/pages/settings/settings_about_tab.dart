@@ -321,8 +321,35 @@ class _SettingsAboutTabState extends State<SettingsAboutTab> {
       case UpdateCheckStatus.noPlatformAsset:
         _snack(result.errorMessage ?? '清单中无当前平台的安装包');
       case UpdateCheckStatus.failed:
+        if (result.errorMessage == kUpdateAccessRequiredMessage) {
+          final unlocked = await _promptAccessCode();
+          if (!mounted) return;
+          if (unlocked) await _onCheckUpdate();
+          return;
+        }
         _snack(result.errorMessage ?? '检查更新失败');
     }
+  }
+
+  /// 口令不足时弹出输入框；成功返回 true。
+  Future<bool> _promptAccessCode() async {
+    final code = await showDialog<String>(
+      context: context,
+      builder: (dialogCtx) => const _AccessCodeDialog(),
+    );
+    if (code == null || code.trim().isEmpty || !mounted) return false;
+    try {
+      await _updater.unlockAccess(code);
+    } on UpdateException catch (e) {
+      if (!mounted) return false;
+      _snack(e.message);
+      return false;
+    } catch (e) {
+      if (!mounted) return false;
+      _snack('解锁失败：$e');
+      return false;
+    }
+    return true;
   }
 
   Future<void> _showUpdatePrompt(UpdateCheckResult check) async {
@@ -821,7 +848,7 @@ class _SettingsAboutTabState extends State<SettingsAboutTab> {
                 const SizedBox(height: 6),
                 Text(
                   _isAndroid
-                      ? '更新通道：GitHub Releases（完整性校验）'
+                      ? '更新通道：AppDock（完整性校验）'
                       : _isIos
                           ? '更新通道：非 App Store · 请通过内测渠道获取新版本'
                           : '分发：不上架 · 直链 / 侧载清单',
@@ -1157,6 +1184,56 @@ enum _ClearChoice {
         media => ClearLocalDataFlags.mediaOnly,
         all => ClearLocalDataFlags.all,
       };
+}
+
+class _AccessCodeDialog extends StatefulWidget {
+  const _AccessCodeDialog();
+
+  @override
+  State<_AccessCodeDialog> createState() => _AccessCodeDialogState();
+}
+
+class _AccessCodeDialogState extends State<_AccessCodeDialog> {
+  final _controller = TextEditingController();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    final code = _controller.text.trim();
+    if (code.isEmpty) return;
+    Navigator.pop(context, code);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('需要访问口令'),
+      content: TextField(
+        controller: _controller,
+        obscureText: true,
+        autofocus: true,
+        decoration: const InputDecoration(
+          hintText: '访问口令',
+          helperText: '口令只保存在本机，用于从 AppDock 检查并下载更新。',
+        ),
+        onSubmitted: (_) => _submit(),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('取消'),
+        ),
+        FilledButton(
+          onPressed: _submit,
+          child: const Text('解锁'),
+        ),
+      ],
+    );
+  }
 }
 
 String _formatBytes(int n) {

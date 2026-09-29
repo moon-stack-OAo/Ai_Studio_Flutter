@@ -9,7 +9,7 @@ import '../platform/open_file_apk_installer.dart';
 
 /// 移动端更新控制器。
 ///
-/// - **Android**：检查 `android-latest.json` → 下载 + sha256 → [AndroidApkInstaller]
+/// - **Android**：检查 AppDock 版本列表 → 下载 + sha256 → [AndroidApkInstaller]
 /// - **iOS**：不走 APK；检查仅用于展示「请通过内测渠道获取」说明
 class MobileUpdateController extends ChangeNotifier {
   MobileUpdateController({
@@ -21,8 +21,14 @@ class MobileUpdateController extends ChangeNotifier {
     List<String>? platformCandidates,
     this.forceIos = false,
     this.forceAndroid = false,
+    AppDockAccessSession? accessSession,
   })  : _androidClient = androidClient ??
-            AndroidUpdateClient(manifestUrl: kAndroidUpdateManifestUrl),
+            AndroidUpdateClient(
+              manifestUrl: kAndroidUpdateManifestUrl,
+              accessSession: accessSession,
+            ),
+        _access = accessSession ??
+            (androidClient?.accessSession ?? AppDockAccessSession()),
         _apkInstaller = apkInstaller ?? const OpenFileAndroidApkInstaller(),
         _appLogs = appLogRepository,
         _prefs = updatePrefs ?? UpdatePrefs(),
@@ -32,6 +38,7 @@ class MobileUpdateController extends ChangeNotifier {
             platformCandidates ?? androidUpdatePlatformCandidates();
 
   final AndroidUpdateClient _androidClient;
+  final AppDockAccessSession _access;
   final AndroidApkInstaller _apkInstaller;
   final AppLogRepository? _appLogs;
   final UpdatePrefs _prefs;
@@ -65,6 +72,9 @@ class MobileUpdateController extends ChangeNotifier {
   UpdateDownloadProgress? get downloadProgress => _downloadProgress;
   String? get progressLabel => _progressLabel;
   String? get lastError => _lastError;
+
+  /// 最近一次检查是否因为 AppDock 需要访问口令而失败。
+  bool get needsAccessCode => _lastError == kUpdateAccessRequiredMessage;
   File? get downloadedFile => _downloadedFile;
   bool get hasUpdate => _lastCheck?.hasUpdate ?? false;
   bool get hasAvailableUpdate => _prefs.hasAvailableUpdate;
@@ -116,6 +126,12 @@ class MobileUpdateController extends ChangeNotifier {
   }
 
   Future<void> ensurePrefsLoaded() => _prefs.ensureLoaded();
+
+  /// 用口令解锁 AppDock 并记住会话。失败抛 [UpdateException]。
+  Future<void> unlockAccess(String accessCode) => _access.unlock(accessCode);
+
+  /// 清除已保存的访问口令会话。
+  Future<void> clearAccess() => _access.clear();
 
   Future<void> setAutoCheckUpdate(bool value) async {
     await _prefs.setAutoCheckUpdate(value);
@@ -460,6 +476,9 @@ class MobileUpdateController extends ChangeNotifier {
 
   @override
   void dispose() {
+    if (!identical(_access, _androidClient.accessSession)) {
+      _access.close();
+    }
     _androidClient.close();
     if (_ownsPrefs) {
       _prefs.dispose();

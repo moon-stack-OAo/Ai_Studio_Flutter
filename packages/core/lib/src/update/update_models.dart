@@ -1,15 +1,21 @@
 import 'version_compare.dart';
 
-/// 默认桌面更新清单 URL（`latest.json`，平台键兼容历史 updater 格式）。
-const String kDesktopUpdateManifestUrl =
-    'https://github.com/moon-stack-OAo/Ai_Studio_Flutter/releases/latest/download/latest.json';
+/// AppDock 更新源根地址（不带末尾斜杠）。
+const String kAppDockBaseUrl = 'https://appdock.livancen.top';
 
-/// 默认 Android 侧载更新清单 URL。
+/// 本产品在 AppDock 中的应用 slug。
+const String kAppDockAppSlug = 'ai-studio';
+
+/// 默认桌面更新清单 URL。
 ///
-/// 字段：`version` / `notes` / `pub_date` / `platforms`；
-/// 平台资产除 `url` 外须含 **`sha256`**（64 位 hex）。
-const String kAndroidUpdateManifestUrl =
-    'https://github.com/moon-stack-OAo/Ai_Studio_Flutter/releases/latest/download/android-latest.json';
+/// 指向 AppDock 公开版本列表（非预发布），由客户端映射成内部 [UpdateManifest]。
+const String kDesktopUpdateManifestUrl =
+    '$kAppDockBaseUrl/api/v1/public/apps/$kAppDockAppSlug/versions';
+
+/// 默认 Android 侧载更新清单 URL（与桌面同一 AppDock 版本列表）。
+///
+/// 平台资产须含 **`sha256`**（64 位 hex）；下载地址为 AppDock 相对路径，客户端会补全。
+const String kAndroidUpdateManifestUrl = kDesktopUpdateManifestUrl;
 
 /// 单平台安装包条目。
 class PlatformAsset {

@@ -19,16 +19,15 @@
 - **调用点**：保存提供商 `baseUrl`、连通性探测、对话 / 生图 / 生视频请求前、更新清单与安装包下载 URL、媒体下载 URL。
 - **warn（不硬拦）**：明文 HTTP、本机、私有网段 → `warnUnsafeUrl`，设置页保存后提示。
 
-## 更新包签名（minisign / Tauri）
+## 更新包完整性（AppDock sha256）
 
-实现：`packages/core/lib/src/update/minisign_verify.dart`；桌面 `UpdateClient.downloadInstaller` 在 `requireSignature: true`（默认）时强制校验。
+实现：`packages/core/lib/src/update/appdock_manifest.dart`、`sha256_util.dart`。桌面与 Android 默认清单为 AppDock 公开版本列表（`kAppDockBaseUrl` + slug `ai-studio`）。
 
-- 公钥钉死为现网 Tauri `plugins.updater.pubkey`（`kDesktopUpdaterMinisignPubkey`）。
-- 清单 `platforms.*.signature` 按 Tauri 约定（多为 base64 包一层的 minisign 文本）解析；支持 prehashed（`ED` / BLAKE2b-512）与 legacy（`Ed`）。
-- **失败安全**：缺签名、缺公钥、密钥 ID 不匹配、验签失败 → 删除临时文件并阻断安装；**无**默认 skip。
-- Android 侧载走 `sha256`（`AndroidUpdateClient` 关闭 minisign）。
-- 自动化：`packages/core/test/minisign_verify_test.dart`（自生成测试密钥向量 + `UpdateClient` 失败清理）。
-- **手工 E2E（可选）**：用现网私钥 `minisign -S -m <installer>`（或 Tauri bundler 产出的 `.sig`），把签名填入 `latest.json` 的 `platforms.*.signature`，桌面客户端下载后应通过；故意改安装包字节或换签名应阻断并删临时文件。CI 不依赖本机 minisign CLI。
+- 客户端取非预发布最高版本，按平台 / ABI 选包，下载地址补全为 AppDock 绝对 URL。
+- 资产须带合法 `checksumSha256`；下载后 `verifyFileSha256`，不匹配则删除临时文件并阻断安装。
+- **失败安全**：缺 sha256、校验失败 → 阻断；**无**默认 skip。AppDock 应用须为公开，否则检查 / 下载会 403。
+- 旧 Tauri `latest.json` 仍可解析：无 sha256 且 `requireSignature: true` 时走 minisign（`minisign_verify.dart`，公钥 `kDesktopUpdaterMinisignPubkey`）。
+- 自动化：`packages/core/test/appdock_manifest_test.dart`、`minisign_verify_test.dart`。
 
 ## 密钥存储
 

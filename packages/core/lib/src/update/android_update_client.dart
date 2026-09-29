@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:http/http.dart' as http;
 
+import 'appdock_access.dart';
 import 'sha256_util.dart';
 import 'update_client.dart';
 import 'update_installer.dart';
@@ -18,6 +19,7 @@ class AndroidUpdateClient {
     this.manifestUrl = kAndroidUpdateManifestUrl,
     this.timeout = const Duration(seconds: 45),
     this.downloadDirectory,
+    this.accessSession,
     UpdateClient? updateClient,
   }) : _client = updateClient ??
             UpdateClient(
@@ -25,6 +27,7 @@ class AndroidUpdateClient {
               manifestUrl: manifestUrl,
               timeout: timeout,
               downloadDirectory: downloadDirectory,
+              accessSession: accessSession,
               // Android 侧载用 sha256，不走桌面 minisign。
               requireSignature: false,
             ),
@@ -35,6 +38,9 @@ class AndroidUpdateClient {
   final String manifestUrl;
   final Duration timeout;
   final Directory? downloadDirectory;
+
+  /// AppDock 访问口令会话；与内部 [UpdateClient] 共用。
+  final AppDockAccessSession? accessSession;
 
   UpdateClient get updateClient => _client;
 

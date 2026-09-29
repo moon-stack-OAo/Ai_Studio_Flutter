@@ -114,8 +114,14 @@ Future<void> main() async {
   );
   desktopSingleInstanceShow = closeCoordinator.showMainWindow;
 
+  final updateAccess = AppDockAccessSession();
+  await updateAccess.load();
   final updateController = UpdateController(
-    client: UpdateClient(manifestUrl: kDesktopUpdateManifestUrl),
+    client: UpdateClient(
+      manifestUrl: kDesktopUpdateManifestUrl,
+      accessSession: updateAccess,
+    ),
+    accessSession: updateAccess,
     appLogRepository: appLogs,
     onQuitAfterInstall: closeCoordinator.quitApp,
   );

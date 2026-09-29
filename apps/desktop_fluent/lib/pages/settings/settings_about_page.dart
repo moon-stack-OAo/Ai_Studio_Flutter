@@ -291,11 +291,42 @@ class _SettingsAboutPageState extends State<SettingsAboutPage> {
           InfoBarSeverity.warning,
         );
       case UpdateCheckStatus.failed:
+        if (result.errorMessage == kUpdateAccessRequiredMessage) {
+          final unlocked = await _promptAccessCode();
+          if (!mounted) return;
+          if (unlocked) {
+            await _onCheckUpdate();
+          }
+          return;
+        }
         _showInfoBar(
           result.errorMessage ?? '检查更新失败',
           InfoBarSeverity.error,
         );
     }
+  }
+
+  /// 口令不足时弹出输入框；成功返回 true。
+  Future<bool> _promptAccessCode() async {
+    final updater = _updater;
+    if (updater == null || !mounted) return false;
+    final code = await showDialog<String>(
+      context: context,
+      builder: (dialogCtx) => const _AccessCodeDialog(),
+    );
+    if (code == null || code.trim().isEmpty) return false;
+    try {
+      await updater.unlockAccess(code);
+    } on UpdateException catch (e) {
+      if (!mounted) return false;
+      _showInfoBar(e.message, InfoBarSeverity.error);
+      return false;
+    } catch (e) {
+      if (!mounted) return false;
+      _showInfoBar('解锁失败：$e', InfoBarSeverity.error);
+      return false;
+    }
+    return true;
   }
 
   Future<void> _onDownloadAndInstall() async {
@@ -821,7 +852,7 @@ class _SettingsAboutPageState extends State<SettingsAboutPage> {
                 Text(
                   !configured
                       ? '更新通道：未配置更新源 · 不上架'
-                      : '更新通道：GitHub Releases（签名校验）· 不上架',
+                      : '更新通道：AppDock（完整性校验）· 不上架',
                   style: TextStyle(
                     fontSize: 12,
                     color: tokens.inkMuted,
@@ -1421,6 +1452,61 @@ class _CloseBehaviorTile extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _AccessCodeDialog extends StatefulWidget {
+  const _AccessCodeDialog();
+
+  @override
+  State<_AccessCodeDialog> createState() => _AccessCodeDialogState();
+}
+
+class _AccessCodeDialogState extends State<_AccessCodeDialog> {
+  final _controller = TextEditingController();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    final code = _controller.text.trim();
+    if (code.isEmpty) return;
+    Navigator.pop(context, code);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ContentDialog(
+      title: const Text('需要访问口令'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('该应用在 AppDock 需要访问口令才能检查并下载更新。口令只保存在本机。'),
+          const SizedBox(height: 12),
+          TextBox(
+            controller: _controller,
+            placeholder: '访问口令',
+            obscureText: true,
+            autofocus: true,
+            onSubmitted: (_) => _submit(),
+          ),
+        ],
+      ),
+      actions: [
+        Button(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('取消'),
+        ),
+        FilledButton(
+          onPressed: _submit,
+          child: const Text('解锁'),
+        ),
+      ],
     );
   }
 }

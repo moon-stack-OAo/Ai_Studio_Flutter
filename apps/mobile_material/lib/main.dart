@@ -84,8 +84,11 @@ Future<void> main() async {
     mcpServers: mcpServers,
   );
 
+  final updateAccess = AppDockAccessSession();
+  await updateAccess.load();
   final updateController = MobileUpdateController(
     appLogRepository: appLogs,
+    accessSession: updateAccess,
   );
 
   runApp(

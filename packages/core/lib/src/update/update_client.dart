@@ -7,7 +7,10 @@ import 'package:path_provider/path_provider.dart';
 
 import '../security/safe_http_client.dart';
 import '../security/url_safety.dart';
+import 'appdock_access.dart';
+import 'appdock_manifest.dart';
 import 'minisign_verify.dart';
+import 'sha256_util.dart';
 import 'update_models.dart';
 import 'update_platform.dart';
 import 'version_compare.dart';
@@ -25,6 +28,7 @@ class UpdateClient {
     this.minisignPubkey = kDesktopUpdaterMinisignPubkey,
     this.requireSignature = true,
     this.installMaxAttempts = kUpdateInstallMaxAttempts,
+    this.accessSession,
   })  : _ownedClient = client == null,
         _client = client ?? createSafeHttpClient();
 
@@ -42,6 +46,9 @@ class UpdateClient {
   /// 下载瞬时失败时的最大尝试次数（含首次）；签名/格式错误不重试。
   final int installMaxAttempts;
 
+  /// AppDock 访问口令会话；有值时清单与下载请求带 cookie。
+  final AppDockAccessSession? accessSession;
+
   final http.Client _client;
   final bool _ownedClient;
   final String manifestUrl;
@@ -57,7 +64,10 @@ class UpdateClient {
     }
   }
 
-  /// 拉取并解析 Tauri 风格 latest.json。
+  /// 拉取并解析更新清单。
+  ///
+  /// AppDock 版本列表（JSON 数组）会映射成内部清单；
+  /// 旧 Tauri `latest.json`（JSON 对象）仍可解析，供测试与兼容。
   Future<UpdateManifest> fetchManifest({http.Client? client}) async {
     final url = manifestUrl.trim();
     if (url.isEmpty) {
@@ -76,10 +86,9 @@ class UpdateClient {
     final c = client ?? _client;
     late final http.Response response;
     try {
-      response = await c.get(uri, headers: const {
-        'Accept': 'application/json',
-        'User-Agent': 'AiStudio-Flutter-Updater/1.0',
-      }).timeout(timeout);
+      response = await c
+          .get(uri, headers: _requestHeaders(json: true))
+          .timeout(timeout);
     } on TimeoutException {
       throw const UpdateException(
         '检查更新失败：请求超时，请检查网络后重试。',
@@ -94,6 +103,9 @@ class UpdateClient {
       throw UpdateException(friendlyUpdateNetworkError(e));
     }
 
+    if (updateResponseNeedsAccess(response.statusCode, response.bodyBytes)) {
+      throw const UpdateException(kUpdateAccessRequiredMessage);
+    }
     if (response.statusCode == 404) {
       throw const UpdateException('暂无更新清单（404）');
     }
@@ -120,14 +132,33 @@ class UpdateClient {
       throw const UpdateException('更新清单不是合法 JSON');
     }
 
-    if (decoded is! Map) {
+    final UpdateManifest manifest;
+    if (decoded is List) {
+      try {
+        manifest = updateManifestFromAppDockVersions(
+          decoded,
+          baseUrl: _manifestOrigin(url),
+        );
+      } on FormatException catch (e) {
+        throw UpdateException(e.message);
+      }
+    } else if (decoded is Map) {
+      manifest = UpdateManifest.fromJson(Map<String, dynamic>.from(decoded));
+    } else {
       throw const UpdateException('更新清单格式无效');
     }
-    final manifest = UpdateManifest.fromJson(Map<String, dynamic>.from(decoded));
     if (manifest.version.trim().isEmpty) {
       throw const UpdateException('更新清单缺少 version');
     }
     return manifest;
+  }
+
+  /// 清单 URL 的 scheme + host（含端口），用来补全 AppDock 相对下载路径。
+  String _manifestOrigin(String url) {
+    final uri = Uri.tryParse(url);
+    if (uri == null || !uri.hasScheme || uri.host.isEmpty) return '';
+    final port = uri.hasPort ? ':${uri.port}' : '';
+    return '${uri.scheme}://${uri.host}$port';
   }
 
   /// 检查更新：比较 [currentVersion] 与清单，并按 [platformCandidates] 选包。
@@ -172,6 +203,15 @@ class UpdateClient {
         );
       }
 
+      if (!isValidSha256(asset.sha256) &&
+          (!requireSignature || asset.signature.trim().isEmpty)) {
+        return UpdateCheckResult.failed(
+          currentVersion: current,
+          message: '更新清单缺少完整性校验信息',
+          manifest: manifest,
+        );
+      }
+
       return UpdateCheckResult.available(
         currentVersion: current,
         manifest: manifest,
@@ -204,8 +244,9 @@ class UpdateClient {
 
   /// 下载安装包到临时目录；[onProgress] 可选。
   ///
-  /// 若 [requireSignature] 为 true，下载后按 [PlatformAsset.signature] 做
-  /// minisign / Tauri 验签；失败删除文件并阻断安装。
+  /// 有合法 `sha256` 时下载后做完整性校验（AppDock）。
+  /// 否则若 [requireSignature] 为 true，按 [PlatformAsset.signature] 做
+  /// minisign / Tauri 验签。失败删除文件并阻断安装。
   ///
   /// 瞬时网络失败会自动重试（最多 [installMaxAttempts] 次）；签名/格式类错误不重试。
   Future<File> downloadInstaller(
@@ -272,7 +313,7 @@ class UpdateClient {
     late final http.StreamedResponse response;
     try {
       final request = http.Request('GET', uri);
-      request.headers['User-Agent'] = 'AiStudio-Flutter-Updater/1.0';
+      request.headers.addAll(_requestHeaders());
       response = await c.send(request).timeout(timeout);
     } on TimeoutException {
       throw const UpdateException(
@@ -282,9 +323,13 @@ class UpdateClient {
       throw UpdateException(friendlyUpdateNetworkError(e));
     }
 
-    if (response.statusCode == 403) {
+    if (response.statusCode == 401 || response.statusCode == 403) {
+      final sniffed = await _sniffAccessBody(response);
+      if (sniffed) {
+        throw const UpdateException(kUpdateAccessRequiredMessage);
+      }
       throw const UpdateException(
-        '下载更新失败：安装包地址可能需要鉴权。请稍后重试，或到 GitHub Releases 手动下载安装。',
+        '下载更新失败：安装包地址可能需要鉴权。请确认 AppDock 应用为公开，或稍后重试。',
       );
     }
     if (response.statusCode == 404) {
@@ -341,7 +386,17 @@ class UpdateClient {
       throw const UpdateException('下载的安装包为空');
     }
 
-    if (requireSignature) {
+    if (isValidSha256(asset.sha256)) {
+      try {
+        await verifyFileSha256(file, asset.sha256);
+      } catch (e) {
+        try {
+          if (await file.exists()) await file.delete();
+        } catch (_) {}
+        if (e is UpdateException) rethrow;
+        throw UpdateException(friendlyUpdateInstallError(e));
+      }
+    } else if (requireSignature) {
       try {
         final bytes = await file.readAsBytes();
         await verifyTauriUpdaterSignature(
@@ -388,6 +443,28 @@ class UpdateClient {
     }
   }
 
+  Map<String, String> _requestHeaders({bool json = false}) {
+    return {
+      'User-Agent': 'AiStudio-Flutter-Updater/1.0',
+      if (json) 'Accept': 'application/json',
+      ...?accessSession?.headers,
+    };
+  }
+
+  /// 读少量响应体判断是否口令不足，并尽量排空流。
+  Future<bool> _sniffAccessBody(http.StreamedResponse response) async {
+    final chunks = <int>[];
+    try {
+      await for (final chunk in response.stream) {
+        if (chunks.length < 2048) {
+          final room = 2048 - chunks.length;
+          chunks.addAll(chunk.length <= room ? chunk : chunk.take(room));
+        }
+      }
+    } catch (_) {}
+    return updateResponseNeedsAccess(response.statusCode, chunks);
+  }
+
   String _safeFileName(String raw) {
     var name = Uri.decodeComponent(raw).split(RegExp(r'[\\/]')).last.trim();
     if (name.isEmpty || name == '.' || name == '..') {
@@ -414,9 +491,11 @@ String friendlyUpdateNetworkError(Object? err) {
         r'api\.github\.com/.*/releases/assets/',
         caseSensitive: false,
       ).hasMatch(msg) ||
-      RegExp(r'\b403\b').hasMatch(msg) ||
-      lower.contains('forbidden')) {
-    return '下载更新失败：安装包地址可能需要鉴权。请稍后重试，或到 GitHub Releases 手动下载安装。';
+      msg.contains(kUpdateAccessRequiredMessage)) {
+    return kUpdateAccessRequiredMessage;
+  }
+  if (RegExp(r'\b403\b').hasMatch(msg) || lower.contains('forbidden')) {
+    return '下载更新失败：安装包地址可能需要鉴权。请确认 AppDock 应用为公开，或稍后重试。';
   }
   if (lower.contains('socket') ||
       lower.contains('connection') ||
@@ -460,9 +539,11 @@ String friendlyUpdateInstallError(Object? err) {
         r'api\.github\.com/.*/releases/assets/',
         caseSensitive: false,
       ).hasMatch(msg) ||
-      RegExp(r'\b403\b').hasMatch(msg) ||
-      lower.contains('forbidden')) {
-    return '下载更新失败：安装包地址可能需要鉴权。请稍后重试，或到 GitHub Releases 手动下载安装。';
+      msg.contains(kUpdateAccessRequiredMessage)) {
+    return kUpdateAccessRequiredMessage;
+  }
+  if (RegExp(r'\b403\b').hasMatch(msg) || lower.contains('forbidden')) {
+    return '下载更新失败：安装包地址可能需要鉴权。请确认 AppDock 应用为公开，或稍后重试。';
   }
   if (_looksLikeTimeout(msg, lower) ||
       lower.contains('connection') ||
