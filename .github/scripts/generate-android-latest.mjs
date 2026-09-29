@@ -4,7 +4,9 @@
  * 用法:
  *   node .github/scripts/generate-android-latest.mjs v1.0.0 [distDir]
  *   node .github/scripts/generate-android-latest.mjs v1.0.0 apk1.apk apk2.apk ...
- * 环境变量可选: GITHUB_REPOSITORY（默认 moon-stack-OAo/Ai_Studio_Flutter）
+ * 环境变量可选:
+ *   GITHUB_REPOSITORY（默认 moon-stack-OAo/Ai_Studio_Flutter）
+ *   APPDOCK_PUBLIC_BASE_URL + APPDOCK_APP_SLUG（有则 APK URL 走 AppDock 文件名直链）
  */
 import crypto from 'node:crypto'
 import fs from 'node:fs'
@@ -188,7 +190,12 @@ for (const spec of ABI_SPECS) {
   const sha256 = crypto.createHash('sha256').update(buf).digest('hex')
   const size = buf.length
   const name = assetNameForAbi(spec.abi)
-  const url = `https://github.com/${repo}/releases/download/${releaseTag}/${name}`
+  const dockBase = String(process.env.APPDOCK_PUBLIC_BASE_URL || '').trim().replace(/\/$/, '')
+  const dockSlug = String(process.env.APPDOCK_APP_SLUG || '').trim()
+  const url =
+    dockBase && dockSlug
+      ? `${dockBase}/api/v1/public/apps/${encodeURIComponent(dockSlug)}/files/${encodeURIComponent(name)}/download`
+      : `https://github.com/${repo}/releases/download/${releaseTag}/${name}`
   const entry = { url, sha256, size }
   for (const key of spec.platformKeys) {
     platforms[key] = entry

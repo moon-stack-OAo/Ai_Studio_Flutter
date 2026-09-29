@@ -256,6 +256,8 @@ jobs:
       - name: Generate latest.json
         env:
           GITHUB_REPOSITORY: ${{ github.repository }}
+          APPDOCK_PUBLIC_BASE_URL: ${{ vars.APPDOCK_PUBLIC_BASE_URL }}
+          APPDOCK_APP_SLUG: ${{ vars.APPDOCK_APP_SLUG }}
         shell: bash
         run: |
           set -euo pipefail
@@ -398,6 +400,8 @@ jobs:
       - name: Package APKs + android-latest.json
         env:
           GITHUB_REPOSITORY: ${{ github.repository }}
+          APPDOCK_PUBLIC_BASE_URL: ${{ vars.APPDOCK_PUBLIC_BASE_URL }}
+          APPDOCK_APP_SLUG: ${{ vars.APPDOCK_APP_SLUG }}
         shell: bash
         run: |
           VERSION="${{ needs.create-draft.outputs.version }}"

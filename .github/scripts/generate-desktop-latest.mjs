@@ -10,7 +10,9 @@
  *     --darwin-x64 dist/AI.Studio_1.0.0_x64.zip \
  *     --darwin-x64-sig dist/AI.Studio_1.0.0_x64.zip.sig
  *
- * 环境变量: GITHUB_REPOSITORY（默认 moon-stack-OAo/Ai_Studio_Flutter）
+ * 环境变量:
+ *   GITHUB_REPOSITORY（默认 moon-stack-OAo/Ai_Studio_Flutter）
+ *   APPDOCK_PUBLIC_BASE_URL + APPDOCK_APP_SLUG（可选；有则安装包 URL 走 AppDock 文件名直链）
  */
 import fs from 'node:fs'
 import path from 'node:path'
@@ -122,6 +124,11 @@ function requireSig(label, sigPath, assetName) {
 }
 
 function releaseUrl(assetName) {
+  const base = String(process.env.APPDOCK_PUBLIC_BASE_URL || '').trim().replace(/\/$/, '')
+  const slug = String(process.env.APPDOCK_APP_SLUG || '').trim()
+  if (base && slug) {
+    return `${base}/api/v1/public/apps/${encodeURIComponent(slug)}/files/${encodeURIComponent(assetName)}/download`
+  }
   return `https://github.com/${repo}/releases/download/${releaseTag}/${assetName}`
 }
 
