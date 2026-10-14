@@ -53,7 +53,7 @@
 - 改完根目录 `CHANGELOG.md` 后构建前：`node .github/scripts/sync-changelog-asset.mjs`（同步到 `packages/core/assets/CHANGELOG.md`，关于页运行时读取）。
 - 发版入口：推送 `v*` tag → `.github/workflows/release.yml`（draft → 双端产物 + `latest.json` / `android-latest.json`）。
 - Secrets：`TAURI_SIGNING_PRIVATE_KEY`（必填）、`TAURI_SIGNING_PRIVATE_KEY_PASSWORD`；可选 `ANDROID_KEY_*`。助手不创建、不回显、不提交私钥。
-- 产物命名：`AI.Studio_<ver>_x64-setup.exe` · `AI.Studio_<ver>_aarch64.zip` / `_x64.zip`（macOS，zip 内 `.app`）· `AI.Studio_<ver>_<abi>.apk`（`arm64-v8a` / `armeabi-v7a` / `x86_64`）；默认更新源指向本仓 Releases。
+- 产物命名：`AI.Studio_<ver>_x64-setup.exe` · `AI.Studio_<ver>_aarch64.zip` / `_x64.zip`（macOS，zip 内 `.app`）· `AI.Studio_<ver>_<abi>.apk`（`arm64-v8a` / `armeabi-v7a` / `x86_64`）· `AI.Studio_<ver>_ios.ipa`（未签名，不进更新清单，须重签后安装）；默认更新源指向本仓 Releases。
 - 未 push 前的多次本地修改视为同一版本演进；未明确要求 TAG 前不随意改版本号。
 
 ## OpenDesign 原型

@@ -73,6 +73,7 @@ const notes = [
   `| Android 64 位真机（常见） | APK | \`AI.Studio_${version}_arm64-v8a.apk\` |`,
   `| Android 32 位旧机 | APK | \`AI.Studio_${version}_armeabi-v7a.apk\` |`,
   `| Android x86_64 模拟器 | APK | \`AI.Studio_${version}_x86_64.apk\` |`,
+  `| iOS 真机 | 未签名 IPA（须重签后安装） | \`AI.Studio_${version}_ios.ipa\` |`,
   '',
   '**说明**',
   '',
@@ -80,8 +81,9 @@ const notes = [
   '- macOS 未做 Apple 公证：首次打开若被拦截，请在 Finder 中右键 `.app` →「打开」。',
   '- 若仍无法打开，可在「终端」执行（路径换成你的 `.app`）：`xattr -cr "/Applications/AI Studio.app"`，然后再打开。',
   '- Android 需允许「安装未知应用」。',
+  '- iOS 的 `.ipa` **未签名**，不能直接安装，也不走应用内自动更新。请用 Sideloadly / AltStore 等以 Apple ID 重签后再装真机。',
   '',
-  '已安装用户可在应用内「设置 → 关于与更新」检查更新（桌面：直链清单；Android：侧载清单）。',
+  '已安装用户可在应用内「设置 → 关于与更新」检查更新（桌面：直链清单；Android：侧载清单；iOS 无应用内安装）。',
   '',
 ].join('\n')
 

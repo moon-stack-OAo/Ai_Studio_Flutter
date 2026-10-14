@@ -1,7 +1,8 @@
-# 推送 v* tag：构建 Windows Inno + macOS zip（按芯片）+ Android APK，生成清单并发布 GitHub Release
+# 推送 v* tag：构建 Windows Inno + macOS zip（按芯片）+ Android APK + iOS 未签名 IPA，生成清单并发布 GitHub Release
 # 示例：git tag v1.0.0 && git push origin v1.0.0
 #
-# 流程：先创建 draft → Windows / macOS / Android 并行上传 → 汇总 latest.json → 校验资产后正式发布
+# 流程：先创建 draft → Windows / macOS / Android / iOS 并行上传 → 汇总 latest.json → 校验资产后正式发布
+# iOS 为未签名 IPA（不进 latest.json / android-latest.json）；真机须用 Sideloadly / AltStore 等以 Apple ID 重签后安装。
 #
 # Secrets（本仓）：
 # - TAURI_SIGNING_PRIVATE_KEY / TAURI_SIGNING_PRIVATE_KEY_PASSWORD（桌面 updater 签名，复用现网密钥）
@@ -437,8 +438,65 @@ jobs:
             android-latest.json \
             --clobber
 
+  # 未签名 IPA：随正式 Release 分发，但不进更新清单；真机须 Sideloadly / AltStore 等重签后安装。
+  publish-ios:
+    needs: create-draft
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: "3.44.5"
+          cache: true
+
+      - name: Pub get
+        run: flutter pub get
+
+      - name: Build iOS release (no codesign)
+        working-directory: apps/mobile_material
+        run: flutter build ios --release --no-codesign
+
+      - name: Package unsigned IPA
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="${{ needs.create-draft.outputs.version }}"
+          APP_DIR="apps/mobile_material/build/ios/iphoneos"
+          APP_PATH="$(find "$APP_DIR" -maxdepth 1 -name '*.app' -print | head -n 1)"
+          test -n "$APP_PATH"
+          test -d "$APP_PATH"
+          # 侧载工具对未签名 framework 更友好：adhoc 身份轻量签一层元数据
+          if [ -d "$APP_PATH/Frameworks" ]; then
+            find "$APP_PATH/Frameworks" -type d -name '*.framework' \
+              -exec codesign --force --sign - --preserve-metadata=identifier,entitlements {} \;
+          fi
+          mkdir -p dist/Payload
+          cp -R "$APP_PATH" dist/Payload/
+          OUT="dist/AI.Studio_${VERSION}_ios.ipa"
+          (
+            cd dist
+            zip -r9 -q "AI.Studio_${VERSION}_ios.ipa" Payload
+            rm -rf Payload
+          )
+          test -f "$OUT"
+          ls -lh "$OUT"
+          unzip -l "$OUT" | head -n 20
+
+      - name: Upload iOS asset to draft
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          TAG="${{ github.ref_name }}"
+          VERSION="${{ needs.create-draft.outputs.version }}"
+          gh release upload "$TAG" "dist/AI.Studio_${VERSION}_ios.ipa" --clobber
+
   publish-release:
-    needs: [create-draft, publish-windows, publish-macos, publish-desktop-manifest, publish-android]
+    needs: [create-draft, publish-windows, publish-macos, publish-desktop-manifest, publish-android, publish-ios]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -478,6 +536,7 @@ jobs:
           require '_x86_64\.apk$' "Android APK (x86_64)"
           require '^latest\.json$' "Desktop updater latest.json"
           require '^android-latest\.json$' "Android updater android-latest.json"
+          require '_ios\.ipa$' "iOS unsigned IPA"
 
           if [ "$missing" -ne 0 ]; then
             echo "::error::资产不完整，保持 draft，不正式发布"

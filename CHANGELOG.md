@@ -17,6 +17,7 @@
 
 ### Changed
 
+- **Release 附带未签名 iOS IPA**：`AI.Studio_<ver>_ios.ipa` 随 GitHub Release 分发，不进更新清单；真机须 Sideloadly / AltStore 等重签后安装
 - **自动更新优先 AppDock**：桌面与 Android 先拉 `https://appdock.livancen.top` 上应用 `ai-studio` 的版本列表；应用不存在或 AppDock 打不开时回退 GitHub `latest.json` / `android-latest.json`。需要访问口令时不回退
 - **更新口令**：AppDock 应用需要访问口令时，桌面与 Android 检查更新会弹出输入框；解锁后的会话写入本机安全存储，之后检查与下载自动携带
 
