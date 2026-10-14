@@ -262,6 +262,7 @@ class _ChatPageState extends State<ChatPage> {
             children: [
               Expanded(
                 child: MessageList(
+                  key: ValueKey(session?.id),
                   messages: messages,
                   recallEnabled: !streamingHere,
                   onRecallUser: (id) => _controller.recallUserMessage(id),

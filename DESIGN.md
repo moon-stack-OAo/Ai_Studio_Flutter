@@ -627,7 +627,7 @@ Flutter 落点：`packages/design_fluent` 与 `packages/design_material` 的 `Th
 |------------------|--------------------------------------|-------------------------------|
 | `deny`           | 不调用；向模型回灌「策略拒绝」                      | 未声明 / 用户显式禁用 / 未知危险名          |
 | `confirm_always` | **每次** `CHAT-TOOL-AUTH`              | `sideEffect=write` 或元数据未声明副作用 |
-| `confirm_once`   | 本会话（或本 Server 会话）首次确认后本会话内同 tool 可静默 | 用户显式降级的写操作 / 半可信读             |
+| `confirm_once`   | 当前聊天首次确认后，同 Server / tool 可静默；不跨聊天复用，配置或凭据变更后失效 | 用户显式降级的写操作 / 半可信读             |
 | `auto_allow`     | 静默执行                                 | 明确 `sideEffect=read` 且用户/清单允许 |
 
 **判定优先级**：单 tool 覆盖 > Server `defaultToolPolicy` > tool 元数据建议 > 客户端按副作用默认（未知/写 → `confirm_always`；明确读 → `auto_allow`）。`defaultToolPolicy` 为空表示「按副作用/元数据」。
@@ -715,7 +715,7 @@ Flutter 落点：`packages/design_fluent` 与 `packages/design_material` 的 `Th
 | SafeHttp 调用、错误码与用户可读文案键；`ProcessHost` **抽象接口**（无具体 `dart:io` Process 绑定亦可）                                                  | 某一端私有的「MCP 业务页面」却把协议堆在 app                                                             |
 |                                                                                                                             | **`Process.start` / 具体进程实现**：仅 `apps/desktop_fluent` 经 `ProcessHost` 注入；**mobile 不注入** |
 
-双端 UI **各自**实现 `CHAT-TOOL-*` 与 `SET-MCP-*`；禁止抽「换皮通用授权组件」跨 `design_*` 互引。移动端设置**不提供** stdio 表单；若备份导入含 `transport=stdio` 项，移动端标记不可用并提示「仅桌面支持」。
+双端 UI **各自**实现 `CHAT-TOOL-*` 与 `SET-MCP-*`；禁止抽「换皮通用授权组件」跨 `design_*` 互引。移动端设置**不提供** stdio 表单；若备份导入含 `transport=stdio` 项，移动端跳过并提示「仅桌面支持」。桌面备份导入不恢复本机命令确认，stdio 默认停用，须重新确认 command / args / env / cwd 后启用。
 
 #### 5.11.9 本期不做（P6 / P6-S 边界）
 

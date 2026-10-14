@@ -39,29 +39,28 @@ class MessageList extends StatefulWidget {
 
 class _MessageListState extends State<MessageList> {
   final ScrollController _scroll = ScrollController();
-  int _lastCount = 0;
-  String _lastTail = '';
 
   @override
   void didUpdateWidget(covariant MessageList oldWidget) {
     super.didUpdateWidget(oldWidget);
-    final count = widget.messages.length;
-    final tail = count == 0 ? '' : widget.messages.last.content;
-    final liveSig = widget.liveToolTraces
-        .map((t) => '${t.toolCallId}:${t.status.wire}')
-        .join('|');
-    final nextTail = '$tail#$liveSig';
-    if (count != _lastCount || nextTail != _lastTail) {
-      _lastCount = count;
-      _lastTail = nextTail;
+    if (widget.messages.length != oldWidget.messages.length ||
+        _tailSignature(widget) != _tailSignature(oldWidget)) {
       WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
     }
   }
 
+  String _tailSignature(MessageList list) {
+    final tail = list.messages.isEmpty ? '' : list.messages.last.content;
+    final liveSig = list.liveToolTraces
+        .map((t) => '${t.toolCallId}:${t.status.wire}')
+        .join('|');
+    return '$tail#$liveSig';
+  }
+
   void _scrollToBottom() {
-    if (!_scroll.hasClients) return;
+    if (!mounted || !_scroll.hasClients) return;
     _scroll.animateTo(
-      _scroll.position.maxScrollExtent,
+      0,
       duration: MaterialMotion.micro,
       curve: MaterialMotion.standard,
     );
@@ -100,16 +99,19 @@ class _MessageListState extends State<MessageList> {
     final extra = live.isEmpty ? 0 : 1;
     return ListView.builder(
       controller: _scroll,
+      // 末尾锚定在 offset=0，底部定位不依赖懒加载的总高度估算。
+      reverse: true,
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
       itemCount: items.length + extra,
       itemBuilder: (context, index) {
-        if (index >= items.length) {
+        final displayIndex = items.length + extra - index - 1;
+        if (displayIndex >= items.length) {
           return Align(
             alignment: Alignment.centerLeft,
             child: ToolCallTraceGroup(traces: live),
           );
         }
-        final item = items[index];
+        final item = items[displayIndex];
         if (item is ChatDisplayToolRound) {
           return Align(
             alignment: Alignment.centerLeft,
@@ -118,7 +120,8 @@ class _MessageListState extends State<MessageList> {
         }
         final msgItem = item as ChatDisplayMessage;
         final msg = msgItem.message;
-        final canRecall = widget.recallEnabled &&
+        final canRecall =
+            widget.recallEnabled &&
             msg.role == ChatRole.user &&
             msg.id == lastUserId;
         return Align(

@@ -75,10 +75,7 @@ class _SettingsAboutPageState extends State<SettingsAboutPage> {
     unawaited(() async {
       final unlocked = await unlock();
       if (!mounted) return;
-      _showInfoBar(
-        unlocked ? '已解锁「实验室」' : '已隐藏「实验室」',
-        InfoBarSeverity.info,
-      );
+      _showInfoBar(unlocked ? '已解锁「实验室」' : '已隐藏「实验室」', InfoBarSeverity.info);
     }());
   }
 
@@ -252,10 +249,7 @@ class _SettingsAboutPageState extends State<SettingsAboutPage> {
         final ok = await updater.downloadAndInstall(result: result);
         if (!mounted) return;
         if (!ok) {
-          _showInfoBar(
-            updater.lastError ?? '下载或安装失败',
-            InfoBarSeverity.error,
-          );
+          _showInfoBar(updater.lastError ?? '下载或安装失败', InfoBarSeverity.error);
         }
     }
   }
@@ -299,10 +293,7 @@ class _SettingsAboutPageState extends State<SettingsAboutPage> {
           }
           return;
         }
-        _showInfoBar(
-          result.errorMessage ?? '检查更新失败',
-          InfoBarSeverity.error,
-        );
+        _showInfoBar(result.errorMessage ?? '检查更新失败', InfoBarSeverity.error);
     }
   }
 
@@ -563,6 +554,7 @@ class _SettingsAboutPageState extends State<SettingsAboutPage> {
                 children: [
                   Text(
                     '将合并提供商、业务 MCP 与外观设置，并用备份中的会话替换本地会话。'
+                    '\n导入的本地 stdio 配置将禁用，须在 MCP 设置确认命令后启用。'
                     '${widget.generation?.busy == true ? '\n\n检测到进行中的生成，导入前将尝试停止。' : ''}',
                   ),
                   if (payload.includeSecrets) ...[
@@ -590,9 +582,9 @@ class _SettingsAboutPageState extends State<SettingsAboutPage> {
                       '此备份不含密钥，导入后本地 API Key / MCP Token 保持不变。',
                       style: TextStyle(
                         fontSize: 12,
-                        color: FluentTheme.of(ctx)
-                            .resources
-                            .textFillColorSecondary,
+                        color: FluentTheme.of(
+                          ctx,
+                        ).resources.textFillColorSecondary,
                       ),
                     ),
                   ],
@@ -811,225 +803,226 @@ class _SettingsAboutPageState extends State<SettingsAboutPage> {
           controller: scroll,
           padding: const EdgeInsets.fromLTRB(28, 16, 28, 16),
           children: [
-          Text(
-            '关于与更新',
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.w600,
-              color: tokens.ink,
-              fontFamily: tokens.fontFamily,
+            Text(
+              '关于与更新',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w600,
+                color: tokens.ink,
+                fontFamily: tokens.fontFamily,
+              ),
             ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            '版本信息、直链更新与桌面关闭行为。',
-            style: TextStyle(
-              fontSize: 13,
-              color: tokens.inkMuted,
-              fontFamily: tokens.fontFamily,
+            const SizedBox(height: 4),
+            Text(
+              '版本信息、直链更新与桌面关闭行为。',
+              style: TextStyle(
+                fontSize: 13,
+                color: tokens.inkMuted,
+                fontFamily: tokens.fontFamily,
+              ),
             ),
-          ),
-          const SizedBox(height: 12),
-          _SectionCard(
-            title: '更新',
-            trailing: statusPill,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: _onVersionPortalTap,
-                  child: Text(
-                    '版本 $_versionLabel · ${updateInstallPlatformLabel()}',
+            const SizedBox(height: 12),
+            _SectionCard(
+              title: '更新',
+              trailing: statusPill,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: _onVersionPortalTap,
+                    child: Text(
+                      '版本 $_versionLabel · ${updateInstallPlatformLabel()}',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: tokens.inkSecondary,
+                        fontFamily: tokens.fontFamily,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    !configured
+                        ? '更新通道：未配置更新源 · 不上架'
+                        : '更新通道：AppDock（完整性校验）· 不上架',
                     style: TextStyle(
-                      fontSize: 13,
+                      fontSize: 12,
+                      color: tokens.inkMuted,
+                      fontFamily: tokens.fontFamily,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      ToggleSwitch(
+                        checked: autoCheck,
+                        onChanged: !configured
+                            ? null
+                            : (v) => unawaited(_onToggleAutoCheck(v)),
+                        content: Text(
+                          '启动时自动检查更新',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: tokens.ink,
+                            fontFamily: tokens.fontFamily,
+                          ),
+                        ),
+                      ),
+                      const Spacer(),
+                      Button(
+                        onPressed: changelogEntries.isEmpty
+                            ? null
+                            : _onOpenChangelog,
+                        child: const Text('打开更新日志'),
+                      ),
+                      const SizedBox(width: 8),
+                      Button(
+                        onPressed: _onOpenLicenses,
+                        child: const Text('开源许可'),
+                      ),
+                      const SizedBox(width: 8),
+                      FilledButton(
+                        onPressed: (!configured || checking || downloading)
+                            ? null
+                            : _onCheckUpdate,
+                        child: checking
+                            ? const Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  SizedBox(
+                                    width: 14,
+                                    height: 14,
+                                    child: ProgressRing(strokeWidth: 2),
+                                  ),
+                                  SizedBox(width: 8),
+                                  Text('检查中…'),
+                                ],
+                              )
+                            : const Text('检查更新'),
+                      ),
+                    ],
+                  ),
+                  if (check != null && check.hasUpdate) ...[
+                    const SizedBox(height: 12),
+                    _UpdateAvailableCard(
+                      result: check,
+                      downloading: downloading,
+                      progress: progress,
+                      progressLabel: progressLabel,
+                      onInstall: _onDownloadAndInstall,
+                      onCancel: downloading
+                          ? () => updater?.cancelDownload()
+                          : null,
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            const SizedBox(height: 10),
+            _SectionCard(
+              title: '更新日志',
+              child: _changelogLoading
+                  ? const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 12),
+                      child: Center(child: ProgressRing()),
+                    )
+                  : ChangelogSection(
+                      entries: changelogEntries,
+                      currentVersionLabel: _versionLabel,
+                    ),
+            ),
+            const SizedBox(height: 10),
+            _SectionCard(
+              title: '关闭行为',
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  RadioGroup<String>(
+                    groupValue: close,
+                    onChanged: (value) {
+                      if (value != null) _setCloseBehavior(value);
+                    },
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        for (final opt in _closeOptions) ...[
+                          if (opt != _closeOptions.first)
+                            const SizedBox(height: 4),
+                          _CloseBehaviorTile(
+                            wire: opt.wire,
+                            title: opt.label,
+                            subtitle: opt.subtitle,
+                            selected: close == opt.wire,
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    '已生效：点击标题栏关闭或系统关闭时按此偏好执行；可随时改回「每次询问」。',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: tokens.inkMuted,
+                      fontFamily: tokens.fontFamily,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 10),
+            _SectionCard(
+              title: '数据',
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    _usageSummary(),
+                    style: TextStyle(
+                      fontSize: 12,
                       color: tokens.inkSecondary,
                       fontFamily: tokens.fontFamily,
                     ),
                   ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  !configured
-                      ? '更新通道：未配置更新源 · 不上架'
-                      : '更新通道：AppDock（完整性校验）· 不上架',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: tokens.inkMuted,
-                    fontFamily: tokens.fontFamily,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    ToggleSwitch(
-                      checked: autoCheck,
-                      onChanged: !configured
-                          ? null
-                          : (v) => unawaited(_onToggleAutoCheck(v)),
-                      content: Text(
-                        '启动时自动检查更新',
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: tokens.ink,
-                          fontFamily: tokens.fontFamily,
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      Button(
+                        onPressed: _busy ? null : _onExport,
+                        child: const Text('导出设置'),
+                      ),
+                      Button(
+                        onPressed: _busy ? null : _onImport,
+                        child: const Text('导入设置'),
+                      ),
+                      Tooltip(
+                        message: '清除本地数据（危险操作）',
+                        child: Semantics(
+                          button: true,
+                          label: '清除本地数据',
+                          child: Button(
+                            onPressed: _busy ? null : _onClearData,
+                            child: const Text('清除本地数据'),
+                          ),
                         ),
                       ),
-                    ),
-                    const Spacer(),
-                    Button(
-                      onPressed: changelogEntries.isEmpty
-                          ? null
-                          : _onOpenChangelog,
-                      child: const Text('打开更新日志'),
-                    ),
-                    const SizedBox(width: 8),
-                    Button(
-                      onPressed: _onOpenLicenses,
-                      child: const Text('开源许可'),
-                    ),
-                    const SizedBox(width: 8),
-                    FilledButton(
-                      onPressed: (!configured || checking || downloading)
-                          ? null
-                          : _onCheckUpdate,
-                      child: checking
-                          ? const Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                SizedBox(
-                                  width: 14,
-                                  height: 14,
-                                  child: ProgressRing(strokeWidth: 2),
-                                ),
-                                SizedBox(width: 8),
-                                Text('检查中…'),
-                              ],
-                            )
-                          : const Text('检查更新'),
-                    ),
-                  ],
-                ),
-                if (check != null && check.hasUpdate) ...[
-                  const SizedBox(height: 12),
-                  _UpdateAvailableCard(
-                    result: check,
-                    downloading: downloading,
-                    progress: progress,
-                    progressLabel: progressLabel,
-                    onInstall: _onDownloadAndInstall,
-                    onCancel:
-                        downloading ? () => updater?.cancelDownload() : null,
-                  ),
-                ],
-              ],
-            ),
-          ),
-          const SizedBox(height: 10),
-          _SectionCard(
-            title: '更新日志',
-            child: _changelogLoading
-                ? const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 12),
-                    child: Center(child: ProgressRing()),
-                  )
-                : ChangelogSection(
-                    entries: changelogEntries,
-                    currentVersionLabel: _versionLabel,
-                  ),
-          ),
-          const SizedBox(height: 10),
-          _SectionCard(
-            title: '关闭行为',
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                RadioGroup<String>(
-                  groupValue: close,
-                  onChanged: (value) {
-                    if (value != null) _setCloseBehavior(value);
-                  },
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      for (final opt in _closeOptions) ...[
-                        if (opt != _closeOptions.first)
-                          const SizedBox(height: 4),
-                        _CloseBehaviorTile(
-                          wire: opt.wire,
-                          title: opt.label,
-                          subtitle: opt.subtitle,
-                          selected: close == opt.wire,
-                        ),
-                      ],
                     ],
                   ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  '已生效：点击标题栏关闭或系统关闭时按此偏好执行；可随时改回「每次询问」。',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: tokens.inkMuted,
-                    fontFamily: tokens.fontFamily,
+                  const SizedBox(height: 8),
+                  Text(
+                    '默认导出不含 API Key / MCP Token。含密钥导出、导入密钥与全部清除均需确认。',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: tokens.inkMuted,
+                      fontFamily: tokens.fontFamily,
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-          const SizedBox(height: 10),
-          _SectionCard(
-            title: '数据',
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  _usageSummary(),
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: tokens.inkSecondary,
-                    fontFamily: tokens.fontFamily,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    Button(
-                      onPressed: _busy ? null : _onExport,
-                      child: const Text('导出设置'),
-                    ),
-                    Button(
-                      onPressed: _busy ? null : _onImport,
-                      child: const Text('导入设置'),
-                    ),
-                    Tooltip(
-                      message: '清除本地数据（危险操作）',
-                      child: Semantics(
-                        button: true,
-                        label: '清除本地数据',
-                        child: Button(
-                          onPressed: _busy ? null : _onClearData,
-                          child: const Text('清除本地数据'),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  '默认导出不含 API Key / MCP Token。含密钥导出、导入密钥与全部清除均需确认。',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: tokens.inkMuted,
-                    fontFamily: tokens.fontFamily,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
+          ],
         ),
       ),
     );
@@ -1042,16 +1035,16 @@ enum _ClearChoice {
   all;
 
   String get label => switch (this) {
-        sessions => '仅会话（对话 / 生图 / 生视频）',
-        media => '仅媒体缓存',
-        all => '全部（含设置、MCP 与密钥）',
-      };
+    sessions => '仅会话（对话 / 生图 / 生视频）',
+    media => '仅媒体缓存',
+    all => '全部（含设置、MCP 与密钥）',
+  };
 
   ClearLocalDataFlags get flags => switch (this) {
-        sessions => ClearLocalDataFlags.sessionsOnly,
-        media => ClearLocalDataFlags.mediaOnly,
-        all => ClearLocalDataFlags.all,
-      };
+    sessions => ClearLocalDataFlags.sessionsOnly,
+    media => ClearLocalDataFlags.mediaOnly,
+    all => ClearLocalDataFlags.all,
+  };
 }
 
 class _UpdateAvailableCard extends StatelessWidget {
@@ -1125,10 +1118,7 @@ class _UpdateAvailableCard extends StatelessWidget {
               onCancel: onCancel,
             )
           else
-            FilledButton(
-              onPressed: onInstall,
-              child: const Text('下载并安装'),
-            ),
+            FilledButton(onPressed: onInstall, child: const Text('下载并安装')),
         ],
       ),
     );
@@ -1154,14 +1144,12 @@ class _DownloadActionProgress extends StatelessWidget {
     final pct = fraction == null ? null : (fraction * 100).clamp(0, 100);
     final status = (progressLabel != null && progressLabel!.isNotEmpty)
         ? progressLabel!
-        : (pct != null
-            ? '正在下载… ${pct.toStringAsFixed(0)}%'
-            : '正在下载…');
+        : (pct != null ? '正在下载… ${pct.toStringAsFixed(0)}%' : '正在下载…');
     final detail = progress == null
         ? null
         : (progress!.total == null
-            ? _formatBytes(progress!.received)
-            : '${_formatBytes(progress!.received)} / ${_formatBytes(progress!.total!)}');
+              ? _formatBytes(progress!.received)
+              : '${_formatBytes(progress!.received)} / ${_formatBytes(progress!.total!)}');
 
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,
@@ -1223,10 +1211,7 @@ class _DownloadActionProgress extends StatelessWidget {
         ),
         if (onCancel != null) ...[
           const SizedBox(width: 8),
-          Button(
-            onPressed: onCancel,
-            child: const Text('取消'),
-          ),
+          Button(onPressed: onCancel, child: const Text('取消')),
         ],
       ],
     );
@@ -1240,21 +1225,9 @@ String _formatBytes(int n) {
 }
 
 const _closeOptions = <({String wire, String label, String subtitle})>[
-  (
-    wire: 'ask',
-    label: '每次询问',
-    subtitle: '弹出确认：退出 / 最小化到托盘',
-  ),
-  (
-    wire: 'quit',
-    label: '直接退出',
-    subtitle: '结束进程，不保留托盘',
-  ),
-  (
-    wire: 'tray',
-    label: '最小化到托盘',
-    subtitle: '窗口隐藏，托盘菜单可还原 / 退出',
-  ),
+  (wire: 'ask', label: '每次询问', subtitle: '弹出确认：退出 / 最小化到托盘'),
+  (wire: 'quit', label: '直接退出', subtitle: '结束进程，不保留托盘'),
+  (wire: 'tray', label: '最小化到托盘', subtitle: '窗口隐藏，托盘菜单可还原 / 退出'),
 ];
 
 class _LicenseEntryBlock extends StatelessWidget {
@@ -1346,11 +1319,7 @@ class _LicenseEntryBlock extends StatelessWidget {
 }
 
 class _SectionCard extends StatelessWidget {
-  const _SectionCard({
-    required this.title,
-    required this.child,
-    this.trailing,
-  });
+  const _SectionCard({required this.title, required this.child, this.trailing});
 
   final String title;
   final Widget child;
@@ -1502,10 +1471,7 @@ class _AccessCodeDialogState extends State<_AccessCodeDialog> {
           onPressed: () => Navigator.pop(context),
           child: const Text('取消'),
         ),
-        FilledButton(
-          onPressed: _submit,
-          child: const Text('解锁'),
-        ),
+        FilledButton(onPressed: _submit, child: const Text('解锁')),
       ],
     );
   }

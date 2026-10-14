@@ -93,8 +93,7 @@ class _SettingsMcpPageState extends State<SettingsMcpPage> {
     if (!mounted) return;
     final exists = _repo.servers.any((s) => s.id == _selectedId);
     if (!exists) {
-      _selectedId =
-          _repo.servers.isEmpty ? null : _repo.servers.first.id;
+      _selectedId = _repo.servers.isEmpty ? null : _repo.servers.first.id;
       _loadFormFromSelected();
     }
     setState(() {});
@@ -137,10 +136,7 @@ class _SettingsMcpPageState extends State<SettingsMcpPage> {
     return keys.map((k) => '$k=${env[k]}').join('\n');
   }
 
-  String _stdioCommandSummary({
-    String? command,
-    List<String>? args,
-  }) {
+  String _stdioCommandSummary({String? command, List<String>? args}) {
     final cmd = (command ?? _commandCtrl.text).trim();
     final a = args ?? _parseArgsLines(_argsCtrl.text);
     if (cmd.isEmpty) return '';
@@ -175,14 +171,14 @@ class _SettingsMcpPageState extends State<SettingsMcpPage> {
       _cwdCtrl.text = s.cwd ?? '';
       _envCtrl.text = _formatEnv(s.env);
       _transport = s.transport;
-      _authKind = s.authKind == McpAuthKind.oauth
-          ? McpAuthKind.none
-          : s.authKind;
+      _authKind =
+          s.authKind == McpAuthKind.oauth ? McpAuthKind.none : s.authKind;
       _enabled = s.enabled;
       _hasStoredToken = await _repo.hasBearerSecret(s.id);
-      _confirmedStdioSummary = s.transport == McpTransport.stdio && s.hasCommand
-          ? _stdioCommandSummary(command: s.command, args: s.args)
-          : null;
+      _confirmedStdioSummary =
+          s.transport == McpTransport.stdio && s.isStdioApproved
+              ? mcpStdioFingerprint(s)
+              : null;
       if (s.lastError != null && s.lastError!.isNotEmpty) {
         _statusText = s.lastError;
         _statusOk = s.probeStatus == McpProbeStatus.ready;
@@ -226,9 +222,20 @@ class _SettingsMcpPageState extends State<SettingsMcpPage> {
   Future<bool> _confirmStdioLaunch() async {
     final summary = _stdioCommandSummary();
     if (summary.isEmpty) return false;
-    if (_confirmedStdioSummary == summary) return true;
+    final fingerprint = mcpStdioFingerprint(
+      McpServerConfig(
+        id: _selectedId ?? '',
+        displayName: '',
+        transport: McpTransport.stdio,
+        command: _commandCtrl.text.trim(),
+        args: _parseArgsLines(_argsCtrl.text),
+        env: _parseEnvLines(_envCtrl.text),
+        cwd: _cwdCtrl.text.trim().isEmpty ? null : _cwdCtrl.text.trim(),
+      ),
+    );
+    if (_confirmedStdioSummary == fingerprint) return true;
     final cwd = _cwdCtrl.text.trim();
-    final envCount = _parseEnvLines(_envCtrl.text).length;
+    final envNames = _parseEnvLines(_envCtrl.text).keys.join('、');
     final ok = await showFluentConfirmDialog(
       context: context,
       title: '确认启动本机进程？',
@@ -242,13 +249,10 @@ class _SettingsMcpPageState extends State<SettingsMcpPage> {
             summary,
             style: const TextStyle(fontFamily: 'Consolas', fontSize: 12),
           ),
-          if (cwd.isNotEmpty) ...[
-            const SizedBox(height: 8),
-            Text('工作目录：$cwd'),
-          ],
-          if (envCount > 0) ...[
+          if (cwd.isNotEmpty) ...[const SizedBox(height: 8), Text('工作目录：$cwd')],
+          if (envNames.isNotEmpty) ...[
             const SizedBox(height: 4),
-            Text('额外环境变量：$envCount 项'),
+            Text('环境变量（值已隐藏）：$envNames'),
           ],
           const SizedBox(height: 10),
           const Text('请确认命令来源可信。取消则不会保存或启动。'),
@@ -260,7 +264,7 @@ class _SettingsMcpPageState extends State<SettingsMcpPage> {
       constraints: const BoxConstraints(maxWidth: 480),
     );
     if (ok) {
-      _confirmedStdioSummary = summary;
+      _confirmedStdioSummary = fingerprint;
     }
     return ok;
   }
@@ -310,10 +314,7 @@ class _SettingsMcpPageState extends State<SettingsMcpPage> {
                       Text(
                         '粘贴本 App 推荐的 mcpServers，或兼容 OpenCode 的 mcp / '
                         'Cursor 的 mcpServers。Bearer 写入本机凭据库，不会在结果中回显。',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: tokens.inkMuted,
-                        ),
+                        style: TextStyle(fontSize: 12, color: tokens.inkMuted),
                       ),
                       const SizedBox(height: 10),
                       TextBox(
@@ -344,8 +345,7 @@ class _SettingsMcpPageState extends State<SettingsMcpPage> {
                             } else if (!r.hasEntries && r.skipped.isEmpty) {
                               parseHint = '没有可导入的 Server';
                             } else if (!r.hasEntries) {
-                              parseHint =
-                                  '没有可导入项（已跳过 ${r.skipped.length} 个）';
+                              parseHint = '没有可导入项（已跳过 ${r.skipped.length} 个）';
                             } else {
                               parseHint = null;
                             }
@@ -357,10 +357,7 @@ class _SettingsMcpPageState extends State<SettingsMcpPage> {
                         const SizedBox(height: 8),
                         Text(
                           parseHint!,
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: tokens.danger,
-                          ),
+                          style: TextStyle(fontSize: 12, color: tokens.danger),
                         ),
                       ],
                       if (preview != null && preview!.hasEntries) ...[
@@ -434,7 +431,8 @@ class _SettingsMcpPageState extends State<SettingsMcpPage> {
         final d = e.draft;
         final cmd = d.command ?? '';
         final line = d.args.isEmpty ? cmd : '$cmd ${d.args.join(' ')}';
-        return '· ${e.name}：$line';
+        return '· ${e.name}：$line\n工作目录：${d.cwd ?? '默认'}'
+            '\n环境变量（值已隐藏）：${d.env.keys.join('、')}';
       }).join('\n');
       final ok = await showFluentConfirmDialog(
         context: context,
@@ -443,9 +441,7 @@ class _SettingsMcpPageState extends State<SettingsMcpPage> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              '导入配置含本地 stdio，将允许本应用按配置启动本机进程（仅桌面）：',
-            ),
+            const Text('导入配置含本地 stdio，将允许本应用按配置启动本机进程（仅桌面）：'),
             const SizedBox(height: 10),
             SelectableText(
               lines,
@@ -468,8 +464,10 @@ class _SettingsMcpPageState extends State<SettingsMcpPage> {
     var imported = 0;
     String? lastId;
     for (final e in result.entries) {
-      final displayName =
-          uniqueMcpImportDisplayName(e.draft.displayName, existingNames);
+      final displayName = uniqueMcpImportDisplayName(
+        e.draft.displayName,
+        existingNames,
+      );
       existingNames.add(displayName);
       final d = e.draft;
       final token = e.bearerToken?.trim();
@@ -481,11 +479,11 @@ class _SettingsMcpPageState extends State<SettingsMcpPage> {
         args: d.args,
         env: d.env,
         cwd: d.cwd,
-        authKind: token != null && token.isNotEmpty
-            ? McpAuthKind.bearer
-            : d.authKind,
+        authKind:
+            token != null && token.isNotEmpty ? McpAuthKind.bearer : d.authKind,
         bearerToken: token,
         enabled: d.enabled,
+        stdioConfirmed: d.transport == McpTransport.stdio,
       );
       lastId = id;
       imported++;
@@ -510,16 +508,13 @@ class _SettingsMcpPageState extends State<SettingsMcpPage> {
     if (d.transport == McpTransport.stdio) {
       final cmd = d.command ?? '';
       final line = d.args.isEmpty ? cmd : '$cmd ${d.args.join(' ')}';
-      final clipped =
-          line.length > 72 ? '${line.substring(0, 72)}…' : line;
+      final clipped = line.length > 72 ? '${line.substring(0, 72)}…' : line;
       return '· ${e.name} · stdio · $clipped';
     }
-    final url = d.baseUrl.length > 64
-        ? '${d.baseUrl.substring(0, 64)}…'
-        : d.baseUrl;
-    final auth = e.bearerToken != null && e.bearerToken!.isNotEmpty
-        ? ' · Bearer'
-        : '';
+    final url =
+        d.baseUrl.length > 64 ? '${d.baseUrl.substring(0, 64)}…' : d.baseUrl;
+    final auth =
+        e.bearerToken != null && e.bearerToken!.isNotEmpty ? ' · Bearer' : '';
     return '· ${e.name} · http · $url$auth';
   }
 
@@ -570,18 +565,14 @@ class _SettingsMcpPageState extends State<SettingsMcpPage> {
       clearCommand: _transport != McpTransport.stdio,
       args: _transport == McpTransport.stdio ? args : const [],
       env: _transport == McpTransport.stdio ? env : const {},
-      cwd: _transport == McpTransport.stdio && cwdRaw.isNotEmpty
-          ? cwdRaw
-          : null,
+      cwd:
+          _transport == McpTransport.stdio && cwdRaw.isNotEmpty ? cwdRaw : null,
       clearCwd: _transport != McpTransport.stdio || cwdRaw.isEmpty,
       enabled: _enabled,
-      authKind: _transport == McpTransport.stdio
-          ? McpAuthKind.none
-          : _authKind,
+      authKind: _transport == McpTransport.stdio ? McpAuthKind.none : _authKind,
     );
 
-    if (_transport == McpTransport.stdio ||
-        _authKind == McpAuthKind.none) {
+    if (_transport == McpTransport.stdio || _authKind == McpAuthKind.none) {
       await _repo.clearBearerSecret(current.id);
       next = next.copyWith(
         authKind: McpAuthKind.none,
@@ -607,7 +598,7 @@ class _SettingsMcpPageState extends State<SettingsMcpPage> {
       }
     }
 
-    await _repo.update(next);
+    await _repo.update(next, stdioConfirmed: _transport == McpTransport.stdio);
     _tokenCtrl.clear();
     await _loadFormFromSelected();
     _showInfoBar('已保存', InfoBarSeverity.success);
@@ -634,8 +625,7 @@ class _SettingsMcpPageState extends State<SettingsMcpPage> {
     if (!ok) return;
     await _repo.delete(current.id);
     setState(() {
-      _selectedId =
-          _repo.servers.isEmpty ? null : _repo.servers.first.id;
+      _selectedId = _repo.servers.isEmpty ? null : _repo.servers.first.id;
     });
     await _loadFormFromSelected();
     _showInfoBar('已删除', InfoBarSeverity.success);
@@ -653,9 +643,7 @@ class _SettingsMcpPageState extends State<SettingsMcpPage> {
     if (current == null) return;
     if (!_canProbe) {
       _showInfoBar(
-        _transport == McpTransport.stdio
-            ? '请先填写 command'
-            : '请先填写 Base URL',
+        _transport == McpTransport.stdio ? '请先填写 command' : '请先填写 Base URL',
         InfoBarSeverity.warning,
       );
       return;
@@ -668,8 +656,11 @@ class _SettingsMcpPageState extends State<SettingsMcpPage> {
       final saved = await _save();
       if (!saved) return;
     }
-    final server = _repo.findById(current.id);
-    if (server == null || !server.canExposeTools) {
+    var server = _repo.findById(current.id);
+    if (server == null ||
+        (server.transport == McpTransport.stdio
+            ? !server.hasCommand
+            : !server.hasBaseUrl)) {
       _showInfoBar(
         _transport == McpTransport.stdio
             ? '请先保存有效的 command'
@@ -677,6 +668,10 @@ class _SettingsMcpPageState extends State<SettingsMcpPage> {
         InfoBarSeverity.warning,
       );
       return;
+    }
+    if (server.transport == McpTransport.stdio) {
+      await _repo.update(server, stdioConfirmed: true);
+      server = _repo.findById(current.id)!;
     }
 
     setState(() {
@@ -752,7 +747,10 @@ class _SettingsMcpPageState extends State<SettingsMcpPage> {
     }
   }
 
-  Future<void> _setToolPolicy(String toolName, McpToolPolicyLevel? level) async {
+  Future<void> _setToolPolicy(
+    String toolName,
+    McpToolPolicyLevel? level,
+  ) async {
     final id = _selectedId;
     if (id == null) return;
     await _repo.setToolPolicyOverride(id, toolName, level);
@@ -838,8 +836,7 @@ class _SettingsMcpPageState extends State<SettingsMcpPage> {
                         : BackToTopHost(
                             builder: (context, scroll) => ListView.separated(
                               controller: scroll,
-                              padding:
-                                  const EdgeInsets.fromLTRB(10, 0, 10, 16),
+                              padding: const EdgeInsets.fromLTRB(10, 0, 10, 16),
                               itemCount: servers.length,
                               separatorBuilder: (_, _) =>
                                   const SizedBox(height: 6),
@@ -978,10 +975,7 @@ class _McpListTile extends StatelessWidget {
 
     final meta = isStdio
         ? (server.hasCommand
-            ? [
-                server.command!.trim(),
-                ...server.args,
-              ].join(' ')
+            ? [server.command!.trim(), ...server.args].join(' ')
             : '未填写 command')
         : (server.baseUrl.trim().isNotEmpty
             ? server.baseUrl.trim()
@@ -1018,8 +1012,7 @@ class _McpListTile extends StatelessWidget {
               ),
               Container(
                 margin: const EdgeInsets.only(right: 6),
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                 decoration: BoxDecoration(
                   color: tokens.surfaceMuted,
                   borderRadius: BorderRadius.circular(999),
@@ -1035,8 +1028,7 @@ class _McpListTile extends StatelessWidget {
                 ),
               ),
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                 decoration: BoxDecoration(
                   color: pillBg,
                   borderRadius: BorderRadius.circular(999),
@@ -1283,10 +1275,7 @@ class _McpFormState extends State<_McpForm> {
                     : widget.authKind,
                 isExpanded: true,
                 items: const [
-                  ComboBoxItem(
-                    value: McpAuthKind.none,
-                    child: Text('无鉴权'),
-                  ),
+                  ComboBoxItem(value: McpAuthKind.none, child: Text('无鉴权')),
                   ComboBoxItem(
                     value: McpAuthKind.bearer,
                     child: Text('Bearer Token'),
@@ -1306,8 +1295,7 @@ class _McpFormState extends State<_McpForm> {
                   child: TextBox(
                     controller: widget.tokenCtrl,
                     obscureText: widget.obscureToken,
-                    placeholder:
-                        widget.hasStoredToken ? '••••••••' : 'token…',
+                    placeholder: widget.hasStoredToken ? '••••••••' : 'token…',
                     onChanged: widget.onFieldChanged,
                     suffix: IconButton(
                       icon: Icon(
@@ -1340,9 +1328,7 @@ class _McpFormState extends State<_McpForm> {
                   onPressed: (!widget.canProbe || widget.probing)
                       ? null
                       : widget.onProbe,
-                  child: Text(
-                    widget.probing ? '探测中…' : '测试连接 / 刷新 tools',
-                  ),
+                  child: Text(widget.probing ? '探测中…' : '测试连接 / 刷新 tools'),
                 ),
                 if (!widget.canProbe)
                   Text(
@@ -1358,9 +1344,7 @@ class _McpFormState extends State<_McpForm> {
                     '● ${widget.statusText}',
                     style: TextStyle(
                       fontSize: 12,
-                      color: widget.statusOk
-                          ? tokens.success
-                          : tokens.danger,
+                      color: widget.statusOk ? tokens.success : tokens.danger,
                       fontFamily: tokens.fontFamily,
                     ),
                   ),
@@ -1465,9 +1449,7 @@ class _McpFormState extends State<_McpForm> {
                   const SizedBox(height: 14),
                   DecoratedBox(
                     decoration: BoxDecoration(
-                      border: Border(
-                        bottom: BorderSide(color: tokens.border),
-                      ),
+                      border: Border(bottom: BorderSide(color: tokens.border)),
                     ),
                     child: Row(
                       children: [
@@ -1513,8 +1495,7 @@ class _McpFormState extends State<_McpForm> {
                                 ),
                               )
                             : Column(
-                                crossAxisAlignment:
-                                    CrossAxisAlignment.stretch,
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
                                 children: [
                                   Text(
                                     '按工具覆盖（可选）',
@@ -1538,8 +1519,7 @@ class _McpFormState extends State<_McpForm> {
                                         defaultToolPolicy:
                                             widget.defaultToolPolicy,
                                         overrides: widget.policyOverrides,
-                                        onPolicyChanged:
-                                            widget.onPolicyChanged,
+                                        onPolicyChanged: widget.onPolicyChanged,
                                       ),
                                     ),
                                   ),
@@ -1574,8 +1554,7 @@ class _McpFormState extends State<_McpForm> {
                 Button(
                   onPressed: widget.onDelete,
                   style: ButtonStyle(
-                    foregroundColor:
-                        WidgetStatePropertyAll(tokens.danger),
+                    foregroundColor: WidgetStatePropertyAll(tokens.danger),
                   ),
                   child: const Text('删除'),
                 ),
@@ -1828,10 +1807,7 @@ class _ToolsPolicyTable extends StatelessWidget {
                               _policyLabel(null, tool, defaultToolPolicy),
                             ),
                           ),
-                          const ComboBoxItem(
-                            value: 'deny',
-                            child: Text('拒绝'),
-                          ),
+                          const ComboBoxItem(value: 'deny', child: Text('拒绝')),
                           const ComboBoxItem(
                             value: 'confirm_always',
                             child: Text('每次确认'),
@@ -1907,11 +1883,7 @@ class _Section extends StatelessWidget {
 }
 
 class _LabeledField extends StatelessWidget {
-  const _LabeledField({
-    required this.label,
-    required this.child,
-    this.hint,
-  });
+  const _LabeledField({required this.label, required this.child, this.hint});
 
   final String label;
   final Widget child;

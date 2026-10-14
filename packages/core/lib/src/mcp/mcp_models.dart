@@ -4,6 +4,43 @@
 /// HTTP Streamable JSON-RPC Client 与 Facade 编排见 P6-2（已落地子集）。
 library;
 
+import 'dart:convert';
+
+import 'package:crypto/crypto.dart';
+
+String mcpEnvironmentSecretKey(String serverId) => 'core.mcp.env.$serverId';
+
+/// 本机命令确认与工具授权绑定到配置内容，不能由备份恢复。
+String mcpStdioFingerprint(McpServerConfig server) => sha256
+    .convert(
+      utf8.encode(
+        jsonEncode({
+          'command': server.command,
+          'args': server.args,
+          'cwd': server.cwd,
+          'env': {
+            for (final key in (server.env.keys.toList()..sort()))
+              key: server.env[key],
+          },
+        }),
+      ),
+    )
+    .toString();
+
+String mcpAuthorizationFingerprint(McpServerConfig server) => jsonEncode({
+      'transport': server.transport.wire,
+      'baseUrl': server.baseUrl,
+      'stdio': mcpStdioFingerprint(server),
+      'enabled': server.enabled,
+      'authKind': server.authKind.wire,
+      'authSecretRef': server.authSecretRef,
+      'defaultToolPolicy': server.defaultToolPolicy?.wire,
+      'overrides': {
+        for (final key in (server.toolPolicyOverrides.keys.toList()..sort()))
+          key: server.toolPolicyOverrides[key]!.wire,
+      },
+    });
+
 /// MCP 传输方式（DESIGN §5.11.5 · P6-S）。
 ///
 /// [http] 双端；[stdio] 仅桌面（经 [ProcessHost]）。
@@ -194,6 +231,7 @@ class McpServerConfig {
     this.command,
     this.args = const [],
     this.env = const {},
+    this.stdioApproval,
     this.cwd,
     this.enabled = true,
     this.authKind = McpAuthKind.none,
@@ -224,9 +262,13 @@ class McpServerConfig {
 
   /// stdio 额外环境变量。
   ///
-  /// prefs [toJsonMeta] 可原样持久化非空 env；**备份默认**经 [toJsonForBackup]
-  /// 在 `includeSecrets: false` 时清空（含密钥的值勿依赖默认备份）。
+  /// 仅内存持有明文；prefs 保存安全存储引用，备份须显式选择含密钥。
   final Map<String, String> env;
+
+  /// 仅本机持久化的命令确认指纹；备份不导出、不恢复。
+  final String? stdioApproval;
+
+  bool get isStdioApproved => stdioApproval == mcpStdioFingerprint(this);
 
   /// stdio 工作目录（可选）。
   final String? cwd;
@@ -265,7 +307,7 @@ class McpServerConfig {
     if (!enabled) return false;
     return switch (transport) {
       McpTransport.http => hasBaseUrl,
-      McpTransport.stdio => hasCommand,
+      McpTransport.stdio => hasCommand && isStdioApproved,
     };
   }
 
@@ -278,6 +320,8 @@ class McpServerConfig {
     bool clearCommand = false,
     List<String>? args,
     Map<String, String>? env,
+    String? stdioApproval,
+    bool clearStdioApproval = false,
     String? cwd,
     bool clearCwd = false,
     bool? enabled,
@@ -304,20 +348,20 @@ class McpServerConfig {
       command: clearCommand ? null : (command ?? this.command),
       args: args ?? this.args,
       env: env ?? this.env,
+      stdioApproval:
+          clearStdioApproval ? null : (stdioApproval ?? this.stdioApproval),
       cwd: clearCwd ? null : (cwd ?? this.cwd),
       enabled: enabled ?? this.enabled,
       authKind: authKind ?? this.authKind,
-      authSecretRef: clearAuthSecretRef
-          ? null
-          : (authSecretRef ?? this.authSecretRef),
+      authSecretRef:
+          clearAuthSecretRef ? null : (authSecretRef ?? this.authSecretRef),
       defaultToolPolicy: clearDefaultToolPolicy
           ? null
           : (defaultToolPolicy ?? this.defaultToolPolicy),
       toolPolicyOverrides: toolPolicyOverrides ?? this.toolPolicyOverrides,
       toolsCache: toolsCache ?? this.toolsCache,
-      lastProbeAtMs: clearLastProbeAtMs
-          ? null
-          : (lastProbeAtMs ?? this.lastProbeAtMs),
+      lastProbeAtMs:
+          clearLastProbeAtMs ? null : (lastProbeAtMs ?? this.lastProbeAtMs),
       lastError: clearLastError ? null : (lastError ?? this.lastError),
       probeStatus: probeStatus ?? this.probeStatus,
       callTimeoutSeconds: clearCallTimeoutSeconds
@@ -328,7 +372,7 @@ class McpServerConfig {
 
   /// 元数据 JSON（不含 Bearer 明文；prefs 用）。
   ///
-  /// stdio `env` 非空时写入（本机 prefs）；备份请用 [toJsonForBackup]。
+  /// env 明文不进入元数据；由生产存储单独写入 SecretStore。
   Map<String, dynamic> toJsonMeta() => {
         'id': id,
         'displayName': displayName,
@@ -336,7 +380,8 @@ class McpServerConfig {
         'baseUrl': baseUrl,
         if (command != null && command!.trim().isNotEmpty) 'command': command,
         if (args.isNotEmpty) 'args': args,
-        if (env.isNotEmpty) 'env': env,
+        if (env.isNotEmpty) 'envSecretRef': mcpEnvironmentSecretKey(id),
+        if (stdioApproval != null) 'stdioApproval': stdioApproval,
         if (cwd != null && cwd!.trim().isNotEmpty) 'cwd': cwd,
         'enabled': enabled,
         'authKind': authKind.wire,
@@ -364,12 +409,13 @@ class McpServerConfig {
     String? authToken,
     bool includeSecrets = false,
   }) {
-    final map = Map<String, dynamic>.from(toJsonMeta())..remove('authSecretRef');
-    if (!includeSecrets) {
-      map.remove('env');
-    }
+    final map = Map<String, dynamic>.from(toJsonMeta())
+      ..remove('authSecretRef')
+      ..remove('envSecretRef')
+      ..remove('stdioApproval');
+    if (includeSecrets) map['env'] = env;
     final token = authToken?.trim() ?? '';
-    if (token.isNotEmpty) {
+    if (includeSecrets && token.isNotEmpty) {
       map['authToken'] = token;
     }
     return map;
@@ -430,14 +476,16 @@ class McpServerConfig {
           : commandRaw.trim(),
       args: args,
       env: env,
+      stdioApproval: json['stdioApproval'] as String?,
       cwd: (cwdRaw == null || cwdRaw.trim().isEmpty) ? null : cwdRaw.trim(),
       enabled: json['enabled'] != false,
       authKind: McpAuthKind.tryParse(json['authKind']?.toString()) ??
           McpAuthKind.none,
       authSecretRef:
           (secretRef == null || secretRef.isEmpty) ? null : secretRef,
-      defaultToolPolicy:
-          McpToolPolicyLevel.tryParse(json['defaultToolPolicy']?.toString()),
+      defaultToolPolicy: McpToolPolicyLevel.tryParse(
+        json['defaultToolPolicy']?.toString(),
+      ),
       toolPolicyOverrides: overrides,
       toolsCache: tools,
       lastProbeAtMs: (json['lastProbeAtMs'] as num?)?.toInt(),
@@ -448,8 +496,7 @@ class McpServerConfig {
   }
 
   @override
-  String toString() =>
-      'McpServerConfig(id: $id, displayName: $displayName, '
+  String toString() => 'McpServerConfig(id: $id, displayName: $displayName, '
       'transport: ${transport.wire}, baseUrl: $baseUrl, '
       'command: $command, enabled: $enabled, authKind: ${authKind.wire})';
 }
@@ -497,8 +544,7 @@ class McpToolDescriptor {
     return McpToolDescriptor(
       name: name ?? this.name,
       title: clearTitle ? null : (title ?? this.title),
-      description:
-          clearDescription ? null : (description ?? this.description),
+      description: clearDescription ? null : (description ?? this.description),
       sideEffect: sideEffect ?? this.sideEffect,
       inputSchemaSummary: clearInputSchemaSummary
           ? null
@@ -527,8 +573,9 @@ class McpToolDescriptor {
       description: json['description']?.toString(),
       sideEffect: McpToolSideEffect.tryParse(json['sideEffect']?.toString()),
       inputSchemaSummary: json['inputSchemaSummary']?.toString(),
-      suggestedPolicy:
-          McpToolPolicyLevel.tryParse(json['suggestedPolicy']?.toString()),
+      suggestedPolicy: McpToolPolicyLevel.tryParse(
+        json['suggestedPolicy']?.toString(),
+      ),
     );
   }
 }

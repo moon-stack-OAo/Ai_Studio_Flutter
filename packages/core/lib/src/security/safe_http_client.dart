@@ -65,10 +65,7 @@ void assertSafeRedirectTarget(Uri url) {
 
 /// 包装 [inner]：关闭自动跟随，改为手动跟随并对每一跳做 url_safety 校验。
 class SafeRedirectHttpClient extends http.BaseClient {
-  SafeRedirectHttpClient(
-    this._inner, {
-    this.closeInner = false,
-  });
+  SafeRedirectHttpClient(this._inner, {this.closeInner = false});
 
   final http.Client _inner;
   final bool closeInner;
@@ -116,12 +113,21 @@ class SafeRedirectHttpClient extends http.BaseClient {
       final nextUrl = resolveRedirectUri(url, location);
       try {
         assertSafeRedirectTarget(nextUrl);
+        if (url.scheme == 'https' &&
+            nextUrl.scheme == 'http' &&
+            headers.keys.any(_isSensitiveHeader)) {
+          throw const UrlSafetyException('拒绝将携带凭据的 HTTPS 请求重定向到 HTTP');
+        }
       } on UrlSafetyException {
         await response.stream.drain<void>();
         rethrow;
       }
 
       await response.stream.drain<void>();
+      if (!isSameHttpOrigin(url, nextUrl)) {
+        headers.removeWhere((name, _) => _isSensitiveHeader(name));
+      }
+      headers.removeWhere((name, _) => name.toLowerCase() == 'host');
       method = redirectRequestMethod(method, response.statusCode);
       url = nextUrl;
       redirects += 1;
@@ -152,6 +158,21 @@ bool _methodMayHaveBody(String method) {
   final m = method.toUpperCase();
   return m != 'GET' && m != 'HEAD';
 }
+
+/// HTTP 来源包含协议、主机与有效端口。
+bool isSameHttpOrigin(Uri a, Uri b) =>
+    a.scheme == b.scheme && a.host == b.host && a.port == b.port;
+
+bool _isSensitiveHeader(String name) => const {
+      'authorization',
+      'proxy-authorization',
+      'cookie',
+      'cookie2',
+      'x-api-key',
+      'api-key',
+      'apikey',
+      'x-auth-token',
+    }.contains(name.toLowerCase());
 
 String? _headerValue(Map<String, String> headers, String name) {
   final lower = name.toLowerCase();

@@ -44,54 +44,50 @@ void main() {
     displayName: 'S1',
     baseUrl: 'https://mcp.example.local/mcp',
     toolsCache: [
-      McpToolDescriptor(
-        name: 'read.t',
-        sideEffect: McpToolSideEffect.read,
-      ),
-      McpToolDescriptor(
-        name: 'write.t',
-        sideEffect: McpToolSideEffect.write,
-      ),
+      McpToolDescriptor(name: 'read.t', sideEffect: McpToolSideEffect.read),
+      McpToolDescriptor(name: 'write.t', sideEffect: McpToolSideEffect.write),
     ],
   );
 
-  test('serial: deny does not call; autoAllow calls; confirm uses prompter',
-      () async {
-    final session = _FakeSession(server);
-    final orch = DefaultToolCallOrchestrator(
-      resolveSession: (_) => session,
-      resolveServer: (_) => server,
-      resolveTool: (_, name) =>
-          server.toolsCache.firstWhere((t) => t.name == name),
-    );
+  test(
+    'serial: deny does not call; autoAllow calls; confirm uses prompter',
+    () async {
+      final session = _FakeSession(server);
+      final orch = DefaultToolCallOrchestrator(
+        resolveSession: (_) => session,
+        resolveServer: (_) => server,
+        resolveTool: (_, name) =>
+            server.toolsCache.firstWhere((t) => t.name == name),
+      );
 
-    final prompts = <String>[];
-    final results = await orch.runRound(
-      calls: const [
-        McpToolCallRequest(
-          toolCallId: '1',
-          serverId: 's1',
-          toolName: 'write.t',
-          argumentsJson: '{}',
-        ),
-        McpToolCallRequest(
-          toolCallId: '2',
-          serverId: 's1',
-          toolName: 'read.t',
-          argumentsJson: '{}',
-        ),
-      ],
-      prompter: (p) async {
-        prompts.add(p.toolName);
-        return p.toolName == 'write.t';
-      },
-    );
+      final prompts = <String>[];
+      final results = await orch.runRound(
+        calls: const [
+          McpToolCallRequest(
+            toolCallId: '1',
+            serverId: 's1',
+            toolName: 'write.t',
+            argumentsJson: '{}',
+          ),
+          McpToolCallRequest(
+            toolCallId: '2',
+            serverId: 's1',
+            toolName: 'read.t',
+            argumentsJson: '{}',
+          ),
+        ],
+        prompter: (p) async {
+          prompts.add(p.toolName);
+          return p.toolName == 'write.t';
+        },
+      );
 
-    expect(prompts, ['write.t']);
-    expect(session.calls.map((c) => c.toolName), ['write.t', 'read.t']);
-    expect(results[0].isSuccess, isTrue);
-    expect(results[1].isSuccess, isTrue);
-  });
+      expect(prompts, ['write.t']);
+      expect(session.calls.map((c) => c.toolName), ['write.t', 'read.t']);
+      expect(results[0].isSuccess, isTrue);
+      expect(results[1].isSuccess, isTrue);
+    },
+  );
 
   test('user reject → no callTool', () async {
     final session = _FakeSession(server);
@@ -115,6 +111,42 @@ void main() {
     expect(results.single.status, McpToolCallStatus.rejected);
     expect(results.single.errorMessage, 'user_rejected');
   });
+
+  test(
+    'server changed while authorization is pending is rejected without granting',
+    () async {
+      var current = server.copyWith(
+        defaultToolPolicy: McpToolPolicyLevel.confirmOnce,
+      );
+      final session = _FakeSession(current);
+      final grants = McpSessionToolGrants();
+      final orch = DefaultToolCallOrchestrator(
+        resolveSession: (_) => session,
+        resolveServer: (_) => current,
+        resolveTool: (_, name) =>
+            current.toolsCache.firstWhere((t) => t.name == name),
+        sessionGrants: grants,
+      );
+      final results = await orch.runRound(
+        calls: const [
+          McpToolCallRequest(
+            toolCallId: 'pending',
+            serverId: 's1',
+            toolName: 'write.t',
+          ),
+        ],
+        prompter: (_) async {
+          current = current.copyWith(
+            baseUrl: 'https://changed.example.com/mcp',
+          );
+          return true;
+        },
+      );
+      expect(results.single.errorMessage, 'config_changed');
+      expect(session.calls, isEmpty);
+      expect(grants.debugKeys, isEmpty);
+    },
+  );
 
   test('policy deny → no call', () async {
     final denied = server.copyWith(
@@ -150,11 +182,7 @@ void main() {
     );
     final results = await orch.runRound(
       calls: const [
-        McpToolCallRequest(
-          toolCallId: '1',
-          serverId: '',
-          toolName: 'ghost',
-        ),
+        McpToolCallRequest(toolCallId: '1', serverId: '', toolName: 'ghost'),
       ],
       prompter: allowAllToolAuthPrompter,
     );

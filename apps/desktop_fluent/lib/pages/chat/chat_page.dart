@@ -187,6 +187,7 @@ class _ChatPageState extends State<ChatPage> {
                             final streamingHere =
                                 _controller.isStreamingActiveSession;
                             return MessageList(
+                              key: ValueKey(session?.id),
                               messages: messages,
                               recallEnabled: !streamingHere,
                               onRecallUser: (id) =>

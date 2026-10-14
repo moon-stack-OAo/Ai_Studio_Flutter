@@ -72,6 +72,7 @@
 - 非法 JSON / 非对象根节点抛 `DataBackupFormatException`（可读中文信息，避免未捕获崩溃）。
 - 有字符上限（约 32MB）；超限拒绝解析，防止 OOM。
 - 合并策略：同 id 覆盖非密钥字段；密钥仅在「备份含密钥 **且** `importSecrets: true`」时覆盖（提供商与 MCP 同原则）。
+- stdio `env` 全部视为密钥字段；未选择导入密钥时保留本地值，新 Server 不导入 env；显式空 env 仅在选择导入密钥时清空。备份不携带本机命令确认；导入的 stdio 默认停用，须在桌面重新确认，移动端跳过并提示。
 - 旧备份无 `mcp` 段：导入不崩、不改本地 MCP。
 - 媒体二进制不进 JSON；导入会话后本地 file 路径可能失效，属预期。
 
@@ -95,6 +96,7 @@
 - MCP `baseUrl` 与 `tools/call` 出站走本节 `urlSafety` + SafeHttp（含 redirect 二次校验）；**首期不做**单独 host 白名单（Q9）。
 - 鉴权密钥（Bearer 等）仅入 `SecretStore`；日志、tool 轨迹、备份默认 **不得**含 token 明文。
 - 用户拒绝授权或策略 `deny` 时**不得**发起 call。
+- `confirm_once` 按聊天 id 隔离；删除聊天时清理授权，Server 配置、策略或凭据变化时撤销已有授权并关闭旧连接；等待确认期间配置变化须拒绝调用。
 - tool 参数/结果写入日志与 UI 时默认截断脱敏（`mcpSanitizeSummary`）。
 - `SET-DATA`：默认 omit MCP secrets；显式 `includeSecrets` / `importSecrets` 才导出/覆盖 token。
 
@@ -104,6 +106,7 @@
 - 默认**拒绝**任意命令；用户在设置中**显式添加或导入并确认** `command` / `args` / `env` / `cwd` 后方可启用。
 - App 退出、停用 Server 或清数据时须终止对应子进程（尽力杀进程组）。
 - `env` 中的密钥与 Bearer 同原则：入 `SecretStore`（或等价）；**备份默认 omit**；不得写入日志 / 轨迹明文。
+- 生产存储将全部 env 值写入 `core.mcp.env.<serverId>` 安全存储，prefs 仅留引用；旧明文须写入并回读验证成功后才清除。命令确认绑定 command / args / env / cwd 指纹，配置变化后须重新确认，启动前再次校验。
 
 ## Redirect 二次校验
 
@@ -111,5 +114,6 @@
 
 - 默认出站 Client（更新下载、对话 / 生图 / 生视频、连通性探测等）关闭底层自动跟随，改为手动跟随 30x。
 - **每一跳** Location 解析后再次走 `assertSafeHttpUrl`（与初始 URL 同一套硬拦）；不安全则中止并抛 `UrlSafetyException`。
+- 跨源（协议 / 主机 / 有效端口变化）剥离 Authorization、Proxy-Authorization、Cookie 及 API Key 等凭据头；后续跳回原来源也不恢复。携带凭据的 HTTPS → HTTP 重定向阻断。
 - 跟随规则对齐 `dart:io`：GET/HEAD 跟 301/302/303/307/308；POST 仅跟 303（下一跳改 GET）。
 - 自动化：`packages/core/test/safe_http_client_test.dart`。

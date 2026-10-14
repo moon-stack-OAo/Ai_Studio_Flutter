@@ -44,6 +44,103 @@ void main() {
   });
 
   group('SafeRedirectHttpClient', () {
+    test(
+      'cross-origin hops strip credentials permanently, including ports',
+      () async {
+        final seen = <http.Request>[];
+        final inner = MockClient((request) async {
+          seen.add(request);
+          if (seen.length == 1) {
+            return http.Response(
+              '',
+              303,
+              headers: {'location': 'https://api.example.com:8443/other'},
+            );
+          }
+          if (seen.length == 2) {
+            return http.Response(
+              '',
+              302,
+              headers: {'location': 'https://api.example.com/back'},
+            );
+          }
+          return http.Response('ok', 200);
+        });
+        final client = SafeRedirectHttpClient(inner);
+        await client.post(
+          Uri.parse('https://api.example.com/start'),
+          headers: {
+            'Authorization': 'Bearer test-secret',
+            'Cookie': 'session=test-cookie',
+            'X-API-Key': 'test-api-key',
+            'Accept': 'application/json',
+          },
+          body: 'body',
+        );
+        for (final request in seen.skip(1)) {
+          expect(
+            request.headers.keys.map((k) => k.toLowerCase()),
+            isNot(
+              anyOf(
+                contains('authorization'),
+                contains('cookie'),
+                contains('x-api-key'),
+              ),
+            ),
+          );
+          expect(request.headers['accept'], 'application/json');
+        }
+        expect(seen[1].method, 'GET');
+        expect(seen[1].body, isEmpty);
+      },
+    );
+
+    test('same origin preserves authorization and cookie', () async {
+      var count = 0;
+      final client = SafeRedirectHttpClient(
+        MockClient((request) async {
+          expect(request.headers['authorization'], 'Bearer test-secret');
+          expect(request.headers['cookie'], 'session=test-cookie');
+          return ++count == 1
+              ? http.Response('', 302, headers: {'location': '/result'})
+              : http.Response('ok', 200);
+        }),
+      );
+      await client.get(
+        Uri.parse('https://api.example.com/start'),
+        headers: {
+          'Authorization': 'Bearer test-secret',
+          'Cookie': 'session=test-cookie',
+        },
+      );
+      expect(count, 2);
+    });
+
+    test(
+      'credential-bearing HTTPS downgrade is blocked before sending',
+      () async {
+        var count = 0;
+        final client = SafeRedirectHttpClient(
+          MockClient((_) async {
+            count++;
+            return http.Response(
+              '',
+              302,
+              headers: {'location': 'http://api.example.com/result'},
+            );
+          }),
+        );
+        await expectLater(
+          client.get(
+            Uri.parse('https://api.example.com/start'),
+            headers: {'Authorization': 'Bearer test-secret'},
+          ),
+          throwsA(isA<UrlSafetyException>()),
+        );
+        expect(count, 1);
+      },
+    );
+
     test('blocks redirect to metadata host', () async {
       final inner = MockClient((request) async {
         if (request.url.path == '/start') {
@@ -114,8 +211,9 @@ void main() {
       final client = SafeRedirectHttpClient(inner);
       addTearDown(client.close);
 
-      final response =
-          await client.get(Uri.parse('https://cdn.example.com/one'));
+      final response = await client.get(
+        Uri.parse('https://cdn.example.com/one'),
+      );
       expect(response.statusCode, 200);
       expect(response.body, 'ok-body');
       expect(seen, [

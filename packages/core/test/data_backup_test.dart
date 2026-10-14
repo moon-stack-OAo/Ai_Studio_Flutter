@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:core/core.dart';
@@ -103,54 +104,46 @@ void main() {
       Uint8List.fromList([1, 2, 3, 4]),
       'seed_img',
     );
-    await imageSessions.completeItem(
-      img.id,
-      imgItem.id,
-      [ImageRef(type: ImageRefType.file, src: path)],
-    );
+    await imageSessions.completeItem(img.id, imgItem.id, [
+      ImageRef(type: ImageRefType.file, src: path),
+    ]);
 
-    await logs.append(
-      level: AppLogLevel.info,
-      source: 'test',
-      message: 'seed',
-    );
+    await logs.append(level: AppLogLevel.info, source: 'test', message: 'seed');
   }
 
-  test('export → import roundtrip preserves appearance / providers / chat',
-      () async {
-    await seedSampleData();
+  test(
+    'export → import roundtrip preserves appearance / providers / chat',
+    () async {
+      await seedSampleData();
 
-    final json = await service.exportBackupJson();
-    final payload = DataBackupPayload.parse(json);
-    expect(payload.schemaVersion, dataBackupSchemaVersion);
-    expect(payload.includeSecrets, isFalse);
-    expect(payload.appearance?.themePreference, 'dark');
-    expect(payload.chatSessions, isNotEmpty);
+      final json = await service.exportBackupJson();
+      final payload = DataBackupPayload.parse(json);
+      expect(payload.schemaVersion, dataBackupSchemaVersion);
+      expect(payload.includeSecrets, isFalse);
+      expect(payload.appearance?.themePreference, 'dark');
+      expect(payload.chatSessions, isNotEmpty);
 
-    // 清空后再导入
-    await service.clearLocalData(ClearLocalDataFlags.all);
+      // 清空后再导入
+      await service.clearLocalData(ClearLocalDataFlags.all);
 
-    final result = await service.importBackup(json);
-    expect(result.appearanceImported, isTrue);
-    expect(result.chatDefaultsImported, isTrue);
-    expect(result.sessionsImported, isTrue);
-    expect(result.secretsApplied, isFalse);
+      final result = await service.importBackup(json);
+      expect(result.appearanceImported, isTrue);
+      expect(result.chatDefaultsImported, isTrue);
+      expect(result.sessionsImported, isTrue);
+      expect(result.secretsApplied, isFalse);
 
-    expect(appearance.settings.themePreference, 'dark');
-    expect(chatDefaults.defaults.temperature, 0.7);
-    expect(
-      providers.providers.any((p) => p.name == 'BackupMe'),
-      isTrue,
-    );
-    final restored = providers.providers.firstWhere((p) => p.name == 'BackupMe');
-    expect(restored.apiKey, isEmpty); // 默认不含密钥
-    expect(restored.baseUrl, 'https://api.backup.test/v1');
-    expect(restored.chatModel, 'gpt-test');
-    expect(
-      chatSessions.sessions.any((s) => s.title == '导出对话'),
-      isTrue,
-    );
-  });
+      expect(appearance.settings.themePreference, 'dark');
+      expect(chatDefaults.defaults.temperature, 0.7);
+      expect(providers.providers.any((p) => p.name == 'BackupMe'), isTrue);
+      final restored = providers.providers.firstWhere(
+        (p) => p.name == 'BackupMe',
+      );
+      expect(restored.apiKey, isEmpty); // 默认不含密钥
+      expect(restored.baseUrl, 'https://api.backup.test/v1');
+      expect(restored.chatModel, 'gpt-test');
+      expect(chatSessions.sessions.any((s) => s.title == '导出对话'), isTrue);
+    },
+  );
 
   test('default export omits apiKey plaintext', () async {
     await seedSampleData();
@@ -220,65 +213,64 @@ void main() {
     );
   });
 
-  test('mergeProviders: same id overwrites meta; secrets only when allowed',
-      () {
-    final local = [
-      const ProviderConfig(
-        id: 'openai',
-        name: 'OpenAI',
-        type: ProviderType.openai,
-        baseUrl: 'https://old',
-        apiKey: 'sk-local',
-        chatModel: 'old-model',
-        builtin: true,
-      ),
-    ];
-    final incoming = [
-      const ProviderConfig(
-        id: 'openai',
-        name: 'OpenAI Cloud',
-        type: ProviderType.openai,
-        baseUrl: 'https://new',
-        apiKey: 'sk-incoming',
-        chatModel: 'new-model',
-        builtin: false,
-      ),
-      const ProviderConfig(
-        id: 'custom_1',
-        name: 'Custom',
-        type: ProviderType.openaiCompatible,
-        baseUrl: 'https://c',
-        apiKey: 'sk-c',
-      ),
-    ];
+  test(
+    'mergeProviders: same id overwrites meta; secrets only when allowed',
+    () {
+      final local = [
+        const ProviderConfig(
+          id: 'openai',
+          name: 'OpenAI',
+          type: ProviderType.openai,
+          baseUrl: 'https://old',
+          apiKey: 'sk-local',
+          chatModel: 'old-model',
+          builtin: true,
+        ),
+      ];
+      final incoming = [
+        const ProviderConfig(
+          id: 'openai',
+          name: 'OpenAI Cloud',
+          type: ProviderType.openai,
+          baseUrl: 'https://new',
+          apiKey: 'sk-incoming',
+          chatModel: 'new-model',
+          builtin: false,
+        ),
+        const ProviderConfig(
+          id: 'custom_1',
+          name: 'Custom',
+          type: ProviderType.openaiCompatible,
+          baseUrl: 'https://c',
+          apiKey: 'sk-c',
+        ),
+      ];
 
-    final noSecret = mergeProviders(
-      local: local,
-      incoming: incoming,
-      applySecrets: false,
-    );
-    expect(noSecret.length, 2);
-    final o = noSecret.firstWhere((p) => p.id == 'openai');
-    expect(o.baseUrl, 'https://new');
-    expect(o.chatModel, 'new-model');
-    expect(o.apiKey, 'sk-local');
-    expect(o.builtin, isTrue);
-    expect(noSecret.firstWhere((p) => p.id == 'custom_1').apiKey, isEmpty);
+      final noSecret = mergeProviders(
+        local: local,
+        incoming: incoming,
+        applySecrets: false,
+      );
+      expect(noSecret.length, 2);
+      final o = noSecret.firstWhere((p) => p.id == 'openai');
+      expect(o.baseUrl, 'https://new');
+      expect(o.chatModel, 'new-model');
+      expect(o.apiKey, 'sk-local');
+      expect(o.builtin, isTrue);
+      expect(noSecret.firstWhere((p) => p.id == 'custom_1').apiKey, isEmpty);
 
-    final withSecret = mergeProviders(
-      local: local,
-      incoming: incoming,
-      applySecrets: true,
-    );
-    expect(
-      withSecret.firstWhere((p) => p.id == 'openai').apiKey,
-      'sk-incoming',
-    );
-    expect(
-      withSecret.firstWhere((p) => p.id == 'custom_1').apiKey,
-      'sk-c',
-    );
-  });
+      final withSecret = mergeProviders(
+        local: local,
+        incoming: incoming,
+        applySecrets: true,
+      );
+      expect(
+        withSecret.firstWhere((p) => p.id == 'openai').apiKey,
+        'sk-incoming',
+      );
+      expect(withSecret.firstWhere((p) => p.id == 'custom_1').apiKey, 'sk-c');
+    },
+  );
 
   test('clearLocalData sessions / media / all', () async {
     await seedSampleData();
@@ -291,20 +283,14 @@ void main() {
     expect(mediaOnly.clearedMediaCache, isTrue);
     expect(mediaOnly.clearedSessions, isFalse);
     expect(imageStore.entries, isEmpty);
-    expect(
-      chatSessions.sessions.any((s) => s.title == '导出对话'),
-      isTrue,
-    );
+    expect(chatSessions.sessions.any((s) => s.title == '导出对话'), isTrue);
 
     await imageStore.savePng(Uint8List.fromList([9]), 'again');
     final sessionsOnly = await service.clearLocalData(
       ClearLocalDataFlags.sessionsOnly,
     );
     expect(sessionsOnly.clearedSessions, isTrue);
-    expect(
-      chatSessions.sessions.every((s) => s.messages.isEmpty),
-      isTrue,
-    );
+    expect(chatSessions.sessions.every((s) => s.messages.isEmpty), isTrue);
 
     await seedSampleData();
     final all = await service.clearLocalData(ClearLocalDataFlags.all);
@@ -399,33 +385,41 @@ void main() {
     }
   });
 
-  test('includeSecrets exports MCP token and importSecrets restores it',
-      () async {
-    await seedSampleData();
-    final json = await service.exportBackupJson(
-      const DataBackupExportOptions(includeSecrets: true),
-    );
-    expect(json.contains('mcp-tok-backup-xyz'), isTrue);
+  test(
+    'includeSecrets exports MCP token and importSecrets restores it',
+    () async {
+      await seedSampleData();
+      final json = await service.exportBackupJson(
+        const DataBackupExportOptions(includeSecrets: true),
+      );
+      expect(json.contains('mcp-tok-backup-xyz'), isTrue);
 
-    await service.clearLocalData(ClearLocalDataFlags.all);
-    expect(mcpServers.servers, isEmpty);
+      await service.clearLocalData(ClearLocalDataFlags.all);
+      expect(mcpServers.servers, isEmpty);
 
-    await service.importBackup(
-      json,
-      options: const DataBackupImportOptions(importSecrets: false),
-    );
-    expect(mcpServers.servers.any((s) => s.displayName == 'Biz MCP'), isTrue);
-    final without = mcpServers.servers.firstWhere((s) => s.displayName == 'Biz MCP');
-    expect(await mcpServers.hasBearerSecret(without.id), isFalse);
+      await service.importBackup(
+        json,
+        options: const DataBackupImportOptions(importSecrets: false),
+      );
+      expect(mcpServers.servers.any((s) => s.displayName == 'Biz MCP'), isTrue);
+      final without = mcpServers.servers.firstWhere(
+        (s) => s.displayName == 'Biz MCP',
+      );
+      expect(await mcpServers.hasBearerSecret(without.id), isFalse);
 
-    await service.importBackup(
-      json,
-      options: const DataBackupImportOptions(importSecrets: true),
-    );
-    final withTok =
-        mcpServers.servers.firstWhere((s) => s.displayName == 'Biz MCP');
-    expect(await mcpServers.readBearerSecret(withTok.id), 'mcp-tok-backup-xyz');
-  });
+      await service.importBackup(
+        json,
+        options: const DataBackupImportOptions(importSecrets: true),
+      );
+      final withTok = mcpServers.servers.firstWhere(
+        (s) => s.displayName == 'Biz MCP',
+      );
+      expect(
+        await mcpServers.readBearerSecret(withTok.id),
+        'mcp-tok-backup-xyz',
+      );
+    },
+  );
 
   test('legacy backup without mcp block still imports', () async {
     final legacy = {
@@ -450,24 +444,193 @@ void main() {
     expect(providers.providers.any((p) => p.name == 'Legacy'), isTrue);
   });
 
-  test('clearLocalData secrets clears MCP tokens; all clears MCP servers',
-      () async {
-    await seedSampleData();
-    final id = mcpServers.servers.single.id;
-    expect(await mcpServers.hasBearerSecret(id), isTrue);
+  test(
+    'undeclared backup secrets are ignored even with import opt-in',
+    () async {
+      await seedSampleData();
+      final id = mcpServers.servers.single.id;
+      await mcpServers.update(
+        mcpServers.findById(id)!.copyWith(env: {'TOKEN': 'local-env'}),
+      );
+      final backup =
+          jsonDecode(await service.exportBackupJson()) as Map<String, dynamic>;
+      final entries = (backup['mcp'] as Map)['servers'] as List;
+      final entry = entries.single as Map;
+      entry['env'] = {'TOKEN': 'injected-env'};
+      entry['authToken'] = 'injected-bearer';
+      entries.add({
+        'id': 'injected-local',
+        'displayName': 'Injected',
+        'transport': 'stdio',
+        'command': 'node',
+        'env': {'TOKEN': 'injected-new-env'},
+      });
+      expect(backup['includeSecrets'], isFalse);
+      final result = await service.importBackup(
+        jsonEncode(backup),
+        options: const DataBackupImportOptions(importSecrets: true),
+      );
+      expect(result.secretsApplied, isFalse);
+      expect(mcpServers.findById(id)!.env, {'TOKEN': 'local-env'});
+      expect(await mcpServers.readBearerSecret(id), 'mcp-tok-backup-xyz');
+      expect(mcpServers.findById('injected-local')!.env, isEmpty);
+      expect(mcpServers.findById('injected-local')!.canExposeTools, isFalse);
+    },
+  );
 
-    final secretsOnly = await service.clearLocalData(
-      const ClearLocalDataFlags(secrets: true),
-    );
-    expect(secretsOnly.clearedSecrets, isTrue);
-    expect(mcpServers.servers, isNotEmpty);
-    expect(await mcpServers.hasBearerSecret(id), isFalse);
+  test(
+    'stdio backups cannot restore approval and env obeys secret options',
+    () async {
+      await seedSampleData();
+      final id = mcpServers.servers.single.id;
+      await mcpServers.update(
+        mcpServers
+            .findById(id)!
+            .copyWith(
+              transport: McpTransport.stdio,
+              command: 'node',
+              args: ['server.js'],
+              env: {'TOKEN': 'backed-up-env'},
+              enabled: true,
+            ),
+        stdioConfirmed: true,
+      );
+      final defaultJson = await service.exportBackupJson();
+      expect(defaultJson, isNot(contains('backed-up-env')));
+      expect(defaultJson, isNot(contains('stdioApproval')));
+      await service.importBackup(defaultJson);
+      expect(mcpServers.findById(id)!.env, {'TOKEN': 'backed-up-env'});
+      expect(mcpServers.findById(id)!.enabled, isFalse);
+      expect(mcpServers.findById(id)!.isStdioApproved, isFalse);
 
-    await mcpServers.writeBearerSecret(id, 'mcp-tok-again');
-    final all = await service.clearLocalData(ClearLocalDataFlags.all);
-    expect(all.clearedSecrets, isTrue);
-    expect(all.clearedProviders, isTrue);
-    expect(mcpServers.servers, isEmpty);
-    expect(mcpSecrets.debugData, isEmpty);
-  });
+      final full = await service.exportBackupJson(
+        const DataBackupExportOptions(includeSecrets: true),
+      );
+      await mcpServers.update(
+        mcpServers.findById(id)!.copyWith(env: {'TOKEN': 'local-env'}),
+      );
+      await service.importBackup(full);
+      expect(mcpServers.findById(id)!.env, {'TOKEN': 'local-env'});
+      await service.importBackup(
+        full,
+        options: const DataBackupImportOptions(importSecrets: true),
+      );
+      expect(mcpServers.findById(id)!.env, {'TOKEN': 'backed-up-env'});
+      expect(mcpServers.findById(id)!.isStdioApproved, isFalse);
+
+      final forged = jsonDecode(full) as Map<String, dynamic>;
+      final entry = ((forged['mcp'] as Map)['servers'] as List).single as Map;
+      entry['stdioApproval'] = mcpStdioFingerprint(mcpServers.findById(id)!);
+      entry['enabled'] = true;
+      await service.importBackup(
+        jsonEncode(forged),
+        options: const DataBackupImportOptions(importSecrets: true),
+      );
+      expect(mcpServers.findById(id)!.canExposeTools, isFalse);
+      expect(mcpServers.findById(id)!.stdioApproval, isNull);
+
+      await service.clearLocalData(const ClearLocalDataFlags(secrets: true));
+      expect(mcpServers.findById(id)!.env, isEmpty);
+    },
+  );
+
+  test(
+    'mobile import skips stdio and leaves existing configuration intact',
+    () async {
+      await seedSampleData();
+      final id = mcpServers.servers.single.id;
+      final backup =
+          jsonDecode(await service.exportBackupJson()) as Map<String, dynamic>;
+      final entry = ((backup['mcp'] as Map)['servers'] as List).single as Map;
+      entry['transport'] = 'stdio';
+      entry['command'] = 'node';
+      final result = await service.importBackup(
+        jsonEncode(backup),
+        options: const DataBackupImportOptions(allowStdio: false),
+      );
+      expect(result.mcpServersSkipped, 1);
+      expect(mcpServers.findById(id)!.transport, McpTransport.http);
+    },
+  );
+
+  test(
+    'absent env preserves local values; explicit empty env clears only with opt-in',
+    () {
+      const local = McpServerConfig(
+        id: 's',
+        displayName: 'Local',
+        transport: McpTransport.stdio,
+        command: 'node',
+        env: {'TOKEN': 'local-env'},
+      );
+      final absent = DataBackupMcpServer.fromJson({
+        'id': 's',
+        'displayName': 'Absent',
+        'transport': 'stdio',
+        'command': 'node',
+      });
+      final empty = DataBackupMcpServer.fromJson({
+        'id': 's',
+        'displayName': 'Empty',
+        'transport': 'stdio',
+        'command': 'node',
+        'env': {},
+      });
+      expect(
+        mergeMcpServers(
+          local: [local],
+          incoming: [absent],
+          applySecrets: true,
+        ).servers.single.env,
+        local.env,
+      );
+      expect(
+        mergeMcpServers(
+          local: [local],
+          incoming: [empty],
+          applySecrets: false,
+        ).servers.single.env,
+        local.env,
+      );
+      expect(
+        mergeMcpServers(
+          local: [local],
+          incoming: [empty],
+          applySecrets: true,
+        ).servers.single.env,
+        isEmpty,
+      );
+      expect(
+        mergeMcpServers(
+          local: [],
+          incoming: [DataBackupMcpServer(config: local)],
+          applySecrets: false,
+        ).servers.single.env,
+        isEmpty,
+      );
+    },
+  );
+
+  test(
+    'clearLocalData secrets clears MCP tokens; all clears MCP servers',
+    () async {
+      await seedSampleData();
+      final id = mcpServers.servers.single.id;
+      expect(await mcpServers.hasBearerSecret(id), isTrue);
+
+      final secretsOnly = await service.clearLocalData(
+        const ClearLocalDataFlags(secrets: true),
+      );
+      expect(secretsOnly.clearedSecrets, isTrue);
+      expect(mcpServers.servers, isNotEmpty);
+      expect(await mcpServers.hasBearerSecret(id), isFalse);
+
+      await mcpServers.writeBearerSecret(id, 'mcp-tok-again');
+      final all = await service.clearLocalData(ClearLocalDataFlags.all);
+      expect(all.clearedSecrets, isTrue);
+      expect(all.clearedProviders, isTrue);
+      expect(mcpServers.servers, isEmpty);
+      expect(mcpSecrets.debugData, isEmpty);
+    },
+  );
 }

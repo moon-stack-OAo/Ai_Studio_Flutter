@@ -23,6 +23,9 @@ class McpSessionToolGrants {
 
   void clear() => _keys.clear();
 
+  void revokeServer(String serverId) =>
+      _keys.removeWhere((key) => key.startsWith('${serverId.trim()}::'));
+
   Set<String> get debugKeys => Set.unmodifiable(_keys);
 }
 

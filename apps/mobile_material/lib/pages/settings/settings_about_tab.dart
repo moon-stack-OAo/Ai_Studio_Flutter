@@ -492,11 +492,7 @@ class _SettingsAboutTabState extends State<SettingsAboutTab> {
       if (path == null) {
         _snack('已取消导出');
       } else {
-        _snack(
-          includeSecrets
-              ? '已导出（含密钥）：$path'
-              : '已导出：$path',
-        );
+        _snack(includeSecrets ? '已导出（含密钥）：$path' : '已导出：$path');
       }
     } catch (e) {
       if (!mounted) return;
@@ -591,6 +587,7 @@ class _SettingsAboutTabState extends State<SettingsAboutTab> {
                   children: [
                     Text(
                       '将合并提供商、业务 MCP 与外观，并用备份会话替换本地会话。'
+                      '\n本地 stdio 配置不适用于移动端，将跳过。'
                       '${widget.generation?.busy == true ? '\n\n检测到进行中的生成，导入前将尝试停止。' : ''}',
                     ),
                     if (payload.includeSecrets) ...[
@@ -639,7 +636,10 @@ class _SettingsAboutTabState extends State<SettingsAboutTab> {
     try {
       final result = await _backup.importBackup(
         raw,
-        options: DataBackupImportOptions(importSecrets: importSecrets),
+        options: DataBackupImportOptions(
+          importSecrets: importSecrets,
+          allowStdio: false,
+        ),
       );
       final appearance = widget.themeController?.appearanceRepository;
       if (appearance != null) {
@@ -648,12 +648,13 @@ class _SettingsAboutTabState extends State<SettingsAboutTab> {
       await _loadUsage();
       if (!mounted) return;
       final parts = <String>[
-        if (result.providersAdded > 0 || result.providersMerged > 0)
-          '提供商',
+        if (result.providersAdded > 0 || result.providersMerged > 0) '提供商',
         if (result.appearanceImported) '外观',
         if (result.chatDefaultsImported) '对话默认',
         if (result.sessionsImported) '会话',
         if (result.secretsApplied) '密钥',
+        if (result.mcpServersSkipped > 0)
+          '跳过 ${result.mcpServersSkipped} 个本地 MCP',
       ];
       _snack(parts.isEmpty ? '导入完成' : '导入完成：${parts.join(' · ')}');
     } on DataBackupSchemaException catch (e) {
@@ -698,7 +699,8 @@ class _SettingsAboutTabState extends State<SettingsAboutTab> {
                           choice == opt
                               ? Icons.radio_button_checked
                               : Icons.radio_button_off,
-                          color: choice == opt ? tokens.primary : tokens.inkMuted,
+                          color:
+                              choice == opt ? tokens.primary : tokens.inkMuted,
                         ),
                         title: Text(opt.label),
                         onTap: () => setLocal(() => choice = opt),
@@ -717,9 +719,7 @@ class _SettingsAboutTabState extends State<SettingsAboutTab> {
                   child: const Text('取消'),
                 ),
                 FilledButton(
-                  style: FilledButton.styleFrom(
-                    backgroundColor: tokens.danger,
-                  ),
+                  style: FilledButton.styleFrom(backgroundColor: tokens.danger),
                   onPressed: () => Navigator.pop(dialogCtx, true),
                   child: Text(choice == _ClearChoice.all ? '全部清除' : '清除'),
                 ),
@@ -794,11 +794,7 @@ class _SettingsAboutTabState extends State<SettingsAboutTab> {
       ),
       child: Text(
         label,
-        style: TextStyle(
-          fontSize: 12,
-          fontWeight: FontWeight.w600,
-          color: fg,
-        ),
+        style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: fg),
       ),
     );
   }
@@ -820,276 +816,289 @@ class _SettingsAboutTabState extends State<SettingsAboutTab> {
         controller: scroll,
         padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
         children: [
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(14),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'AI Studio',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                    color: tokens.ink,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: _onVersionPortalTap,
-                  child: Text(
-                    '版本 $_versionLabel · Android / iOS',
-                    style: TextStyle(fontSize: 13, color: tokens.inkSecondary),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                _statusPill(tokens),
-                const SizedBox(height: 6),
-                Text(
-                  _isAndroid
-                      ? '更新通道：AppDock（完整性校验）'
-                      : _isIos
-                          ? '更新通道：非 App Store · 请通过内测渠道获取新版本'
-                          : '分发：不上架 · 直链 / 侧载清单',
-                  style: TextStyle(fontSize: 12, color: tokens.inkMuted),
-                ),
-                if (_isAndroid) ...[
-                  const SizedBox(height: 6),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
                   Text(
-                    '不上架应用商店；安装包为按 ABI 分包的 AI.Studio_*_<abi>.apk，需允许「安装未知应用」。',
-                    style: TextStyle(fontSize: 12, color: tokens.inkMuted),
+                    'AI Studio',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: tokens.ink,
+                    ),
                   ),
-                ],
-                if (_isIos) ...[
                   const SizedBox(height: 6),
-                  Text(
-                    'iOS 以企业签 / TestFlight 等非 Store 渠道分发，'
-                    '不提供商店内购更新。${MobileUpdateController.iosNonStoreMessage}',
-                    style: TextStyle(fontSize: 12, color: tokens.inkMuted),
-                  ),
-                ],
-                const SizedBox(height: 14),
-                SwitchListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: const Text('启动时自动检查更新'),
-                  subtitle: const Text('冷启动静默检查；关闭后仅手动检查'),
-                  value: _updater.autoCheckUpdate,
-                  onChanged: busy ? null : _onToggleAutoCheck,
-                ),
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    FilledButton(
-                      onPressed: busy ? null : _onCheckUpdate,
-                      child: checking
-                          ? const SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : const Text('检查更新'),
-                    ),
-                    OutlinedButton(
-                      onPressed: changelogEntries.isEmpty
-                          ? null
-                          : _onOpenChangelog,
-                      child: const Text('查看完整更新日志'),
-                    ),
-                    OutlinedButton(
-                      onPressed: _onOpenLicenses,
-                      child: const Text('开源许可'),
-                    ),
-                  ],
-                ),
-                if (check != null && check.hasUpdate) ...[
-                  const SizedBox(height: 12),
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Color.lerp(tokens.primary, tokens.surface, 0.92),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: Color.lerp(tokens.primary, tokens.border, 0.55)!,
+                  GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: _onVersionPortalTap,
+                    child: Text(
+                      '版本 $_versionLabel · Android / iOS',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: tokens.inkSecondary,
                       ),
                     ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          '发现新版本 v${normalizeVersion(check.latestVersion)}',
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                            color: tokens.ink,
-                          ),
+                  ),
+                  const SizedBox(height: 8),
+                  _statusPill(tokens),
+                  const SizedBox(height: 6),
+                  Text(
+                    _isAndroid
+                        ? '更新通道：AppDock（完整性校验）'
+                        : _isIos
+                            ? '更新通道：非 App Store · 请通过内测渠道获取新版本'
+                            : '分发：不上架 · 直链 / 侧载清单',
+                    style: TextStyle(fontSize: 12, color: tokens.inkMuted),
+                  ),
+                  if (_isAndroid) ...[
+                    const SizedBox(height: 6),
+                    Text(
+                      '不上架应用商店；安装包为按 ABI 分包的 AI.Studio_*_<abi>.apk，需允许「安装未知应用」。',
+                      style: TextStyle(fontSize: 12, color: tokens.inkMuted),
+                    ),
+                  ],
+                  if (_isIos) ...[
+                    const SizedBox(height: 6),
+                    Text(
+                      'iOS 以企业签 / TestFlight 等非 Store 渠道分发，'
+                      '不提供商店内购更新。${MobileUpdateController.iosNonStoreMessage}',
+                      style: TextStyle(fontSize: 12, color: tokens.inkMuted),
+                    ),
+                  ],
+                  const SizedBox(height: 14),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('启动时自动检查更新'),
+                    subtitle: const Text('冷启动静默检查；关闭后仅手动检查'),
+                    value: _updater.autoCheckUpdate,
+                    onChanged: busy ? null : _onToggleAutoCheck,
+                  ),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      FilledButton(
+                        onPressed: busy ? null : _onCheckUpdate,
+                        child: checking
+                            ? const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Text('检查更新'),
+                      ),
+                      OutlinedButton(
+                        onPressed:
+                            changelogEntries.isEmpty ? null : _onOpenChangelog,
+                        child: const Text('查看完整更新日志'),
+                      ),
+                      OutlinedButton(
+                        onPressed: _onOpenLicenses,
+                        child: const Text('开源许可'),
+                      ),
+                    ],
+                  ),
+                  if (check != null && check.hasUpdate) ...[
+                    const SizedBox(height: 12),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Color.lerp(tokens.primary, tokens.surface, 0.92),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: Color.lerp(
+                            tokens.primary,
+                            tokens.border,
+                            0.55,
+                          )!,
                         ),
-                        if (notes.isNotEmpty) ...[
-                          const SizedBox(height: 6),
-                          MarkdownHost(data: notes, compact: true),
-                        ],
-                        const SizedBox(height: 10),
-                        if (downloading)
-                          Row(
-                            children: [
-                              Expanded(
-                                child: ClipRRect(
-                                  borderRadius: BorderRadius.circular(20),
-                                  child: SizedBox(
-                                    height: 40,
-                                    child: Stack(
-                                      fit: StackFit.expand,
-                                      children: [
-                                        ColoredBox(color: tokens.surfaceMuted),
-                                        if (progress?.fraction != null)
-                                          FractionallySizedBox(
-                                            widthFactor: progress!.fraction!
-                                                .clamp(0.0, 1.0),
-                                            alignment: Alignment.centerLeft,
-                                            child:
-                                                ColoredBox(color: tokens.primary),
-                                          )
-                                        else
-                                          const Align(
-                                            child: SizedBox(
-                                              width: 18,
-                                              height: 18,
-                                              child: CircularProgressIndicator(
-                                                strokeWidth: 2,
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '发现新版本 v${normalizeVersion(check.latestVersion)}',
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: tokens.ink,
+                            ),
+                          ),
+                          if (notes.isNotEmpty) ...[
+                            const SizedBox(height: 6),
+                            MarkdownHost(data: notes, compact: true),
+                          ],
+                          const SizedBox(height: 10),
+                          if (downloading)
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: ClipRRect(
+                                    borderRadius: BorderRadius.circular(20),
+                                    child: SizedBox(
+                                      height: 40,
+                                      child: Stack(
+                                        fit: StackFit.expand,
+                                        children: [
+                                          ColoredBox(
+                                            color: tokens.surfaceMuted,
+                                          ),
+                                          if (progress?.fraction != null)
+                                            FractionallySizedBox(
+                                              widthFactor: progress!.fraction!
+                                                  .clamp(0.0, 1.0),
+                                              alignment: Alignment.centerLeft,
+                                              child: ColoredBox(
+                                                color: tokens.primary,
+                                              ),
+                                            )
+                                          else
+                                            const Align(
+                                              child: SizedBox(
+                                                width: 18,
+                                                height: 18,
+                                                child:
+                                                    CircularProgressIndicator(
+                                                  strokeWidth: 2,
+                                                ),
+                                              ),
+                                            ),
+                                          Center(
+                                            child: Padding(
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                horizontal: 12,
+                                              ),
+                                              child: Text(
+                                                progressLabel ??
+                                                    (progress?.fraction != null
+                                                        ? '正在下载… ${(progress!.fraction! * 100).toStringAsFixed(0)}%'
+                                                        : '正在下载…'),
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                                style: TextStyle(
+                                                  fontSize: 13,
+                                                  fontWeight: FontWeight.w600,
+                                                  color: (progress?.fraction ??
+                                                              0) >
+                                                          0.45
+                                                      ? tokens.onPrimary
+                                                      : tokens.ink,
+                                                ),
                                               ),
                                             ),
                                           ),
-                                        Center(
-                                          child: Padding(
-                                            padding: const EdgeInsets.symmetric(
-                                              horizontal: 12,
-                                            ),
-                                            child: Text(
-                                              progressLabel ??
-                                                  (progress?.fraction != null
-                                                      ? '正在下载… ${(progress!.fraction! * 100).toStringAsFixed(0)}%'
-                                                      : '正在下载…'),
-                                              maxLines: 1,
-                                              overflow: TextOverflow.ellipsis,
-                                              style: TextStyle(
-                                                fontSize: 13,
-                                                fontWeight: FontWeight.w600,
-                                                color:
-                                                    (progress?.fraction ?? 0) >
-                                                            0.45
-                                                        ? tokens.onPrimary
-                                                        : tokens.ink,
-                                              ),
-                                            ),
-                                          ),
-                                        ),
-                                      ],
+                                        ],
+                                      ),
                                     ),
                                   ),
                                 ),
-                              ),
-                              const SizedBox(width: 8),
-                              OutlinedButton(
-                                onPressed: _updater.cancelDownload,
-                                child: const Text('取消'),
-                              ),
-                            ],
-                          )
-                        else if (!checking)
-                          FilledButton(
-                            onPressed: () async {
-                              if (_isIos) {
-                                await _showUpdatePrompt(check);
-                                return;
-                              }
-                              if (_updater.isDownloading) return;
-                              final ok = await _updater.downloadAndInstall(
-                                result: check,
-                              );
-                              if (!mounted) return;
-                              if (ok) {
-                                _snack('已调起安装器，请按系统提示完成安装');
-                              } else {
-                                final err = _updater.lastError ?? '下载或安装失败';
-                                _snack(err);
-                              }
-                            },
-                            child: Text(_isIos ? '查看更新说明' : '下载并安装'),
-                          ),
-                      ],
+                                const SizedBox(width: 8),
+                                OutlinedButton(
+                                  onPressed: _updater.cancelDownload,
+                                  child: const Text('取消'),
+                                ),
+                              ],
+                            )
+                          else if (!checking)
+                            FilledButton(
+                              onPressed: () async {
+                                if (_isIos) {
+                                  await _showUpdatePrompt(check);
+                                  return;
+                                }
+                                if (_updater.isDownloading) return;
+                                final ok = await _updater.downloadAndInstall(
+                                  result: check,
+                                );
+                                if (!mounted) return;
+                                if (ok) {
+                                  _snack('已调起安装器，请按系统提示完成安装');
+                                } else {
+                                  final err = _updater.lastError ?? '下载或安装失败';
+                                  _snack(err);
+                                }
+                              },
+                              child: Text(_isIos ? '查看更新说明' : '下载并安装'),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '更新日志',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: tokens.ink,
                     ),
                   ),
+                  const SizedBox(height: 8),
+                  if (_changelogLoading)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 16),
+                      child: Center(child: CircularProgressIndicator()),
+                    )
+                  else
+                    ChangelogSection(
+                      entries: changelogEntries,
+                      currentVersionLabel: _versionLabel,
+                    ),
                 ],
-              ],
+              ),
             ),
           ),
-        ),
-        const SizedBox(height: 12),
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(14),
+          const SizedBox(height: 12),
+          Card(
+            clipBehavior: Clip.antiAlias,
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  '更新日志',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: tokens.ink,
-                  ),
+                ListTile(
+                  title: const Text('本地占用'),
+                  subtitle: Text(_usageSummary()),
                 ),
-                const SizedBox(height: 8),
-                if (_changelogLoading)
-                  const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 16),
-                    child: Center(child: CircularProgressIndicator()),
-                  )
-                else
-                  ChangelogSection(
-                    entries: changelogEntries,
-                    currentVersionLabel: _versionLabel,
-                  ),
-              ],
-            ),
-          ),
-        ),
-        const SizedBox(height: 12),
-        Card(
-          clipBehavior: Clip.antiAlias,
-          child: Column(
-            children: [
-              ListTile(
-                title: const Text('本地占用'),
-                subtitle: Text(_usageSummary()),
-              ),
-              Divider(height: 1, color: tokens.border),
-              ListTile(
-                title: const Text('导入 / 导出'),
-                subtitle: const Text('设置与会话备份（JSON）'),
-                enabled: !_busy,
-                trailing: Icon(Icons.chevron_right, color: tokens.inkMuted),
-                onTap: _busy ? null : _onImportExport,
-              ),
-              Divider(height: 1, color: tokens.border),
-              Semantics(
-                button: true,
-                label: '清理本地数据',
-                child: ListTile(
-                  title: const Text('清理本地数据'),
-                  subtitle: const Text('会话 / 媒体缓存 / 全部'),
+                Divider(height: 1, color: tokens.border),
+                ListTile(
+                  title: const Text('导入 / 导出'),
+                  subtitle: const Text('设置与会话备份（JSON）'),
                   enabled: !_busy,
                   trailing: Icon(Icons.chevron_right, color: tokens.inkMuted),
-                  onTap: _busy ? null : _onClearData,
+                  onTap: _busy ? null : _onImportExport,
                 ),
-              ),
-            ],
+                Divider(height: 1, color: tokens.border),
+                Semantics(
+                  button: true,
+                  label: '清理本地数据',
+                  child: ListTile(
+                    title: const Text('清理本地数据'),
+                    subtitle: const Text('会话 / 媒体缓存 / 全部'),
+                    enabled: !_busy,
+                    trailing: Icon(Icons.chevron_right, color: tokens.inkMuted),
+                    onTap: _busy ? null : _onClearData,
+                  ),
+                ),
+              ],
+            ),
           ),
-        ),
-      ],
+        ],
       ),
     );
   }
@@ -1131,11 +1140,7 @@ class _LicenseEntryTile extends StatelessWidget {
           const SizedBox(height: 4),
           Text(
             entry.note,
-            style: TextStyle(
-              fontSize: 12,
-              color: tokens.inkMuted,
-              height: 1.4,
-            ),
+            style: TextStyle(fontSize: 12, color: tokens.inkMuted, height: 1.4),
           ),
           if (url != null && url.isNotEmpty) ...[
             const SizedBox(height: 6),
@@ -1151,9 +1156,9 @@ class _LicenseEntryTile extends StatelessWidget {
                   onPressed: () async {
                     await Clipboard.setData(ClipboardData(text: url));
                     if (!context.mounted) return;
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('已复制链接')),
-                    );
+                    ScaffoldMessenger.of(
+                      context,
+                    ).showSnackBar(const SnackBar(content: Text('已复制链接')));
                   },
                   child: const Text('复制'),
                 ),
@@ -1227,10 +1232,7 @@ class _AccessCodeDialogState extends State<_AccessCodeDialog> {
           onPressed: () => Navigator.pop(context),
           child: const Text('取消'),
         ),
-        FilledButton(
-          onPressed: _submit,
-          child: const Text('解锁'),
-        ),
+        FilledButton(onPressed: _submit, child: const Text('解锁')),
       ],
     );
   }

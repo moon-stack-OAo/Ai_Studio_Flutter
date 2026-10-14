@@ -41,6 +41,7 @@ class DataBackupImportOptions {
     this.importChatDefaults = true,
     this.replaceSessions = true,
     this.importMcpServers = true,
+    this.allowStdio = true,
   });
 
   /// 是否接受备份中的 API Key / MCP Bearer。仅当导出时含密钥且本项为 true 时覆盖本地密钥。
@@ -57,6 +58,9 @@ class DataBackupImportOptions {
 
   /// 是否合并备份中的 MCP Server 元数据（旧备份无 mcp 段则跳过）。
   final bool importMcpServers;
+
+  /// 移动端不接受本地进程配置。
+  final bool allowStdio;
 }
 
 /// 清数据档位 / 开关。
@@ -100,12 +104,7 @@ class ClearLocalDataFlags {
   final bool secrets;
 
   bool get isNoop =>
-      !sessions &&
-      !mediaCache &&
-      !settings &&
-      !providers &&
-      !logs &&
-      !secrets;
+      !sessions && !mediaCache && !settings && !providers && !logs && !secrets;
 }
 
 /// 本地占用估算（供 UI 展示）。
@@ -152,6 +151,7 @@ class DataBackupImportResult {
     this.mcpServersMerged = 0,
     this.mcpServersAdded = 0,
     this.mcpImported = false,
+    this.mcpServersSkipped = 0,
   });
 
   final int schemaVersion;
@@ -164,6 +164,7 @@ class DataBackupImportResult {
   final int mcpServersMerged;
   final int mcpServersAdded;
   final bool mcpImported;
+  final int mcpServersSkipped;
 }
 
 /// 清数据结果摘要。
@@ -211,9 +212,11 @@ class DataBackupMcpServer {
   const DataBackupMcpServer({
     required this.config,
     this.authToken,
+    this.hasEnvironment = true,
   });
 
   final McpServerConfig config;
+  final bool hasEnvironment;
 
   /// 仅当导出含密钥时非空；导入时受 [DataBackupImportOptions.importSecrets] 约束。
   final String? authToken;
@@ -227,15 +230,17 @@ class DataBackupMcpServer {
 
   factory DataBackupMcpServer.fromJson(Map<String, dynamic> json) {
     final tokenRaw = json['authToken']?.toString();
-    final token = (tokenRaw == null || tokenRaw.trim().isEmpty)
-        ? null
-        : tokenRaw.trim();
+    final token =
+        (tokenRaw == null || tokenRaw.trim().isEmpty) ? null : tokenRaw.trim();
     final cleaned = Map<String, dynamic>.from(json)
       ..remove('authToken')
-      ..remove('authSecretRef');
+      ..remove('authSecretRef')
+      ..remove('envSecretRef')
+      ..remove('stdioApproval');
     return DataBackupMcpServer(
       config: McpServerConfig.fromJson(cleaned),
       authToken: token,
+      hasEnvironment: json.containsKey('env'),
     );
   }
 }
@@ -294,33 +299,26 @@ class DataBackupPayload {
     if (mcpServers != null) {
       map['mcp'] = {
         'servers': [
-          for (final s in mcpServers!)
-            s.toJson(includeSecrets: includeSecrets),
+          for (final s in mcpServers!) s.toJson(includeSecrets: includeSecrets),
         ],
       };
     }
     if (chatSessions != null) {
       map['chat'] = {
         'activeId': chatActiveId ?? '',
-        'sessions': [
-          for (final s in chatSessions!) _chatSessionMetaJson(s),
-        ],
+        'sessions': [for (final s in chatSessions!) _chatSessionMetaJson(s)],
       };
     }
     if (imageSessions != null) {
       map['image'] = {
         'activeId': imageActiveId ?? '',
-        'sessions': [
-          for (final s in imageSessions!) _imageSessionMetaJson(s),
-        ],
+        'sessions': [for (final s in imageSessions!) _imageSessionMetaJson(s)],
       };
     }
     if (videoSessions != null) {
       map['video'] = {
         'activeId': videoActiveId ?? '',
-        'sessions': [
-          for (final s in videoSessions!) _videoSessionMetaJson(s),
-        ],
+        'sessions': [for (final s in videoSessions!) _videoSessionMetaJson(s)],
       };
     }
     return map;
@@ -668,9 +666,7 @@ McpMergeResult mergeMcpServers({
   required List<DataBackupMcpServer> incoming,
   required bool applySecrets,
 }) {
-  final byId = <String, McpServerConfig>{
-    for (final s in local) s.id: s,
-  };
+  final byId = <String, McpServerConfig>{for (final s in local) s.id: s};
   final secrets = <String, String>{};
   var merged = 0;
   var added = 0;
@@ -681,7 +677,12 @@ McpMergeResult mergeMcpServers({
     final token = entry.authToken?.trim() ?? '';
     if (existing == null) {
       added++;
-      byId[src.id] = src.copyWith(clearAuthSecretRef: true);
+      byId[src.id] = src.copyWith(
+        clearAuthSecretRef: true,
+        env: applySecrets && entry.hasEnvironment ? src.env : const {},
+        enabled: src.transport == McpTransport.stdio ? false : src.enabled,
+        clearStdioApproval: true,
+      );
       if (applySecrets &&
           src.authKind == McpAuthKind.bearer &&
           token.isNotEmpty) {
@@ -697,10 +698,11 @@ McpMergeResult mergeMcpServers({
       command: src.command,
       clearCommand: src.command == null,
       args: src.args,
-      env: src.env,
+      env: applySecrets && entry.hasEnvironment ? src.env : existing.env,
       cwd: src.cwd,
       clearCwd: src.cwd == null,
-      enabled: src.enabled,
+      enabled: src.transport == McpTransport.stdio ? false : src.enabled,
+      clearStdioApproval: true,
       authKind: src.authKind,
       defaultToolPolicy: src.defaultToolPolicy,
       clearDefaultToolPolicy: src.defaultToolPolicy == null,
@@ -751,15 +753,11 @@ List<ProviderConfig> mergeProviders({
   required List<ProviderConfig> incoming,
   required bool applySecrets,
 }) {
-  final byId = <String, ProviderConfig>{
-    for (final p in local) p.id: p,
-  };
+  final byId = <String, ProviderConfig>{for (final p in local) p.id: p};
   for (final src in incoming) {
     final existing = byId[src.id];
     if (existing == null) {
-      byId[src.id] = applySecrets
-          ? src
-          : src.copyWith(apiKey: '');
+      byId[src.id] = applySecrets ? src : src.copyWith(apiKey: '');
       continue;
     }
     final nextKey = applySecrets && src.apiKey.trim().isNotEmpty

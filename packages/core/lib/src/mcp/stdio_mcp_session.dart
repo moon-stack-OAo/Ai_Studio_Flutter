@@ -31,6 +31,9 @@ class StdioMcpSession implements McpSession {
     if (cmd.isEmpty) {
       throw ArgumentError('MCP stdio command 不能为空');
     }
+    if (!server.isStdioApproved) {
+      throw StateError('MCP 本地命令尚未确认，请在设置中确认后启用');
+    }
   }
 
   final McpServerConfig _server;
@@ -120,9 +123,7 @@ class StdioMcpSession implements McpSession {
       Map<String, dynamic> arguments;
       try {
         final decoded = jsonDecode(
-          request.argumentsJson.trim().isEmpty
-              ? '{}'
-              : request.argumentsJson,
+          request.argumentsJson.trim().isEmpty ? '{}' : request.argumentsJson,
         );
         arguments = decoded is Map
             ? Map<String, dynamic>.from(decoded)
@@ -133,10 +134,7 @@ class StdioMcpSession implements McpSession {
 
       final result = await _rpc(
         'tools/call',
-        params: {
-          'name': request.toolName,
-          'arguments': arguments,
-        },
+        params: {'name': request.toolName, 'arguments': arguments},
         timeout: timeout ?? defaultCallTimeout,
         isCancelled: isCancelled,
       );
@@ -148,9 +146,7 @@ class StdioMcpSession implements McpSession {
         status: isError ? McpToolCallStatus.failed : McpToolCallStatus.success,
         content: content,
         isError: isError,
-        errorMessage: isError
-            ? mcpSanitizeSummary(content, maxLen: 120)
-            : null,
+        errorMessage: isError ? mcpSanitizeSummary(content, maxLen: 120) : null,
         latencyMs: sw.elapsedMilliseconds,
       );
     } on McpCancelledException {
@@ -224,14 +220,17 @@ class StdioMcpSession implements McpSession {
     if (_process != null) return;
     _throwIfCancelled(isCancelled);
 
+    if (!_server.isStdioApproved) {
+      throw StateError('MCP 本地命令配置已变更，请重新确认后启动');
+    }
+
     final cmd = _server.command!.trim();
     final args = List<String>.from(_server.args);
     final env = _server.env.isEmpty
         ? null
         : Map<String, String>.from(_server.env);
     final cwd = _server.cwd?.trim();
-    final workingDirectory =
-        (cwd == null || cwd.isEmpty) ? null : cwd;
+    final workingDirectory = (cwd == null || cwd.isEmpty) ? null : cwd;
 
     try {
       final started = processHost.start(
@@ -256,14 +255,12 @@ class StdioMcpSession implements McpSession {
     _stdoutSub = proc.stdout.listen(
       _onStdoutBytes,
       onError: (Object e, StackTrace st) {
-        _failAllPending(McpProcessException(
-          mcpSanitizeSummary('stdout 错误: $e', maxLen: 160),
-        ));
+        _failAllPending(
+          McpProcessException(mcpSanitizeSummary('stdout 错误: $e', maxLen: 160)),
+        );
       },
       onDone: () {
-        _failAllPending(
-          const McpProcessException('MCP 子进程 stdout 已关闭'),
-        );
+        _failAllPending(const McpProcessException('MCP 子进程 stdout 已关闭'));
       },
       cancelOnError: false,
     );
@@ -298,10 +295,7 @@ class StdioMcpSession implements McpSession {
       params: {
         'protocolVersion': protocolVersion,
         'capabilities': <String, dynamic>{},
-        'clientInfo': {
-          'name': clientName,
-          'version': clientVersion,
-        },
+        'clientInfo': {'name': clientName, 'version': clientVersion},
       },
       timeout: timeout ?? defaultCallTimeout,
       isCancelled: isCancelled,
@@ -438,9 +432,7 @@ class StdioMcpSession implements McpSession {
     try {
       decoded = jsonDecode(line);
     } catch (_) {
-      _failAllPending(
-        const McpProtocolException('stdout 行不是合法 JSON'),
-      );
+      _failAllPending(const McpProtocolException('stdout 行不是合法 JSON'));
       return;
     }
     if (decoded is! Map) return;
@@ -463,9 +455,7 @@ class StdioMcpSession implements McpSession {
     if (result is Map) {
       pending.complete(Map<String, dynamic>.from(result));
     } else if (result == null) {
-      pending.completeError(
-        const McpProtocolException('JSON-RPC 缺少 result'),
-      );
+      pending.completeError(const McpProtocolException('JSON-RPC 缺少 result'));
     } else {
       pending.complete({'value': result});
     }
@@ -498,8 +488,8 @@ class StdioMcpSession implements McpSession {
         } else if (ann['destructiveHint'] == true) {
           side = McpToolSideEffect.write;
         }
-        final se = ann['sideEffect']?.toString() ??
-            map['sideEffect']?.toString();
+        final se =
+            ann['sideEffect']?.toString() ?? map['sideEffect']?.toString();
         if (se != null) side = McpToolSideEffect.tryParse(se);
       } else if (map['sideEffect'] != null) {
         side = McpToolSideEffect.tryParse(map['sideEffect']?.toString());

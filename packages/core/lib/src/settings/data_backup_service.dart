@@ -106,8 +106,7 @@ class DataBackupService {
       exportedAtMs: DateTime.now().millisecondsSinceEpoch,
       includeSecrets: options.includeSecrets,
       appearance: _appearance.settings,
-      chatDefaults:
-          options.includeChatDefaults ? _chatDefaults.defaults : null,
+      chatDefaults: options.includeChatDefaults ? _chatDefaults.defaults : null,
       providers: List<ProviderConfig>.from(_providers.providers),
       activeProviderId: _providers.activeProviderId,
       chatSessions: chat,
@@ -138,8 +137,7 @@ class DataBackupService {
     final payload = DataBackupPayload.parse(raw);
     await _ensureLoaded();
 
-    final applySecrets =
-        options.importSecrets && payload.includeSecrets;
+    final applySecrets = options.importSecrets && payload.includeSecrets;
 
     final localProviders = List<ProviderConfig>.from(_providers.providers);
     final localIds = {for (final p in localProviders) p.id};
@@ -216,14 +214,21 @@ class DataBackupService {
     var mcpImported = false;
     var mcpMerged = 0;
     var mcpAdded = 0;
+    var mcpSkipped = 0;
     final mcpRepo = _mcpServers;
     final incomingMcp = payload.mcpServers;
-    if (options.importMcpServers &&
-        mcpRepo != null &&
-        incomingMcp != null) {
+    if (options.importMcpServers && mcpRepo != null && incomingMcp != null) {
+      final accepted = incomingMcp
+          .where(
+            (entry) =>
+                options.allowStdio ||
+                entry.config.transport != McpTransport.stdio,
+          )
+          .toList();
+      mcpSkipped = incomingMcp.length - accepted.length;
       final merge = mergeMcpServers(
         local: List<McpServerConfig>.from(mcpRepo.servers),
-        incoming: incomingMcp,
+        incoming: accepted,
         applySecrets: applySecrets,
       );
       await mcpRepo.replaceAll(merge.servers);
@@ -246,6 +251,7 @@ class DataBackupService {
       mcpServersMerged: mcpMerged,
       mcpServersAdded: mcpAdded,
       mcpImported: mcpImported,
+      mcpServersSkipped: mcpSkipped,
     );
   }
 
@@ -279,12 +285,8 @@ class DataBackupService {
       await _chatSessions.clearAllSessions(
         clearAttachmentCache: flags.mediaCache,
       );
-      await _imageSessions.clearAllSessions(
-        clearMediaCache: flags.mediaCache,
-      );
-      await _videoSessions.clearAllSessions(
-        clearMediaCache: flags.mediaCache,
-      );
+      await _imageSessions.clearAllSessions(clearMediaCache: flags.mediaCache);
+      await _videoSessions.clearAllSessions(clearMediaCache: flags.mediaCache);
       clearedSessions = true;
       if (flags.mediaCache) {
         try {
@@ -371,12 +373,10 @@ class DataBackupService {
 
     var approxJson = 0;
     try {
-      approxJson += utf8
-          .encode(jsonEncode(_appearance.settings.toJson()))
-          .length;
-      approxJson += utf8
-          .encode(jsonEncode(_chatDefaults.defaults.toJson()))
-          .length;
+      approxJson +=
+          utf8.encode(jsonEncode(_appearance.settings.toJson())).length;
+      approxJson +=
+          utf8.encode(jsonEncode(_chatDefaults.defaults.toJson())).length;
       approxJson += utf8
           .encode(
             jsonEncode({
@@ -412,8 +412,9 @@ class DataBackupService {
     } catch (_) {}
 
     final imageBytes = await _safeEstimate(_imageAssetStore.estimateBytes);
-    final chatAttBytes =
-        await _safeEstimate(_chatAttachmentStore.estimateBytes);
+    final chatAttBytes = await _safeEstimate(
+      _chatAttachmentStore.estimateBytes,
+    );
     final videoBytes = await _safeEstimate(_videoAssetStore.estimateBytes);
     final posterStore = _videoPosterStore;
     final posterBytes = posterStore == null

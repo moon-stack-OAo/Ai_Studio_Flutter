@@ -75,13 +75,9 @@ void main() {
       apiKey: 'sk-test',
       chatModel: 'gpt-4o',
     );
-    sessions = ChatSessionRepository(
-      storage: MemoryChatSessionStorage(),
-    );
+    sessions = ChatSessionRepository(storage: MemoryChatSessionStorage());
     await sessions.load();
-    chatDefaults = ChatDefaultsRepository(
-      storage: MemoryChatDefaultsStorage(),
-    );
+    chatDefaults = ChatDefaultsRepository(storage: MemoryChatDefaultsStorage());
     await chatDefaults.load();
     generation = GenerationRuntime();
   });
@@ -135,10 +131,7 @@ void main() {
       }
       // 第二轮：应含 role=tool
       final messages = body['messages'] as List;
-      expect(
-        messages.any((m) => m is Map && m['role'] == 'tool'),
-        isTrue,
-      );
+      expect(messages.any((m) => m is Map && m['role'] == 'tool'), isTrue);
       return http.StreamedResponse(
         Stream.value(
           utf8.encode(
@@ -252,9 +245,85 @@ void main() {
     );
     await facade.send('写入', onNotify: () {});
     expect(fakeSessions['mcp_1']?.calls ?? [], isEmpty);
-    final toolMsg =
-        sessions.activeSession!.messages.firstWhere((m) => m.role == ChatRole.tool);
+    final toolMsg = sessions.activeSession!.messages.firstWhere(
+      (m) => m.role == ChatRole.tool,
+    );
     expect(toolMsg.content, contains('拒绝'));
     facade.dispose();
   });
+
+  test(
+    'confirm_once is isolated by chat and revoked on server or credential changes',
+    () async {
+      var round = 0;
+      final client = MockClient.streaming((request, bodyStream) async {
+        await bodyStream.drain();
+        final payload = ++round % 2 == 1
+            ? '{"choices":[{"delta":{"tool_calls":[{"index":0,"id":"c$round","type":"function","function":{"name":"biz.write","arguments":"{}"}}]},"finish_reason":"tool_calls"}]}'
+            : '{"choices":[{"delta":{"content":"done"}}]}';
+        return http.StreamedResponse(
+          Stream.value(utf8.encode('data: $payload\n\ndata: [DONE]\n\n')),
+          200,
+        );
+      });
+      final repo = McpServerRepository(
+        storage: MemoryMcpServerStorage([
+          const McpServerConfig(
+            id: 's',
+            displayName: 'Server',
+            baseUrl: 'https://example.com/mcp',
+            defaultToolPolicy: McpToolPolicyLevel.confirmOnce,
+            toolsCache: [
+              McpToolDescriptor(
+                name: 'biz.write',
+                sideEffect: McpToolSideEffect.write,
+              ),
+            ],
+          ),
+        ]),
+        secretStore: MemorySecretStore(),
+      );
+      await repo.load();
+      var prompts = 0;
+      final facade = ChatSessionFacade(
+        providers: providers,
+        sessions: sessions,
+        chatDefaults: chatDefaults,
+        generation: generation,
+        chatClient: OpenAiCompatibleChatClient(client: client),
+        createHttpClient: () => createSafeHttpClient(inner: client),
+        mcpServers: repo,
+        mcpSessionFactory: _FakeFactory({}),
+        toolAuthPrompter: (_) async {
+          prompts++;
+          return true;
+        },
+      );
+      addTearDown(facade.dispose);
+      final firstId = sessions.activeId;
+      await facade.send('a1', onNotify: () {});
+      await facade.send('a2', onNotify: () {});
+      expect(prompts, 1);
+      await sessions.createSession();
+      await facade.send('b1', onNotify: () {});
+      await facade.send('b2', onNotify: () {});
+      expect(prompts, 2);
+      await sessions.setActive(firstId);
+      await facade.send('a3', onNotify: () {});
+      expect(prompts, 2);
+      await repo.update(
+        repo
+            .findById('s')!
+            .copyWith(baseUrl: 'https://changed.example.com/mcp'),
+      );
+      await facade.send('a4', onNotify: () {});
+      expect(prompts, 3);
+      await repo.writeBearerSecret('s', 'test-token-1');
+      await facade.send('a5', onNotify: () {});
+      expect(prompts, 4);
+      await repo.writeBearerSecret('s', 'test-token-2');
+      await facade.send('a6', onNotify: () {});
+      expect(prompts, 5);
+    },
+  );
 }

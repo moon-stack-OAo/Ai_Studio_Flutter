@@ -20,8 +20,7 @@ Future<void> main() async {
 
   // 仅预加载外观，尽快画出 BrandIntro（正确亮/暗）
 
-  final appearance =
-      AppearanceRepository(storage: PrefsAppearanceStorage());
+  final appearance = AppearanceRepository(storage: PrefsAppearanceStorage());
   await appearance.load();
 
   final themeController = ThemeController(repository: appearance);
@@ -32,14 +31,12 @@ Future<void> main() async {
     storage: SecureProviderStorage(secretStore: secretStore),
   );
   final mcpServers = McpServerRepository(
-    storage: PrefsMcpServerStorage(),
+    storage: PrefsMcpServerStorage(secretStore: secretStore),
     secretStore: secretStore,
   );
   final mcpSessionFactory = HttpSseMcpSessionFactory(
-    secretStoreAuthBuilder: (server) => createMcpAuthProvider(
-      server: server,
-      secretStore: secretStore,
-    ),
+    secretStoreAuthBuilder: (server) =>
+        createMcpAuthProvider(server: server, secretStore: secretStore),
   );
   final chatAttachmentStore = FileImageAssetStore(subdir: 'chat_image_cache');
   final sessions = ChatSessionRepository(
@@ -61,8 +58,9 @@ Future<void> main() async {
     store: videoPosterStore,
     extractor: MediaKitVideoFrameExtractor(),
   );
-  final chatDefaults =
-      ChatDefaultsRepository(storage: PrefsChatDefaultsStorage());
+  final chatDefaults = ChatDefaultsRepository(
+    storage: PrefsChatDefaultsStorage(),
+  );
   final appLogs = AppLogRepository(storage: PrefsAppLogStorage());
 
   final generation = GenerationRuntime();
@@ -243,10 +241,7 @@ class _AiStudioAppState extends State<AiStudioApp> {
           theme: buildMaterialLightTheme(fontScale: scale, density: dens),
           darkTheme: buildMaterialDarkTheme(fontScale: scale, density: dens),
           locale: const Locale('zh', 'CN'),
-          supportedLocales: const [
-            Locale('zh', 'CN'),
-            Locale('en'),
-          ],
+          supportedLocales: const [Locale('zh', 'CN'), Locale('en')],
           localizationsDelegates: const [
             GlobalMaterialLocalizations.delegate,
             GlobalWidgetsLocalizations.delegate,
@@ -290,10 +285,7 @@ class _AiStudioAppState extends State<AiStudioApp> {
                 return shell;
               }
 
-              return BrandIntroGate(
-                ready: _shellReady,
-                child: shell,
-              );
+              return BrandIntroGate(ready: _shellReady, child: shell);
             },
           ),
         );

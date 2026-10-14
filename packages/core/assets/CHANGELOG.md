@@ -17,7 +17,15 @@
 
 ### Changed
 
+- **Release 附带未签名 iOS IPA**：`AI.Studio_<ver>_ios.ipa` 随 GitHub Release 分发，不进更新清单；真机须 Sideloadly / AltStore 等重签后安装
+- **自动更新优先 AppDock**：桌面与 Android 先拉 `https://appdock.livancen.top` 上应用 `ai-studio` 的版本列表；应用不存在或 AppDock 打不开时回退 GitHub `latest.json` / `android-latest.json`。需要访问口令时不回退
+- **更新口令**：AppDock 应用需要访问口令时，桌面与 Android 检查更新会弹出输入框；解锁后的会话写入本机安全存储，之后检查与下载自动携带
+
 ### Fixed
+
+- **对话切换滚动**：桌面与移动端切换长会话或含大量表格的会话时可靠定位到最新消息；按会话重建滚动状态，底部定位不再依赖懒加载列表的总高度估算。
+- **凭据与 MCP 安全**：跨源重定向剥离鉴权头与 Cookie，携凭据的 HTTPS 降级重定向阻断；stdio 环境变量改存凭据库，旧明文验证迁移后清除；备份导入不恢复本地命令确认，须重新确认启用，移动端跳过 stdio；导入环境变量受密钥选项约束；`confirm_once` 授权仅在当前聊天复用，配置或凭据变更后失效。
+- **桌面更新测试**：对齐缺少完整性信息时检查失败、sha256 匹配后安装及不匹配时删除下载包并阻断安装的规则。
 
 ---
 

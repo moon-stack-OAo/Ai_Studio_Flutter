@@ -73,6 +73,7 @@ class DefaultToolCallOrchestrator implements ToolCallOrchestrator {
     required this.resolveSession,
     required this.resolveTool,
     required this.resolveServer,
+    this.authorizationFingerprint,
     this.policyResolver = const McpToolPolicyResolver(),
     McpSessionToolGrants? sessionGrants,
   }) : sessionGrants = sessionGrants ?? McpSessionToolGrants();
@@ -84,6 +85,11 @@ class DefaultToolCallOrchestrator implements ToolCallOrchestrator {
       resolveTool;
 
   final McpServerConfig Function(String serverId) resolveServer;
+  final String Function(String serverId)? authorizationFingerprint;
+
+  String _fingerprint(String id) =>
+      authorizationFingerprint?.call(id) ??
+      mcpAuthorizationFingerprint(resolveServer(id));
 
   final McpToolPolicyResolver policyResolver;
   final McpSessionToolGrants sessionGrants;
@@ -141,6 +147,7 @@ class DefaultToolCallOrchestrator implements ToolCallOrchestrator {
       }
 
       final server = resolveServer(call.serverId);
+      final fingerprint = _fingerprint(call.serverId);
       final tool = resolveTool(call.serverId, call.toolName);
       final level = policyResolver.resolveEffective(
         server: server,
@@ -160,7 +167,7 @@ class DefaultToolCallOrchestrator implements ToolCallOrchestrator {
       );
       onTrace?.call(trace);
 
-      if (level == McpToolPolicyLevel.deny) {
+      if (!server.enabled || level == McpToolPolicyLevel.deny) {
         final rejected = McpToolCallResult(
           toolCallId: call.toolCallId,
           status: McpToolCallStatus.rejected,
@@ -202,6 +209,20 @@ class DefaultToolCallOrchestrator implements ToolCallOrchestrator {
           );
           onTrace?.call(trace.copyWith(status: McpToolCallStatus.rejected));
           out.add(rejected);
+          continue;
+        }
+        if (fingerprint != _fingerprint(call.serverId) ||
+            !resolveServer(call.serverId).enabled) {
+          out.add(
+            McpToolCallResult(
+              toolCallId: call.toolCallId,
+              status: McpToolCallStatus.rejected,
+              content: 'MCP 配置已变更，请重新发起调用并确认授权',
+              isError: true,
+              errorMessage: 'config_changed',
+            ),
+          );
+          onTrace?.call(trace.copyWith(status: McpToolCallStatus.rejected));
           continue;
         }
         if (level == McpToolPolicyLevel.confirmOnce) {

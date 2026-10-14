@@ -5,6 +5,9 @@ import 'dart:io';
 import 'package:core/core.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+McpServerConfig _approved(McpServerConfig server) =>
+    server.copyWith(stdioApproval: mcpStdioFingerprint(server));
+
 /// 脚本式 Fake：按收到的 JSON-RPC method 应答（newline delimited）。
 class _ScriptedProcessHost implements ProcessHost {
   _ScriptedProcessHost(this.handler);
@@ -156,16 +159,17 @@ void main() {
       expect(meta['transport'], 'stdio');
       expect(meta['command'], 'node');
       expect(meta['args'], ['server.js', '--port', '0']);
-      expect(meta['env'], {'API_KEY': 'secret-env', 'DEBUG': '1'});
+      expect(meta.containsKey('env'), isFalse);
+      expect(meta['envSecretRef'], mcpEnvironmentSecretKey(original.id));
       expect(meta['cwd'], '/tmp/mcp');
 
       final restored = McpServerConfig.fromJson(meta);
       expect(restored.transport, McpTransport.stdio);
       expect(restored.command, 'node');
       expect(restored.args, original.args);
-      expect(restored.env, original.env);
+      expect(restored.env, isEmpty);
       expect(restored.cwd, '/tmp/mcp');
-      expect(restored.canExposeTools, isTrue);
+      expect(restored.canExposeTools, isFalse);
     });
 
     test('legacy json without transport defaults to http', () {
@@ -184,10 +188,7 @@ void main() {
         displayName: 'H',
         baseUrl: 'https://x/mcp',
       );
-      const httpNoUrl = McpServerConfig(
-        id: 'h2',
-        displayName: 'H2',
-      );
+      const httpNoUrl = McpServerConfig(id: 'h2', displayName: 'H2');
       const stdioOk = McpServerConfig(
         id: 's',
         displayName: 'S',
@@ -202,7 +203,20 @@ void main() {
       );
       expect(httpOk.canExposeTools, isTrue);
       expect(httpNoUrl.canExposeTools, isFalse);
-      expect(stdioOk.canExposeTools, isTrue);
+      expect(stdioOk.canExposeTools, isFalse);
+      expect(_approved(stdioOk).canExposeTools, isTrue);
+      expect(
+        _approved(stdioOk).copyWith(args: ['changed']).canExposeTools,
+        isFalse,
+      );
+      expect(
+        _approved(stdioOk).copyWith(env: {'TOKEN': 'changed'}).canExposeTools,
+        isFalse,
+      );
+      expect(
+        _approved(stdioOk).copyWith(cwd: '/changed').canExposeTools,
+        isFalse,
+      );
       expect(stdioNoCmd.canExposeTools, isFalse);
       expect(stdioOk.copyWith(enabled: false).canExposeTools, isFalse);
     });
@@ -267,7 +281,9 @@ void main() {
       expect(s.transport, McpTransport.stdio);
       expect(s.command, 'node');
       expect(s.args, ['srv.js']);
-      expect(s.env, {'K': 'V'});
+      expect(s.env, isEmpty);
+      expect(s.enabled, isFalse);
+      expect(s.isStdioApproved, isFalse);
       expect(s.cwd, '/home/mcp');
       expect(s.displayName, 'New');
     });
@@ -295,6 +311,55 @@ void main() {
   });
 
   group('HttpSseMcpSessionFactory transport routing', () {
+    for (final field in ['args', 'env']) {
+      test(
+        'changed $field after session creation cannot start a process',
+        () async {
+          final args = ['approved.js'];
+          final env = {'TOKEN': 'approved-env'};
+          final host = _ScriptedProcessHost((_) => {'result': {}});
+          final session = StdioMcpSession(
+            server: _approved(
+              McpServerConfig(
+                id: 'changed',
+                displayName: 'Local',
+                transport: McpTransport.stdio,
+                command: 'node',
+                args: args,
+                env: env,
+              ),
+            ),
+            processHost: host,
+          );
+          addTearDown(session.close);
+          if (field == 'args') {
+            args[0] = 'unapproved.js';
+          } else {
+            env['TOKEN'] = 'unapproved-env';
+          }
+          final result = await session.probe();
+          expect(result.ok, isFalse);
+          expect(host.startCount, 0);
+        },
+      );
+    }
+
+    test('unconfirmed commands never start a process', () {
+      final host = _ScriptedProcessHost((_) => {'result': {}});
+      expect(
+        () => StdioMcpSession(
+          server: const McpServerConfig(
+            id: 'unconfirmed',
+            displayName: 'Local',
+            transport: McpTransport.stdio,
+            command: 'node',
+          ),
+          processHost: host,
+        ),
+        throwsStateError,
+      );
+      expect(host.startCount, 0);
+    });
     test('stdio without ProcessHost throws StateError', () {
       final factory = HttpSseMcpSessionFactory(
         secretStoreAuthBuilder: (_) => const NoneMcpAuth(),
@@ -319,12 +384,14 @@ void main() {
         processHost: host,
       );
       final session = factory.create(
-        const McpServerConfig(
-          id: 's',
-          displayName: 'S',
-          transport: McpTransport.stdio,
-          command: 'node',
-          args: ['x.js'],
+        _approved(
+          const McpServerConfig(
+            id: 's',
+            displayName: 'S',
+            transport: McpTransport.stdio,
+            command: 'node',
+            args: ['x.js'],
+          ),
         ),
       );
       expect(session, isA<StdioMcpSession>());
@@ -389,7 +456,10 @@ void main() {
         env: {'FOO': 'bar'},
         cwd: '/tmp',
       );
-      final session = StdioMcpSession(server: server, processHost: host);
+      final session = StdioMcpSession(
+        server: _approved(server),
+        processHost: host,
+      );
       final probe = await session.probe();
       expect(probe.ok, isTrue);
       expect(probe.serverName, 'fake-stdio');
@@ -410,7 +480,10 @@ void main() {
         transport: McpTransport.stdio,
         command: 'node',
       );
-      final session = StdioMcpSession(server: server, processHost: host);
+      final session = StdioMcpSession(
+        server: _approved(server),
+        processHost: host,
+      );
       final result = await session.callTool(
         const McpToolCallRequest(
           toolCallId: 'tc1',
@@ -431,7 +504,10 @@ void main() {
         transport: McpTransport.stdio,
         command: 'node',
       );
-      final session = StdioMcpSession(server: server, processHost: host);
+      final session = StdioMcpSession(
+        server: _approved(server),
+        processHost: host,
+      );
       await session.listTools();
       expect(host.lastProcess?.isRunning, isTrue);
       session.close();

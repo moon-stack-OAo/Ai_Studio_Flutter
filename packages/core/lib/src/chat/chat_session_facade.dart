@@ -70,7 +70,11 @@ class ChatSessionFacade {
         modelsCache = ProviderModelsCache(
           providers: providers,
           onChanged: onModelsChanged,
-        );
+        ) {
+    _mcpServers?.addListener(_onMcpConfigurationChanged);
+    _sessions.addListener(_pruneSessionGrants);
+    _onMcpConfigurationChanged();
+  }
 
   final ProviderRepository _providers;
   final ChatSessionRepository _sessions;
@@ -89,15 +93,39 @@ class ChatSessionFacade {
   final int maxMcpToolRounds;
 
   final Map<String, McpSession> _mcpSessions = {};
-  final McpSessionToolGrants _mcpSessionGrants = McpSessionToolGrants();
+  final Map<String, McpSessionToolGrants> _mcpSessionGrants = {};
+  final Map<String, String> _mcpConfigurationFingerprints = {};
+
+  void _pruneSessionGrants() {
+    final ids = _sessions.sessions.map((s) => s.id).toSet();
+    _mcpSessionGrants.removeWhere((id, _) => !ids.contains(id));
+  }
+
+  void _onMcpConfigurationChanged() {
+    final repo = _mcpServers;
+    if (repo == null) return;
+    final next = {
+      for (final s in repo.servers)
+        s.id: '${mcpAuthorizationFingerprint(s)}:${repo.secretRevision(s.id)}',
+    };
+    for (final id in _mcpConfigurationFingerprints.keys) {
+      if (next[id] == _mcpConfigurationFingerprints[id]) continue;
+      for (final grants in _mcpSessionGrants.values) {
+        grants.revokeServer(id);
+      }
+      _mcpSessions.remove(id)?.close();
+    }
+    _mcpConfigurationFingerprints
+      ..clear()
+      ..addAll(next);
+  }
 
   final ProviderModelsCache modelsCache;
 
   String? _streamingAssistantId;
   DateTime? _lastPersistAt;
 
-  bool get isStreamingActiveSession =>
-      generation.isCurrent(_sessions.activeId);
+  bool get isStreamingActiveSession => generation.isCurrent(_sessions.activeId);
 
   /// 是否具备 MCP 编排注入（不含「当前是否有 tools 缓存」）。
   bool get isMcpWiringEnabled =>
@@ -113,10 +141,7 @@ class ChatSessionFacade {
       );
 
   /// 含正文 / 附图的发送门闩（CHAT-ATTACH：有图可空文）。
-  bool canSendWith({
-    String textDraft = '',
-    bool hasAttachments = false,
-  }) {
+  bool canSendWith({String textDraft = '', bool hasAttachments = false}) {
     return canSendChatMessage(
       generation: generation,
       activeSessionId: _sessions.activeId,
@@ -192,10 +217,9 @@ class ChatSessionFacade {
         return;
       }
       for (var i = 0; i < bytesList.length; i++) {
-        final mime =
-            attachmentMimes != null && i < attachmentMimes.length
-                ? attachmentMimes[i]
-                : null;
+        final mime = attachmentMimes != null && i < attachmentMimes.length
+            ? attachmentMimes[i]
+            : null;
         final err = validateChatAttachmentBytes(bytesList[i], mime: mime);
         if (err != null) {
           onBanner?.call(err);
@@ -265,15 +289,15 @@ class ChatSessionFacade {
     final systemPrompt =
         session.overrides.systemPrompt ?? defaults.systemPrompt;
 
-    final attachmentDataUrls =
-        await _collectAttachmentDataUrls(trimmed.messages);
+    final attachmentDataUrls = await _collectAttachmentDataUrls(
+      trimmed.messages,
+    );
     var apiMessages = buildApiMessages(
       history: trimmed.messages,
       systemPrompt: systemPrompt,
       attachmentDataUrls: attachmentDataUrls,
     );
-    final temperature =
-        session.overrides.temperature ?? defaults.temperature;
+    final temperature = session.overrides.temperature ?? defaults.temperature;
     final maxTokens = defaults.maxTokens > 0 ? defaults.maxTokens : null;
 
     final openaiTools = _resolveOpenAiTools(chatModel);
@@ -356,8 +380,7 @@ class ChatSessionFacade {
         );
 
         round++;
-        if (round > maxMcpToolRounds ||
-            totalToolCalls >= maxMcpToolRounds) {
+        if (round > maxMcpToolRounds || totalToolCalls >= maxMcpToolRounds) {
           await _sessions.appendMessage(
             sessionId,
             role: ChatRole.assistant,
@@ -373,7 +396,7 @@ class ChatSessionFacade {
         }
 
         final remaining = maxMcpToolRounds - totalToolCalls;
-        final orchestrator = _resolveOrchestrator();
+        final orchestrator = _resolveOrchestrator(sessionId);
         final callResults = await orchestrator.runRound(
           calls: requests,
           prompter: _toolAuthPrompter!,
@@ -399,15 +422,13 @@ class ChatSessionFacade {
           {
             'role': 'assistant',
             'content': result.content,
-            'tool_calls':
-                result.toolCalls.map((t) => t.toApiJson()).toList(),
+            'tool_calls': result.toolCalls.map((t) => t.toApiJson()).toList(),
           },
         ];
 
         for (final tr in callResults) {
-          final content = tr.content.isEmpty
-              ? (tr.isError ? '工具调用失败' : '')
-              : tr.content;
+          final content =
+              tr.content.isEmpty ? (tr.isError ? '工具调用失败' : '') : tr.content;
           await _sessions.appendMessage(
             sessionId,
             role: ChatRole.tool,
@@ -546,10 +567,11 @@ class ChatSessionFacade {
     return out;
   }
 
-  ToolCallOrchestrator _resolveOrchestrator() {
+  ToolCallOrchestrator _resolveOrchestrator(String sessionId) {
     final injected = _toolCallOrchestrator;
     if (injected != null) return injected;
     return DefaultToolCallOrchestrator(
+      authorizationFingerprint: (id) => _mcpConfigurationFingerprints[id] ?? '',
       resolveSession: _sessionFor,
       resolveTool: (serverId, toolName) {
         if (serverId.isEmpty) {
@@ -582,7 +604,10 @@ class ChatSessionFacade {
               enabled: false,
             );
       },
-      sessionGrants: _mcpSessionGrants,
+      sessionGrants: _mcpSessionGrants.putIfAbsent(
+        sessionId,
+        McpSessionToolGrants.new,
+      ),
     );
   }
 
@@ -677,6 +702,9 @@ class ChatSessionFacade {
   }
 
   void dispose() {
+    _mcpServers?.removeListener(_onMcpConfigurationChanged);
+    _sessions.removeListener(_pruneSessionGrants);
+    _mcpSessionGrants.clear();
     modelsCache.dispose();
     _closeMcpSessions();
     if (_ownsClient) _chatClient.close();

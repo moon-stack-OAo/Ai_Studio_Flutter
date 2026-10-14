@@ -27,8 +27,7 @@ Future<void> main() async {
   MediaKit.ensureInitialized();
 
   // 先读外观，再开窗：原生窗底须不透明并贴合主题，否则最大化会闪透桌面。
-  final appearance =
-      AppearanceRepository(storage: PrefsAppearanceStorage());
+  final appearance = AppearanceRepository(storage: PrefsAppearanceStorage());
   await appearance.load();
   final themeController = ThemeController(repository: appearance);
   themeController.loadFrom(appearance.settings);
@@ -41,15 +40,13 @@ Future<void> main() async {
   await providers.load();
 
   final mcpServers = McpServerRepository(
-    storage: PrefsMcpServerStorage(),
+    storage: PrefsMcpServerStorage(secretStore: secretStore),
     secretStore: secretStore,
   );
   await mcpServers.load();
   final mcpSessionFactory = HttpSseMcpSessionFactory(
-    secretStoreAuthBuilder: (server) => createMcpAuthProvider(
-      server: server,
-      secretStore: secretStore,
-    ),
+    secretStoreAuthBuilder: (server) =>
+        createMcpAuthProvider(server: server, secretStore: secretStore),
     processHost: const IoProcessHost(),
   );
 
@@ -80,8 +77,9 @@ Future<void> main() async {
     extractor: MediaKitVideoFrameExtractor(),
   );
 
-  final chatDefaults =
-      ChatDefaultsRepository(storage: PrefsChatDefaultsStorage());
+  final chatDefaults = ChatDefaultsRepository(
+    storage: PrefsChatDefaultsStorage(),
+  );
   await chatDefaults.load();
 
   final appLogs = AppLogRepository(storage: PrefsAppLogStorage());
@@ -251,10 +249,7 @@ class AiStudioApp extends StatelessWidget {
           theme: buildFluentLightTheme(fontScale: scale, density: dens),
           darkTheme: buildFluentDarkTheme(fontScale: scale, density: dens),
           locale: const Locale('zh', 'CN'),
-          supportedLocales: const [
-            Locale('zh', 'CN'),
-            Locale('en'),
-          ],
+          supportedLocales: const [Locale('zh', 'CN'), Locale('en')],
           home: showBrandIntro ? BrandIntroGate(child: shell) : shell,
         );
       },
