@@ -1,9 +1,12 @@
+import 'dart:convert';
+
 import 'package:core/core.dart';
 import 'package:design_fluent/design_fluent.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 
 import '../../widgets/back_to_top_host.dart';
 import 'widgets/settings_typography.dart';
+import 'widgets/settings_conflict_notice.dart';
 import '../../widgets/filterable_model_picker.dart';
 import '../../widgets/empty_illustrations.dart';
 import '../../widgets/fluent_empty_states.dart';
@@ -35,6 +38,14 @@ class _SettingsProvidersPageState extends State<SettingsProvidersPage> {
   bool _dirty = false;
   bool _syncingForm = false;
   String? _lastShownPersistError;
+  String? _formFingerprint;
+  bool _saving = false;
+
+  String? _fingerprint(ProviderConfig? provider) => provider == null
+      ? null
+      : jsonEncode(provider.copyWith(clearLastTest: true).toJson());
+
+  bool get _hasConflict => _fingerprint(_selected) != _formFingerprint;
 
   ProviderRepository get _repo => widget.repository;
 
@@ -89,6 +100,8 @@ class _SettingsProvidersPageState extends State<SettingsProvidersPage> {
     if (!exists) {
       _selectedId = _repo.activeProviderId;
       _loadFormFromSelected();
+    } else if (!_dirty && !_saving && _hasConflict) {
+      _loadFormFromSelected();
     }
     final err = _repo.lastError;
     setState(() {});
@@ -111,6 +124,7 @@ class _SettingsProvidersPageState extends State<SettingsProvidersPage> {
 
   void _loadFormFromSelected() {
     final p = _selected;
+    _formFingerprint = _fingerprint(p);
     _syncingForm = true;
     if (p == null) {
       _nameCtrl.clear();
@@ -191,13 +205,16 @@ class _SettingsProvidersPageState extends State<SettingsProvidersPage> {
     _showInfoBar('已添加自定义提供商', InfoBarSeverity.success);
   }
 
-  Future<void> _save() async {
+  Future<bool> _save() async {
+    if (_saving) return false;
+    if (_hasConflict && !await confirmSettingsOverwrite(context)) return false;
+    if (!mounted) return false;
     final current = _selected;
-    if (current == null) return;
+    if (current == null) return false;
     final name = _nameCtrl.text.trim();
     if (name.isEmpty) {
       _showInfoBar('请填写显示名称', InfoBarSeverity.warning);
-      return;
+      return false;
     }
     final baseUrl = _baseUrlCtrl.text.trim();
     final urlRisk = warnUnsafeUrl(baseUrl);
@@ -210,13 +227,16 @@ class _SettingsProvidersPageState extends State<SettingsProvidersPage> {
       imageModel: _imageModelCtrl.text.trim(),
       videoModel: _videoModelCtrl.text.trim(),
     );
+    _saving = true;
     try {
       await _repo.saveProvider(next);
     } on UrlSafetyException catch (e) {
       _showInfoBar(e.message, InfoBarSeverity.error);
-      return;
+      return false;
+    } finally {
+      _saving = false;
     }
-    if (!mounted) return;
+    if (!mounted) return false;
     setState(() {
       _dirty = false;
       _loadFormFromSelected();
@@ -225,6 +245,7 @@ class _SettingsProvidersPageState extends State<SettingsProvidersPage> {
     if (urlRisk != null) {
       _showInfoBar(urlRisk, InfoBarSeverity.warning);
     }
+    return true;
   }
 
   void _cancelEdits() {
@@ -277,9 +298,8 @@ class _SettingsProvidersPageState extends State<SettingsProvidersPage> {
       _showInfoBar(blocked, InfoBarSeverity.warning);
       return;
     }
-    if (_dirty) {
-      await _save();
-    }
+    if (_dirty && !await _save()) return;
+    if (!mounted) return;
     setState(() {
       _testing = true;
       _statusText = '测试中…';
@@ -321,7 +341,8 @@ class _SettingsProvidersPageState extends State<SettingsProvidersPage> {
       _showInfoBar(blocked, InfoBarSeverity.warning);
       return;
     }
-    if (_dirty) await _save();
+    if (_dirty && !await _save()) return;
+    if (!mounted) return;
     setState(() => _listingModels = true);
     try {
       final models = await _repo.listModels(current.id);
@@ -452,6 +473,7 @@ class _SettingsProvidersPageState extends State<SettingsProvidersPage> {
                     statusText: _statusText,
                     statusOk: _statusOk,
                     dirty: _dirty,
+                    hasConflict: _hasConflict,
                     canDelete: !selected.builtin,
                     chatModelOptions: _stableOptions(
                       ModelKind.chat,
@@ -611,6 +633,7 @@ class _ProviderForm extends StatelessWidget {
     required this.statusText,
     required this.statusOk,
     required this.dirty,
+    required this.hasConflict,
     required this.canDelete,
     required this.chatModelOptions,
     required this.imageModelOptions,
@@ -640,6 +663,7 @@ class _ProviderForm extends StatelessWidget {
   final String? statusText;
   final bool statusOk;
   final bool dirty;
+  final bool hasConflict;
   final bool canDelete;
   final List<ModelSelectOption> chatModelOptions;
   final List<ModelSelectOption> imageModelOptions;
@@ -667,6 +691,13 @@ class _ProviderForm extends StatelessWidget {
                 padding: const EdgeInsets.fromLTRB(28, 20, 28, 16),
                 children: [
                   Text('编辑提供商', style: context.settingsText.pageTitle),
+                  if (hasConflict) ...[
+                    const SizedBox(height: 12),
+                    const InfoBar(
+                      title: Text(settingsConflictMessage),
+                      severity: InfoBarSeverity.warning,
+                    ),
+                  ],
                   const SizedBox(height: 4),
                   Text(
                     '元数据存本机；密钥存 OS 凭据库（不上传）；完整 Key 不写入日志。',

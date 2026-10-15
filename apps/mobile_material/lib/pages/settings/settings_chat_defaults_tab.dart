@@ -6,10 +6,7 @@ import 'package:flutter/services.dart';
 import '../../widgets/back_to_top_host.dart';
 
 class SettingsChatDefaultsTab extends StatefulWidget {
-  const SettingsChatDefaultsTab({
-    super.key,
-    required this.repository,
-  });
+  const SettingsChatDefaultsTab({super.key, required this.repository});
 
   final ChatDefaultsRepository repository;
 
@@ -31,6 +28,8 @@ class _SettingsChatDefaultsTabState extends State<SettingsChatDefaultsTab> {
   bool _dirty = false;
   bool _syncing = false;
   bool _saving = false;
+  late ChatDefaults _baseline;
+  bool get _hasConflict => _baseline != _repo.defaults;
 
   ChatDefaultsRepository get _repo => widget.repository;
 
@@ -58,12 +57,17 @@ class _SettingsChatDefaultsTabState extends State<SettingsChatDefaultsTab> {
   }
 
   void _onRepoChanged() {
-    if (!mounted || _dirty) return;
-    _loadFromRepo();
+    if (!mounted || _saving) return;
+    if (_dirty) {
+      setState(() {});
+    } else {
+      _loadFromRepo();
+    }
   }
 
   void _loadFromRepo() {
     final d = _repo.defaults;
+    _baseline = d;
     _syncing = true;
     _temperature = d.temperature;
     _trimEnabled = d.contextTrimEnabled;
@@ -115,6 +119,17 @@ class _SettingsChatDefaultsTabState extends State<SettingsChatDefaultsTab> {
 
   Future<void> _save() async {
     if (_saving) return;
+    if (_hasConflict &&
+        !await showMaterialConfirmDialog(
+          context: context,
+          title: '覆盖最新配置？',
+          message: '对话默认已被导入或其他操作更新。继续保存将用当前草稿覆盖最新配置。',
+          confirmLabel: '覆盖保存',
+          cancelLabel: '继续编辑',
+        )) {
+      return;
+    }
+    if (!mounted) return;
     setState(() => _saving = true);
     try {
       await _repo.save(_buildFromForm());
@@ -168,176 +183,180 @@ class _SettingsChatDefaultsTabState extends State<SettingsChatDefaultsTab> {
         controller: scroll,
         padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
         children: [
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(14),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text(
-                  '对话默认',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: tokens.ink,
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    '对话默认',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: tokens.ink,
+                    ),
                   ),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  '全局默认参数。单会话覆盖优先于本页；空系统提示不传 system。',
-                  style: TextStyle(fontSize: 12, color: tokens.inkMuted),
-                ),
-                const SizedBox(height: 14),
-                TextField(
-                  controller: _systemCtrl,
-                  maxLines: 4,
-                  decoration: const InputDecoration(
-                    labelText: '系统提示',
-                    hintText: '你是有用的本地助手。',
-                    alignLabelWithHint: true,
+                  const SizedBox(height: 6),
+                  Text(
+                    '全局默认参数。单会话覆盖优先于本页；启用的对话技能会追加到最终系统提示。',
+                    style: TextStyle(fontSize: 12, color: tokens.inkMuted),
                   ),
-                  onChanged: (_) => _markDirty(),
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  '温度 ${_temperature.toStringAsFixed(2)}',
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: tokens.inkSecondary,
+                  const SizedBox(height: 14),
+                  if (_hasConflict)
+                    const Text('本机配置已更新，当前草稿已保留。保存时需要确认覆盖；取消可载入最新配置。'),
+                  TextField(
+                    controller: _systemCtrl,
+                    maxLines: 4,
+                    decoration: const InputDecoration(
+                      labelText: '系统提示',
+                      hintText: '你是有用的本地助手。',
+                      helperText: '留空不追加全局系统提示；已启用的对话技能仍会生效',
+                      helperMaxLines: 3,
+                      alignLabelWithHint: true,
+                    ),
+                    onChanged: (_) => _markDirty(),
                   ),
-                ),
-                Slider(
-                  value: _temperature,
-                  min: 0,
-                  max: 2,
-                  divisions: 40,
-                  label: _temperature.toStringAsFixed(2),
-                  onChanged: (v) {
-                    setState(() {
-                      _temperature = double.parse(v.toStringAsFixed(2));
-                      _dirty = true;
-                    });
-                  },
-                ),
-                Text(
-                  '0 = 更确定 · 2 = 更随机',
-                  style: TextStyle(fontSize: 11, color: tokens.inkMuted),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: _maxTokensCtrl,
-                  keyboardType: TextInputType.number,
-                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                  decoration: const InputDecoration(
-                    labelText: 'Max Tokens',
-                    helperText: '0 = 不传 max_tokens',
+                  const SizedBox(height: 16),
+                  Text(
+                    '温度 ${_temperature.toStringAsFixed(2)}',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: tokens.inkSecondary,
+                    ),
                   ),
-                  onChanged: (_) => _markDirty(),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: _timeoutSecCtrl,
-                  keyboardType: TextInputType.number,
-                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                  decoration: const InputDecoration(
-                    labelText: '超时（秒）',
-                    helperText: '默认 180 秒',
+                  Slider(
+                    value: _temperature,
+                    min: 0,
+                    max: 2,
+                    divisions: 40,
+                    label: _temperature.toStringAsFixed(2),
+                    onChanged: (v) {
+                      setState(() {
+                        _temperature = double.parse(v.toStringAsFixed(2));
+                        _dirty = true;
+                      });
+                    },
                   ),
-                  onChanged: (_) => _markDirty(),
-                ),
-              ],
+                  Text(
+                    '0 = 更确定 · 2 = 更随机',
+                    style: TextStyle(fontSize: 11, color: tokens.inkMuted),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: _maxTokensCtrl,
+                    keyboardType: TextInputType.number,
+                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                    decoration: const InputDecoration(
+                      labelText: 'Max Tokens',
+                      helperText: '0 = 不传 max_tokens',
+                    ),
+                    onChanged: (_) => _markDirty(),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: _timeoutSecCtrl,
+                    keyboardType: TextInputType.number,
+                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                    decoration: const InputDecoration(
+                      labelText: '超时（秒）',
+                      helperText: '默认 180 秒',
+                    ),
+                    onChanged: (_) => _markDirty(),
+                  ),
+                ],
+              ),
             ),
           ),
-        ),
-        const SizedBox(height: 12),
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(14),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text(
-                  '上下文裁剪',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: tokens.ink,
+          const SizedBox(height: 12),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    '上下文裁剪',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: tokens.ink,
+                    ),
                   ),
-                ),
-                SwitchListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: const Text('按轮数裁剪上下文'),
-                  value: _trimEnabled,
-                  onChanged: (v) {
-                    setState(() {
-                      _trimEnabled = v;
-                      _dirty = true;
-                    });
-                  },
-                ),
-                TextField(
-                  controller: _maxTurnsCtrl,
-                  enabled: _trimEnabled,
-                  keyboardType: TextInputType.number,
-                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                  decoration: const InputDecoration(
-                    labelText: '最大轮数',
-                    helperText: '以 user 消息条数为轮；推荐 20',
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('按轮数裁剪上下文'),
+                    value: _trimEnabled,
+                    onChanged: (v) {
+                      setState(() {
+                        _trimEnabled = v;
+                        _dirty = true;
+                      });
+                    },
                   ),
-                  onChanged: (_) => _markDirty(),
-                ),
-                SwitchListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: const Text('启用字符预算'),
-                  value: _maxCharsEnabled,
-                  onChanged: (v) {
-                    setState(() {
-                      _maxCharsEnabled = v;
-                      _dirty = true;
-                    });
-                  },
-                ),
-                TextField(
-                  controller: _maxCharsCtrl,
-                  enabled: _maxCharsEnabled,
-                  keyboardType: TextInputType.number,
-                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                  decoration: const InputDecoration(
-                    labelText: '最大字符数',
-                    helperText: '粗估字符（非 Token）；推荐 32000',
+                  TextField(
+                    controller: _maxTurnsCtrl,
+                    enabled: _trimEnabled,
+                    keyboardType: TextInputType.number,
+                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                    decoration: const InputDecoration(
+                      labelText: '最大轮数',
+                      helperText: '以 user 消息条数为轮；推荐 20',
+                    ),
+                    onChanged: (_) => _markDirty(),
                   ),
-                  onChanged: (_) => _markDirty(),
-                ),
-              ],
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('启用字符预算'),
+                    value: _maxCharsEnabled,
+                    onChanged: (v) {
+                      setState(() {
+                        _maxCharsEnabled = v;
+                        _dirty = true;
+                      });
+                    },
+                  ),
+                  TextField(
+                    controller: _maxCharsCtrl,
+                    enabled: _maxCharsEnabled,
+                    keyboardType: TextInputType.number,
+                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                    decoration: const InputDecoration(
+                      labelText: '最大字符数',
+                      helperText: '粗估字符（非 Token）；推荐 32000',
+                    ),
+                    onChanged: (_) => _markDirty(),
+                  ),
+                ],
+              ),
             ),
           ),
-        ),
-        const SizedBox(height: 16),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: [
-            FilledButton(
-              onPressed: (_dirty && !_saving) ? _save : null,
-              child: Text(_saving ? '保存中…' : '保存默认'),
-            ),
-            OutlinedButton(
-              onPressed: (_dirty && !_saving) ? _cancelEdits : null,
-              child: const Text('取消'),
-            ),
-            TextButton(
-              onPressed: _saving ? null : _reset,
-              child: const Text('恢复推荐值'),
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        Text(
-          '本会话覆盖在对话页顶栏「会话参数」中设置，不写入此处。',
-          style: TextStyle(fontSize: 11, color: tokens.inkMuted),
-        ),
-      ],
+          const SizedBox(height: 16),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              FilledButton(
+                onPressed: (_dirty && !_saving) ? _save : null,
+                child: Text(_saving ? '保存中…' : '保存默认'),
+              ),
+              OutlinedButton(
+                onPressed: (_dirty && !_saving) ? _cancelEdits : null,
+                child: const Text('取消'),
+              ),
+              TextButton(
+                onPressed: _saving ? null : _reset,
+                child: const Text('恢复推荐值'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            '本会话覆盖在对话页顶栏「会话参数」中设置，不写入此处。',
+            style: TextStyle(fontSize: 11, color: tokens.inkMuted),
+          ),
+        ],
       ),
     );
   }

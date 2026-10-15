@@ -4,6 +4,7 @@ import 'package:fluent_ui/fluent_ui.dart';
 
 import '../../widgets/back_to_top_host.dart';
 import 'widgets/settings_typography.dart';
+import 'widgets/settings_conflict_notice.dart';
 
 class SettingsChatDefaultsPage extends StatefulWidget {
   const SettingsChatDefaultsPage({super.key, required this.repository});
@@ -28,6 +29,8 @@ class _SettingsChatDefaultsPageState extends State<SettingsChatDefaultsPage> {
   bool _dirty = false;
   bool _syncing = false;
   bool _saving = false;
+  late ChatDefaults _baseline;
+  bool get _hasConflict => _baseline != _repo.defaults;
 
   ChatDefaultsRepository get _repo => widget.repository;
 
@@ -55,12 +58,17 @@ class _SettingsChatDefaultsPageState extends State<SettingsChatDefaultsPage> {
   }
 
   void _onRepoChanged() {
-    if (!mounted || _dirty) return;
-    _loadFromRepo();
+    if (!mounted || _saving) return;
+    if (_dirty) {
+      setState(() {});
+    } else {
+      _loadFromRepo();
+    }
   }
 
   void _loadFromRepo() {
     final d = _repo.defaults;
+    _baseline = d;
     _syncing = true;
     _temperature = d.temperature;
     _trimEnabled = d.contextTrimEnabled;
@@ -101,6 +109,8 @@ class _SettingsChatDefaultsPageState extends State<SettingsChatDefaultsPage> {
 
   Future<void> _save() async {
     if (_saving) return;
+    if (_hasConflict && !await confirmSettingsOverwrite(context)) return;
+    if (!mounted) return;
     setState(() => _saving = true);
     try {
       await _repo.save(_buildFromForm());
@@ -175,10 +185,15 @@ class _SettingsChatDefaultsPageState extends State<SettingsChatDefaultsPage> {
                   Text('对话默认', style: context.settingsText.pageTitle),
                   const SizedBox(height: 6),
                   Text(
-                    '全局默认参数。单会话覆盖优先于本页；空系统提示不传 system。',
+                    '全局默认参数。单会话覆盖优先于本页；启用的对话技能会追加到最终系统提示。',
                     style: context.settingsText.caption,
                   ),
                   const SizedBox(height: 18),
+                  if (_hasConflict)
+                    const InfoBar(
+                      title: Text(settingsConflictMessage),
+                      severity: InfoBarSeverity.warning,
+                    ),
                   _Section(
                     title: '生成参数',
                     child: Column(
@@ -186,7 +201,7 @@ class _SettingsChatDefaultsPageState extends State<SettingsChatDefaultsPage> {
                       children: [
                         _LabeledField(
                           label: '系统提示',
-                          hint: '留空则不向 API 传 system 消息',
+                          hint: '留空不追加全局系统提示；已启用的对话技能仍会生效',
                           child: TextBox(
                             controller: _systemCtrl,
                             maxLines: 5,

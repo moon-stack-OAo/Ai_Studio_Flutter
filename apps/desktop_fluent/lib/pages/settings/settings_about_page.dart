@@ -14,6 +14,7 @@ import '../../update/update_prompt_dialog.dart';
 import '../../widgets/back_to_top_host.dart';
 import '../chat/widgets/markdown_host.dart';
 import 'widgets/changelog_section.dart';
+import 'widgets/backup_import_dialog.dart';
 import 'widgets/settings_typography.dart';
 
 class SettingsAboutPage extends StatefulWidget {
@@ -449,7 +450,7 @@ class _SettingsAboutPageState extends State<SettingsAboutPage> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Text(
-                    '将导出提供商、业务 MCP、外观、对话默认与会话元数据为 JSON 文件。'
+                    '将导出提供商、业务 MCP、外观、对话默认、自定义技能与会话元数据为 JSON 文件。'
                     '媒体二进制不会写入备份。',
                   ),
                   const SizedBox(height: 14),
@@ -464,12 +465,12 @@ class _SettingsAboutPageState extends State<SettingsAboutPage> {
                     onChanged: (v) {
                       setLocal(() => includeSecrets = v == true);
                     },
-                    content: const Text('包含 API Key / MCP Token 明文'),
+                    content: const Text('包含密钥明文（API Key、MCP Token、stdio 环境变量）'),
                   ),
                   if (includeSecrets) ...[
                     const SizedBox(height: 10),
                     Text(
-                      '警告：备份将含提供商 API Key 与 MCP Bearer 明文，等同密钥副本。'
+                      '警告：备份将含提供商 API Key、MCP Token 与 stdio 环境变量明文，等同密钥副本。'
                       '请勿分享、云同步或截图；用完建议立即删除。',
                       style: ctx.settingsText.caption.copyWith(
                         color: fluentTokensOf(ctx).danger,
@@ -562,75 +563,19 @@ class _SettingsAboutPageState extends State<SettingsAboutPage> {
     }
 
     if (!mounted) return;
-    var importSecrets = false;
-    final confirmed = await showDialog<bool>(
+    final options = await showDialog<DataBackupImportOptions>(
       context: context,
-      builder: (dialogCtx) {
-        return StatefulBuilder(
-          builder: (ctx, setLocal) {
-            return ContentDialog(
-              title: const Text('导入设置'),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    '将合并提供商、业务 MCP 与外观设置，并用备份中的会话替换本地会话。'
-                    '${payload.skills == null ? '' : '\n将合并 ${payload.skills!.length} 个自定义技能；同 ID 更新，新 ID 追加。'}'
-                    '\n导入的本地 stdio 配置将禁用，须在 MCP 设置确认命令后启用。'
-                    '${widget.generation?.busy == true ? '\n\n检测到进行中的生成，导入前将尝试停止。' : ''}',
-                  ),
-                  if (payload.includeSecrets) ...[
-                    const SizedBox(height: 14),
-                    Checkbox(
-                      checked: importSecrets,
-                      onChanged: (v) {
-                        setLocal(() => importSecrets = v == true);
-                      },
-                      content: const Text('同时导入 API Key / MCP Token'),
-                    ),
-                    if (importSecrets) ...[
-                      const SizedBox(height: 8),
-                      Text(
-                        '将用备份中的密钥覆盖本机对应提供商 API Key 与 MCP Token。请确认备份来源可信。',
-                        style: ctx.settingsText.caption.copyWith(
-                          color: fluentTokensOf(ctx).danger,
-                        ),
-                      ),
-                    ],
-                  ] else ...[
-                    const SizedBox(height: 10),
-                    Text(
-                      '此备份不含密钥，导入后本地 API Key / MCP Token 保持不变。',
-                      style: ctx.settingsText.caption,
-                    ),
-                  ],
-                ],
-              ),
-              actions: [
-                Button(
-                  onPressed: () => Navigator.pop(dialogCtx, false),
-                  child: const Text('取消'),
-                ),
-                FilledButton(
-                  onPressed: () => Navigator.pop(dialogCtx, true),
-                  child: const Text('导入'),
-                ),
-              ],
-            );
-          },
-        );
-      },
+      builder: (_) => BackupImportDialog(
+        payload: payload,
+        generationBusy: widget.generation?.busy == true,
+      ),
     );
-    if (confirmed != true || !mounted) return;
+    if (options == null || !mounted) return;
 
     _stopGenerationIfBusy();
     setState(() => _busy = true);
     try {
-      final result = await _backup.importBackup(
-        raw,
-        options: DataBackupImportOptions(importSecrets: importSecrets),
-      );
+      final result = await _backup.importBackup(raw, options: options);
       widget.themeController?.loadFrom(_repo.settings);
       await _loadUsage();
       if (!mounted) return;
@@ -704,7 +649,7 @@ class _SettingsAboutPageState extends State<SettingsAboutPage> {
                   if (choice == _ClearChoice.all) ...[
                     const SizedBox(height: 12),
                     Text(
-                      '将清除会话、媒体缓存、外观与对话默认、提供商与业务 MCP、日志以及全部 API Key / MCP Token。',
+                      '将清除会话、媒体缓存、外观与对话默认、自定义技能、提供商与业务 MCP、日志以及全部 API Key、MCP Token 与 stdio 环境变量。',
                       style: ctx.settingsText.caption.copyWith(
                         color: tokens.danger,
                       ),
@@ -773,27 +718,45 @@ class _SettingsAboutPageState extends State<SettingsAboutPage> {
         '提供商 ${u.providerCount} · 技能 ${u.skillCount}';
   }
 
-  Widget? _updateStatusPill(FluentTokens tokens, UpdateController? updater) {
+  Widget _updateStatusPill(FluentTokens tokens, UpdateController? updater) {
     final check = updater?.lastCheck;
-    if (check == null && !(updater?.hasAvailableUpdate ?? false)) {
-      return null;
-    }
-    final hasUpdate =
-        (check?.hasUpdate ?? false) || (updater?.hasAvailableUpdate ?? false);
+    final label = updater?.isChecking == true
+        ? '检查中…'
+        : updater == null || !updater.isConfigured
+        ? '未配置更新源'
+        : switch (check?.status) {
+            UpdateCheckStatus.notConfigured => '未配置更新源',
+            UpdateCheckStatus.upToDate => '已是最新',
+            UpdateCheckStatus.available => '有更新',
+            UpdateCheckStatus.noPlatformAsset => '无平台安装包',
+            UpdateCheckStatus.failed => '检查失败',
+            null => updater.hasAvailableUpdate ? '有更新' : '尚未检查',
+          };
+    final hasUpdate = label == '有更新';
+    final isLatest = label == '已是最新';
+    final failed = label == '检查失败';
     final bg = hasUpdate
         ? Color.lerp(tokens.primary, tokens.surface, 0.82)!
-        : Color.lerp(tokens.success, tokens.surface, 0.85)!;
-    final fg = hasUpdate ? tokens.primaryPressed : tokens.success;
+        : Color.lerp(
+            isLatest ? tokens.success : tokens.inkMuted,
+            tokens.surface,
+            0.85,
+          )!;
+    final fg = hasUpdate
+        ? tokens.primaryPressed
+        : failed
+        ? tokens.danger
+        : isLatest
+        ? tokens.success
+        : tokens.inkMuted;
     return Container(
+      key: const ValueKey('update_status'),
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       decoration: BoxDecoration(
         color: bg,
         borderRadius: BorderRadius.circular(999),
       ),
-      child: Text(
-        hasUpdate ? '有更新' : '最新',
-        style: context.settingsText.badge.copyWith(color: fg),
-      ),
+      child: Text(label, style: context.settingsText.badge.copyWith(color: fg)),
     );
   }
 

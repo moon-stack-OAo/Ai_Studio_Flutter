@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:core/core.dart';
 import 'package:design_fluent/design_fluent.dart';
@@ -8,6 +9,7 @@ import '../../widgets/back_to_top_host.dart';
 import '../../widgets/empty_illustrations.dart';
 import '../../widgets/fluent_empty_states.dart';
 import 'widgets/settings_typography.dart';
+import 'widgets/settings_conflict_notice.dart';
 
 /// SET-MCP / SET-MCP-EDIT / SET-MCP-POLICY：业务 MCP Server 配置（含桌面 stdio）。
 class SettingsMcpPage extends StatefulWidget {
@@ -44,6 +46,28 @@ class _SettingsMcpPageState extends State<SettingsMcpPage> {
   bool _dirty = false;
   bool _syncingForm = false;
   String? _confirmedStdioSummary;
+  String? _formFingerprint;
+  int _formLoadRequest = 0;
+  bool _saving = false;
+
+  String? _fingerprint(McpServerConfig? server) => server == null
+      ? null
+      : jsonEncode([
+          server.id,
+          server.displayName,
+          server.transport.name,
+          server.baseUrl,
+          server.command,
+          server.args,
+          server.cwd,
+          _formatEnv(server.env),
+          server.enabled,
+          server.authKind.name,
+          server.authSecretRef,
+          server.stdioApproval,
+        ]);
+
+  bool get _hasConflict => _formFingerprint != _fingerprint(_selected);
 
   McpServerRepository get _repo => widget.repository;
 
@@ -91,10 +115,12 @@ class _SettingsMcpPageState extends State<SettingsMcpPage> {
   }
 
   void _onRepoChanged() {
-    if (!mounted) return;
+    if (!mounted || _saving) return;
     final exists = _repo.servers.any((s) => s.id == _selectedId);
     if (!exists) {
       _selectedId = _repo.servers.isEmpty ? null : _repo.servers.first.id;
+      _loadFormFromSelected();
+    } else if (!_dirty) {
       _loadFormFromSelected();
     }
     setState(() {});
@@ -146,7 +172,9 @@ class _SettingsMcpPageState extends State<SettingsMcpPage> {
   }
 
   Future<void> _loadFormFromSelected() async {
+    final request = ++_formLoadRequest;
     final s = _selected;
+    _formFingerprint = _fingerprint(s);
     _syncingForm = true;
     if (s == null) {
       _nameCtrl.clear();
@@ -176,7 +204,7 @@ class _SettingsMcpPageState extends State<SettingsMcpPage> {
           ? McpAuthKind.none
           : s.authKind;
       _enabled = s.enabled;
-      _hasStoredToken = await _repo.hasBearerSecret(s.id);
+      _hasStoredToken = false;
       _confirmedStdioSummary =
           s.transport == McpTransport.stdio && s.isStdioApproved
           ? mcpStdioFingerprint(s)
@@ -195,6 +223,11 @@ class _SettingsMcpPageState extends State<SettingsMcpPage> {
     }
     _syncingForm = false;
     if (mounted) setState(() {});
+    if (s != null) {
+      final hasToken = await _repo.hasBearerSecret(s.id);
+      if (!mounted || request != _formLoadRequest) return;
+      setState(() => _hasStoredToken = hasToken);
+    }
   }
 
   void _markDirty() {
@@ -515,6 +548,27 @@ class _SettingsMcpPageState extends State<SettingsMcpPage> {
   }
 
   Future<bool> _save() async {
+    if (_saving) return false;
+    if (_hasConflict && !await confirmSettingsOverwrite(context)) return false;
+    if (!mounted) return false;
+    _saving = true;
+    try {
+      return await _saveDraft();
+    } catch (e) {
+      if (mounted) {
+        _showInfoBar(
+          '保存失败：${sanitizeErrorText(e.toString(), '请重试')}',
+          InfoBarSeverity.error,
+        );
+      }
+      return false;
+    } finally {
+      _saving = false;
+      if (mounted) _onRepoChanged();
+    }
+  }
+
+  Future<bool> _saveDraft() async {
     final current = _selected;
     if (current == null) return false;
     final name = _nameCtrl.text.trim();
@@ -588,7 +642,7 @@ class _SettingsMcpPageState extends State<SettingsMcpPage> {
           enabled: _enabled,
           authKind: McpAuthKind.bearer,
         );
-      } else if (!_hasStoredToken) {
+      } else if (!await _repo.hasBearerSecret(current.id)) {
         _showInfoBar('Bearer 鉴权请填写 Token', InfoBarSeverity.warning);
         return false;
       } else {
@@ -880,6 +934,7 @@ class _SettingsMcpPageState extends State<SettingsMcpPage> {
                     statusText: _statusText,
                     statusOk: _statusOk,
                     dirty: _dirty,
+                    hasConflict: _hasConflict,
                     tools: selected.toolsCache,
                     defaultToolPolicy: selected.defaultToolPolicy,
                     policyOverrides: selected.toolPolicyOverrides,
@@ -1066,6 +1121,7 @@ class _McpForm extends StatefulWidget {
     required this.statusText,
     required this.statusOk,
     required this.dirty,
+    required this.hasConflict,
     required this.tools,
     required this.defaultToolPolicy,
     required this.policyOverrides,
@@ -1100,6 +1156,7 @@ class _McpForm extends StatefulWidget {
   final String? statusText;
   final bool statusOk;
   final bool dirty;
+  final bool hasConflict;
   final List<McpToolDescriptor> tools;
   final McpToolPolicyLevel? defaultToolPolicy;
   final Map<String, McpToolPolicyLevel> policyOverrides;
@@ -1392,6 +1449,13 @@ class _McpFormState extends State<_McpForm> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   Text('编辑 MCP Server', style: context.settingsText.pageTitle),
+                  if (widget.hasConflict) ...[
+                    const SizedBox(height: 12),
+                    const InfoBar(
+                      title: Text(settingsConflictMessage),
+                      severity: InfoBarSeverity.warning,
+                    ),
+                  ],
                   const SizedBox(height: 4),
                   Text(
                     _isStdio

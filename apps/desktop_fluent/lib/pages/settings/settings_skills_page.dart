@@ -7,6 +7,7 @@ import 'package:flutter/semantics.dart';
 import 'package:flutter/services.dart';
 
 import 'widgets/settings_typography.dart';
+import 'widgets/settings_conflict_notice.dart';
 
 class SettingsSkillsPage extends StatefulWidget {
   const SettingsSkillsPage({
@@ -36,6 +37,15 @@ class SettingsSkillsPageState extends State<SettingsSkillsPage> {
   String? _error;
   String _baseline = '';
 
+  CustomSkill? get _saved => widget.repository.skills
+      .where((skill) => skill.id == _editing?.id)
+      .firstOrNull;
+
+  bool get _hasConflict =>
+      _baseline.isNotEmpty &&
+      _saved != null &&
+      jsonEncode(_saved!.toJson()) != _baseline;
+
   CustomSkill get _draft => CustomSkill(
     id: _editing!.id,
     name: _name.text.trim(),
@@ -55,6 +65,36 @@ class SettingsSkillsPageState extends State<SettingsSkillsPage> {
     for (final controller in [_name, _description, _prompt, _rules]) {
       controller.addListener(_changed);
     }
+    widget.repository.addListener(_onRepositoryChanged);
+  }
+
+  @override
+  void didUpdateWidget(covariant SettingsSkillsPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.repository != widget.repository) {
+      oldWidget.repository.removeListener(_onRepositoryChanged);
+      widget.repository.addListener(_onRepositoryChanged);
+      _onRepositoryChanged();
+    }
+  }
+
+  void _onRepositoryChanged() {
+    if (!mounted || _saving || _editing == null || _baseline.isEmpty) return;
+    final saved = _saved;
+    if (saved == null) {
+      setState(() {
+        _editing = null;
+        _baseline = '';
+        _error = null;
+        for (final controller in [_name, _description, _prompt, _rules]) {
+          controller.clear();
+        }
+      });
+    } else if (!hasUnsavedChanges) {
+      _edit(saved);
+    } else {
+      setState(() {});
+    }
   }
 
   void _changed() {
@@ -63,6 +103,7 @@ class SettingsSkillsPageState extends State<SettingsSkillsPage> {
 
   @override
   void dispose() {
+    widget.repository.removeListener(_onRepositoryChanged);
     for (final controller in [_name, _description, _prompt, _rules]) {
       controller.removeListener(_changed);
       controller.dispose();
@@ -86,6 +127,8 @@ class SettingsSkillsPageState extends State<SettingsSkillsPage> {
 
   Future<bool> _save() async {
     if (_saving || _editing == null) return false;
+    if (_hasConflict && !await confirmSettingsOverwrite(context)) return false;
+    if (!mounted || _editing == null) return false;
     if (_name.text.trim().isEmpty) {
       setState(() => _error = '请输入技能名称');
       return false;
@@ -113,7 +156,10 @@ class SettingsSkillsPageState extends State<SettingsSkillsPage> {
       }
       return false;
     } finally {
-      if (mounted) setState(() => _saving = false);
+      if (mounted) {
+        setState(() => _saving = false);
+        _onRepositoryChanged();
+      }
     }
   }
 
@@ -639,6 +685,37 @@ class SettingsSkillsPageState extends State<SettingsSkillsPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          if (_hasConflict)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(28, 12, 28, 0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const InfoBar(
+                    title: Text('本机技能已更新，当前草稿已保留；保存时需要确认覆盖。'),
+                    severity: InfoBarSeverity.warning,
+                  ),
+                  Button(
+                    onPressed: _saving
+                        ? null
+                        : () async {
+                            if (!await showFluentConfirmDialog(
+                                  context: context,
+                                  title: '载入最新技能？',
+                                  message: '当前未保存的草稿将被最新技能内容替换。',
+                                  confirmLabel: '载入最新',
+                                ) ||
+                                !mounted) {
+                              return;
+                            }
+                            final saved = _saved;
+                            if (saved != null) _edit(saved);
+                          },
+                    child: const Text('载入最新'),
+                  ),
+                ],
+              ),
+            ),
           if (error != null)
             Padding(
               padding: const EdgeInsets.fromLTRB(28, 20, 28, 0),

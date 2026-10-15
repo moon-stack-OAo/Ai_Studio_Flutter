@@ -469,7 +469,8 @@ class _SettingsAboutTabState extends State<SettingsAboutTab> {
                     CheckboxListTile(
                       contentPadding: EdgeInsets.zero,
                       value: includeSkills,
-                      onChanged: (v) => setLocal(() => includeSkills = v == true),
+                      onChanged: (v) =>
+                          setLocal(() => includeSkills = v == true),
                       title: const Text('包含自定义技能'),
                       controlAffinity: ListTileControlAffinity.leading,
                     ),
@@ -479,12 +480,12 @@ class _SettingsAboutTabState extends State<SettingsAboutTab> {
                       onChanged: (v) {
                         setLocal(() => includeSecrets = v == true);
                       },
-                      title: const Text('包含 API Key / MCP Token 明文'),
+                      title: const Text('包含密钥明文（API Key、MCP Token、stdio 环境变量）'),
                       controlAffinity: ListTileControlAffinity.leading,
                     ),
                     if (includeSecrets)
                       Text(
-                        '警告：备份将含提供商 API Key 与 MCP Bearer 明文，等同密钥副本。'
+                        '警告：备份将含提供商 API Key、MCP Token 与 stdio 环境变量明文，等同密钥副本。'
                         '请勿分享或云同步；用完建议立即删除。',
                         style: TextStyle(fontSize: 12, color: tokens.danger),
                       ),
@@ -511,7 +512,10 @@ class _SettingsAboutTabState extends State<SettingsAboutTab> {
     setState(() => _busy = true);
     try {
       final json = await _backup.exportBackupJson(
-        DataBackupExportOptions(includeSecrets: includeSecrets, includeSkills: includeSkills),
+        DataBackupExportOptions(
+          includeSecrets: includeSecrets,
+          includeSkills: includeSkills,
+        ),
       );
       final path = await _writeExportJson(json);
       if (!mounted) return;
@@ -613,7 +617,7 @@ class _SettingsAboutTabState extends State<SettingsAboutTab> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      '将合并提供商、业务 MCP、自定义技能与外观，并用备份会话替换本地会话。'
+                      '将合并提供商、业务 MCP 与外观，并用备份会话替换本地会话。'
                       '\n本地 stdio 配置不适用于移动端，将跳过。'
                       '${widget.generation?.busy == true ? '\n\n检测到进行中的生成，导入前将尝试停止。' : ''}',
                     ),
@@ -622,10 +626,12 @@ class _SettingsAboutTabState extends State<SettingsAboutTab> {
                       CheckboxListTile(
                         contentPadding: EdgeInsets.zero,
                         value: importSkills,
-                        onChanged: (v) => setLocal(() => importSkills = v == true),
+                        onChanged: (v) =>
+                            setLocal(() => importSkills = v == true),
                         title: Text('合并自定义技能（${payload.skills!.length} 项）'),
                         controlAffinity: ListTileControlAffinity.leading,
                       ),
+                      const Text('按 ID 合并；取消勾选则保留本机技能。'),
                     ],
                     if (payload.includeSecrets) ...[
                       const SizedBox(height: 8),
@@ -640,7 +646,7 @@ class _SettingsAboutTabState extends State<SettingsAboutTab> {
                       ),
                       if (importSecrets)
                         Text(
-                          '将覆盖本机对应提供商 API Key 与 MCP Token。请确认备份来源可信。',
+                          '将覆盖本机对应提供商 API Key 与 MCP Token。移动端会跳过 stdio 配置及其环境变量。请确认备份来源可信。',
                           style: TextStyle(fontSize: 12, color: tokens.danger),
                         ),
                     ] else
@@ -690,7 +696,8 @@ class _SettingsAboutTabState extends State<SettingsAboutTab> {
         if (result.appearanceImported) '外观',
         if (result.chatDefaultsImported) '对话默认',
         if (result.sessionsImported) '会话',
-        if (result.skillsImported) '技能（新增 ${result.skillsAdded} · 合并 ${result.skillsMerged}）',
+        if (result.skillsImported)
+          '技能（新增 ${result.skillsAdded} · 合并 ${result.skillsMerged}）',
         if (result.secretsApplied) '密钥',
         if (result.mcpServersSkipped > 0)
           '跳过 ${result.mcpServersSkipped} 个本地 MCP',
@@ -738,15 +745,16 @@ class _SettingsAboutTabState extends State<SettingsAboutTab> {
                           choice == opt
                               ? Icons.radio_button_checked
                               : Icons.radio_button_off,
-                          color:
-                              choice == opt ? tokens.primary : tokens.inkMuted,
+                          color: choice == opt
+                              ? tokens.primary
+                              : tokens.inkMuted,
                         ),
                         title: Text(opt.label),
                         onTap: () => setLocal(() => choice = opt),
                       ),
                     if (choice == _ClearChoice.all)
                       Text(
-                        '将清除会话、媒体缓存、外观与对话默认、自定义技能、提供商与业务 MCP、日志以及全部 API Key / MCP Token。',
+                        '将清除会话、媒体缓存、外观与对话默认、自定义技能、提供商与业务 MCP、日志以及全部 API Key、MCP Token 与 stdio 环境变量。',
                         style: TextStyle(fontSize: 12, color: tokens.danger),
                       ),
                   ],
@@ -810,17 +818,34 @@ class _SettingsAboutTabState extends State<SettingsAboutTab> {
   }
 
   Widget _statusPill(MaterialTokens tokens) {
-    final hasUpdate = _updater.hasAvailableUpdate;
     final check = _updater.lastCheck;
+    final status = _updater.isChecking
+        ? '检查中…'
+        : _updater.isIos
+        ? '内测渠道更新'
+        : switch (check?.status) {
+            UpdateCheckStatus.notConfigured => '未配置更新源',
+            UpdateCheckStatus.upToDate => '已是最新',
+            UpdateCheckStatus.available => '有更新',
+            UpdateCheckStatus.noPlatformAsset => '无平台安装包',
+            UpdateCheckStatus.failed => '检查失败',
+            null => _updater.hasAvailableUpdate ? '有更新' : '尚未检查',
+          };
+    final hasUpdate = status == '有更新';
     final label = hasUpdate
-        ? '有更新 ${check?.latestVersion ?? _updater.prefs.availableUpdateVersion ?? ''}'
-            .trim()
-        : '已是最新';
+        ? '$status ${check?.latestVersion ?? _updater.prefs.availableUpdateVersion ?? ''}'
+              .trim()
+        : status;
     final bg = hasUpdate
         ? Color.lerp(tokens.primary, tokens.surface, 0.85)!
         : tokens.surfaceMuted;
-    final fg = hasUpdate ? tokens.primary : tokens.inkMuted;
+    final fg = hasUpdate
+        ? tokens.primary
+        : status == '检查失败'
+        ? tokens.danger
+        : tokens.inkMuted;
     return Container(
+      key: const ValueKey('update_status'),
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
         color: bg,
@@ -888,8 +913,8 @@ class _SettingsAboutTabState extends State<SettingsAboutTab> {
                     _isAndroid
                         ? '更新通道：AppDock（完整性校验）'
                         : _isIos
-                            ? '更新通道：非 App Store · 请通过内测渠道获取新版本'
-                            : '分发：不上架 · 直链 / 侧载清单',
+                        ? '更新通道：非 App Store · 请通过内测渠道获取新版本'
+                        : '分发：不上架 · 直链 / 侧载清单',
                     style: TextStyle(fontSize: 12, color: tokens.inkMuted),
                   ),
                   if (_isAndroid) ...[
@@ -933,8 +958,9 @@ class _SettingsAboutTabState extends State<SettingsAboutTab> {
                             : const Text('检查更新'),
                       ),
                       OutlinedButton(
-                        onPressed:
-                            changelogEntries.isEmpty ? null : _onOpenChangelog,
+                        onPressed: changelogEntries.isEmpty
+                            ? null
+                            : _onOpenChangelog,
                         child: const Text('查看完整更新日志'),
                       ),
                       OutlinedButton(
@@ -1005,16 +1031,16 @@ class _SettingsAboutTabState extends State<SettingsAboutTab> {
                                                 height: 18,
                                                 child:
                                                     CircularProgressIndicator(
-                                                  strokeWidth: 2,
-                                                ),
+                                                      strokeWidth: 2,
+                                                    ),
                                               ),
                                             ),
                                           Center(
                                             child: Padding(
                                               padding:
                                                   const EdgeInsets.symmetric(
-                                                horizontal: 12,
-                                              ),
+                                                    horizontal: 12,
+                                                  ),
                                               child: Text(
                                                 progressLabel ??
                                                     (progress?.fraction != null
@@ -1025,7 +1051,8 @@ class _SettingsAboutTabState extends State<SettingsAboutTab> {
                                                 style: TextStyle(
                                                   fontSize: 13,
                                                   fontWeight: FontWeight.w600,
-                                                  color: (progress?.fraction ??
+                                                  color:
+                                                      (progress?.fraction ??
                                                               0) >
                                                           0.45
                                                       ? tokens.onPrimary
@@ -1218,16 +1245,16 @@ enum _ClearChoice {
   all;
 
   String get label => switch (this) {
-        sessions => '仅会话（对话 / 生图 / 生视频）',
-        media => '仅媒体缓存',
-        all => '全部（含设置、MCP 与密钥）',
-      };
+    sessions => '仅会话（对话 / 生图 / 生视频）',
+    media => '仅媒体缓存',
+    all => '全部（含设置、MCP 与密钥）',
+  };
 
   ClearLocalDataFlags get flags => switch (this) {
-        sessions => ClearLocalDataFlags.sessionsOnly,
-        media => ClearLocalDataFlags.mediaOnly,
-        all => ClearLocalDataFlags.all,
-      };
+    sessions => ClearLocalDataFlags.sessionsOnly,
+    media => ClearLocalDataFlags.mediaOnly,
+    all => ClearLocalDataFlags.all,
+  };
 }
 
 class _AccessCodeDialog extends StatefulWidget {
