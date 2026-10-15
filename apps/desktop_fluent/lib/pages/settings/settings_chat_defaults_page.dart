@@ -29,6 +29,7 @@ class _SettingsChatDefaultsPageState extends State<SettingsChatDefaultsPage> {
   bool _dirty = false;
   bool _syncing = false;
   bool _saving = false;
+  final Map<String, String> _errors = {};
   late ChatDefaults _baseline;
   bool get _hasConflict => _baseline != _repo.defaults;
 
@@ -79,81 +80,112 @@ class _SettingsChatDefaultsPageState extends State<SettingsChatDefaultsPage> {
     _maxTurnsCtrl.text = d.contextMaxTurns.toString();
     _maxCharsCtrl.text = d.contextMaxChars.toString();
     _dirty = false;
+    _errors.clear();
     _syncing = false;
     if (mounted) setState(() {});
   }
 
-  void _markDirty() {
-    if (_syncing || _dirty) return;
-    setState(() => _dirty = true);
+  void _markDirty([String? field]) {
+    if (_syncing || _saving) return;
+    setState(() {
+      _dirty = true;
+      _errors.remove(field);
+    });
+  }
+
+  bool _validateForm() {
+    final errors = <String, String>{};
+    void validate(String field, String text, int min, int max) {
+      final input = text.trim();
+      final value = RegExp(r'^[0-9]+$').hasMatch(input)
+          ? int.tryParse(input)
+          : null;
+      if (value == null || value < min || value > max) {
+        errors[field] = '请输入 $min～$max 的整数';
+      }
+    }
+
+    validate('maxTokens', _maxTokensCtrl.text, 0, 200000);
+    validate('timeoutSec', _timeoutSecCtrl.text, 1, 600);
+    if (_trimEnabled) validate('maxTurns', _maxTurnsCtrl.text, 1, 200);
+    if (_maxCharsEnabled) validate('maxChars', _maxCharsCtrl.text, 1, 500000);
+    setState(() {
+      _errors
+        ..clear()
+        ..addAll(errors);
+    });
+    return errors.isEmpty;
   }
 
   ChatDefaults _buildFromForm() {
-    final maxTokens = int.tryParse(_maxTokensCtrl.text.trim()) ?? 0;
-    final timeoutSec = int.tryParse(_timeoutSecCtrl.text.trim()) ?? 180;
-    final maxTurns =
-        int.tryParse(_maxTurnsCtrl.text.trim()) ?? defaultChatContextMaxTurns;
-    final maxChars =
-        int.tryParse(_maxCharsCtrl.text.trim()) ?? defaultChatContextMaxChars;
+    // 启用项已通过显式校验；关闭项保留最新已保存值，不提交禁用的草稿。
+    final saved = _repo.defaults;
     return ChatDefaults(
       temperature: _temperature,
       systemPrompt: _systemCtrl.text,
-      maxTokens: maxTokens,
-      apiTimeoutMs: timeoutSec * 1000,
+      maxTokens: int.parse(_maxTokensCtrl.text.trim()),
+      apiTimeoutMs: int.parse(_timeoutSecCtrl.text.trim()) * 1000,
       contextTrimEnabled: _trimEnabled,
-      contextMaxTurns: maxTurns,
+      contextMaxTurns: _trimEnabled
+          ? int.parse(_maxTurnsCtrl.text.trim())
+          : saved.contextMaxTurns,
       contextMaxCharsEnabled: _maxCharsEnabled,
-      contextMaxChars: maxChars,
-    ).sanitized();
+      contextMaxChars: _maxCharsEnabled
+          ? int.parse(_maxCharsCtrl.text.trim())
+          : saved.contextMaxChars,
+    );
   }
 
   Future<void> _save() async {
-    if (_saving) return;
-    if (_hasConflict && !await confirmSettingsOverwrite(context)) return;
-    if (!mounted) return;
+    if (_saving || !_validateForm()) return;
     setState(() => _saving = true);
     try {
+      if (_hasConflict) {
+        final ok = await confirmSettingsOverwrite(context);
+        if (!mounted || !ok) return;
+      }
       await _repo.save(_buildFromForm());
       if (!mounted) return;
-      setState(() {
-        _dirty = false;
-        _saving = false;
-      });
       _loadFromRepo();
       _showInfoBar('已保存对话默认', InfoBarSeverity.success);
     } catch (e) {
       if (!mounted) return;
-      setState(() => _saving = false);
       _showInfoBar('保存失败：$e', InfoBarSeverity.error);
+    } finally {
+      if (mounted) setState(() => _saving = false);
     }
   }
 
   Future<void> _reset() async {
-    final ok = await showFluentConfirmDialog(
-      context: context,
-      title: '恢复推荐值？',
-      message: '将温度、超时、裁剪等恢复为推荐默认，当前未保存更改也会丢弃。',
-      confirmLabel: '恢复',
-    );
-    if (!ok) return;
+    if (_saving) return;
     setState(() => _saving = true);
     try {
+      final ok = await showFluentConfirmDialog(
+        context: context,
+        title: '恢复推荐值？',
+        message: '将温度、超时、裁剪等恢复为推荐默认，当前未保存更改也会丢弃。',
+        confirmLabel: '恢复',
+      );
+      if (!mounted || !ok) return;
       await _repo.resetToRecommended();
       if (!mounted) return;
-      setState(() {
-        _dirty = false;
-        _saving = false;
-      });
       _loadFromRepo();
       _showInfoBar('已恢复推荐值', InfoBarSeverity.success);
     } catch (e) {
       if (!mounted) return;
-      setState(() => _saving = false);
       _showInfoBar('恢复失败：$e', InfoBarSeverity.error);
+    } finally {
+      if (mounted) {
+        setState(() => _saving = false);
+        if (!_dirty) _loadFromRepo();
+      }
     }
   }
 
-  void _cancelEdits() => _loadFromRepo();
+  void _cancelEdits() {
+    if (_saving) return;
+    _loadFromRepo();
+  }
 
   void _showInfoBar(String message, InfoBarSeverity severity) {
     displayInfoBar(
@@ -204,6 +236,7 @@ class _SettingsChatDefaultsPageState extends State<SettingsChatDefaultsPage> {
                           hint: '留空不追加全局系统提示；已启用的对话技能仍会生效',
                           child: TextBox(
                             controller: _systemCtrl,
+                            enabled: !_saving,
                             maxLines: 5,
                             placeholder: '你是有用的本地助手。',
                             onChanged: (_) => _markDirty(),
@@ -219,14 +252,17 @@ class _SettingsChatDefaultsPageState extends State<SettingsChatDefaultsPage> {
                             max: 2,
                             divisions: 40,
                             label: _temperature.toStringAsFixed(2),
-                            onChanged: (v) {
-                              setState(() {
-                                _temperature = double.parse(
-                                  v.toStringAsFixed(2),
-                                );
-                                _dirty = true;
-                              });
-                            },
+                            onChanged: _saving
+                                ? null
+                                : (v) {
+                                    if (_saving) return;
+                                    setState(() {
+                                      _temperature = double.parse(
+                                        v.toStringAsFixed(2),
+                                      );
+                                      _dirty = true;
+                                    });
+                                  },
                           ),
                         ),
                         const SizedBox(height: 14),
@@ -237,10 +273,12 @@ class _SettingsChatDefaultsPageState extends State<SettingsChatDefaultsPage> {
                               child: _LabeledField(
                                 label: 'Max Tokens',
                                 hint: '0 = 不传 max_tokens',
+                                error: _errors['maxTokens'],
                                 child: TextBox(
                                   controller: _maxTokensCtrl,
+                                  enabled: !_saving,
                                   placeholder: '0',
-                                  onChanged: (_) => _markDirty(),
+                                  onChanged: (_) => _markDirty('maxTokens'),
                                 ),
                               ),
                             ),
@@ -249,10 +287,12 @@ class _SettingsChatDefaultsPageState extends State<SettingsChatDefaultsPage> {
                               child: _LabeledField(
                                 label: '超时（秒）',
                                 hint: '默认 180 秒',
+                                error: _errors['timeoutSec'],
                                 child: TextBox(
                                   controller: _timeoutSecCtrl,
+                                  enabled: !_saving,
                                   placeholder: '180',
-                                  onChanged: (_) => _markDirty(),
+                                  onChanged: (_) => _markDirty('timeoutSec'),
                                 ),
                               ),
                             ),
@@ -269,12 +309,16 @@ class _SettingsChatDefaultsPageState extends State<SettingsChatDefaultsPage> {
                       children: [
                         ToggleSwitch(
                           checked: _trimEnabled,
-                          onChanged: (v) {
-                            setState(() {
-                              _trimEnabled = v;
-                              _dirty = true;
-                            });
-                          },
+                          onChanged: _saving
+                              ? null
+                              : (v) {
+                                  if (_saving) return;
+                                  setState(() {
+                                    _trimEnabled = v;
+                                    _errors.remove('maxTurns');
+                                    _dirty = true;
+                                  });
+                                },
                           content: Text(
                             '按轮数裁剪上下文',
                             style: context.settingsText.body,
@@ -283,23 +327,28 @@ class _SettingsChatDefaultsPageState extends State<SettingsChatDefaultsPage> {
                         const SizedBox(height: 12),
                         _LabeledField(
                           label: '最大轮数',
-                          hint: '以 user 消息条数为轮；推荐 20',
+                          hint: '以 user 消息条数为轮；推荐 20；关闭时保留已保存值',
+                          error: _errors['maxTurns'],
                           child: TextBox(
                             controller: _maxTurnsCtrl,
                             placeholder: '20',
-                            enabled: _trimEnabled,
-                            onChanged: (_) => _markDirty(),
+                            enabled: _trimEnabled && !_saving,
+                            onChanged: (_) => _markDirty('maxTurns'),
                           ),
                         ),
                         const SizedBox(height: 14),
                         ToggleSwitch(
                           checked: _maxCharsEnabled,
-                          onChanged: (v) {
-                            setState(() {
-                              _maxCharsEnabled = v;
-                              _dirty = true;
-                            });
-                          },
+                          onChanged: _saving
+                              ? null
+                              : (v) {
+                                  if (_saving) return;
+                                  setState(() {
+                                    _maxCharsEnabled = v;
+                                    _errors.remove('maxChars');
+                                    _dirty = true;
+                                  });
+                                },
                           content: Text(
                             '启用字符预算',
                             style: context.settingsText.body,
@@ -308,12 +357,13 @@ class _SettingsChatDefaultsPageState extends State<SettingsChatDefaultsPage> {
                         const SizedBox(height: 12),
                         _LabeledField(
                           label: '最大字符数',
-                          hint: '粗估字符（非 Token）；推荐 32000',
+                          hint: '粗估字符（非 Token）；推荐 32000；关闭时保留已保存值',
+                          error: _errors['maxChars'],
                           child: TextBox(
                             controller: _maxCharsCtrl,
                             placeholder: '32000',
-                            enabled: _maxCharsEnabled,
-                            onChanged: (_) => _markDirty(),
+                            enabled: _maxCharsEnabled && !_saving,
+                            onChanged: (_) => _markDirty('maxChars'),
                           ),
                         ),
                       ],
@@ -384,11 +434,17 @@ class _Section extends StatelessWidget {
 }
 
 class _LabeledField extends StatelessWidget {
-  const _LabeledField({required this.label, required this.child, this.hint});
+  const _LabeledField({
+    required this.label,
+    required this.child,
+    this.hint,
+    this.error,
+  });
 
   final String label;
   final Widget child;
   final String? hint;
+  final String? error;
 
   @override
   Widget build(BuildContext context) {
@@ -398,6 +454,15 @@ class _LabeledField extends StatelessWidget {
         Text(label, style: context.settingsText.label),
         const SizedBox(height: 6),
         child,
+        if (error != null) ...[
+          const SizedBox(height: 6),
+          Text(
+            error!,
+            style: context.settingsText.caption.copyWith(
+              color: fluentTokensOf(context).danger,
+            ),
+          ),
+        ],
         if (hint != null) ...[
           const SizedBox(height: 6),
           Text(hint!, style: context.settingsText.caption),

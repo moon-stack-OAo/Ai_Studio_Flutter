@@ -37,8 +37,8 @@ class OpenAiCompatibleChatClient {
   OpenAiCompatibleChatClient({
     http.Client? client,
     this.timeout = defaultChatTimeout,
-  })  : _ownedClient = client == null,
-        _client = client ?? createSafeHttpClient();
+  }) : _ownedClient = client == null,
+       _client = client ?? createSafeHttpClient();
 
   final http.Client _client;
   final bool _ownedClient;
@@ -155,8 +155,14 @@ class OpenAiCompatibleChatClient {
     if (response.statusCode < 200 || response.statusCode >= 300) {
       String raw = '';
       try {
-        raw = await response.stream.bytesToString();
-      } catch (_) {}
+        raw = await http.ByteStream(
+          response.stream.timeout(reqTimeout),
+        ).bytesToString();
+      } on TimeoutException {
+        throw const ChatApiException('请求超时，请稍后重试或增大超时时间');
+      } catch (e) {
+        if (isAbortLike(e)) throw toAbortError();
+      }
       String bodyMsg = '';
       try {
         final decoded = jsonDecode(raw);

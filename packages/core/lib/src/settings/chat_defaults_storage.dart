@@ -19,6 +19,7 @@ class PrefsChatDefaultsStorage implements ChatDefaultsStorage {
 
   final SharedPreferences? _prefsOverride;
   SharedPreferences? _prefs;
+  bool _reloadBeforeLoad = false;
 
   Future<SharedPreferences> _ensurePrefs() async {
     return _prefs ??= _prefsOverride ?? await SharedPreferences.getInstance();
@@ -27,6 +28,10 @@ class PrefsChatDefaultsStorage implements ChatDefaultsStorage {
   @override
   Future<ChatDefaults> load() async {
     final prefs = await _ensurePrefs();
+    if (_reloadBeforeLoad) {
+      await prefs.reload();
+      _reloadBeforeLoad = false;
+    }
     final raw = prefs.getString(prefsKey);
     if (raw == null || raw.isEmpty) {
       return ChatDefaults.recommended;
@@ -43,14 +48,31 @@ class PrefsChatDefaultsStorage implements ChatDefaultsStorage {
   @override
   Future<void> save(ChatDefaults defaults) async {
     final prefs = await _ensurePrefs();
-    await prefs.setString(prefsKey, jsonEncode(defaults.sanitized().toJson()));
+    try {
+      final saved = await prefs.setString(
+        prefsKey,
+        jsonEncode(defaults.sanitized().toJson()),
+      );
+      if (!saved) throw StateError('保存对话默认设置失败');
+      _reloadBeforeLoad = false;
+    } catch (_) {
+      // SharedPreferences 会先修改缓存；失败后重新读取，避免 load 发布失败草稿。
+      _reloadBeforeLoad = true;
+      try {
+        await prefs.reload();
+        _reloadBeforeLoad = false;
+      } catch (_) {
+        // 保留原始保存异常，供界面提示并重试。
+      }
+      rethrow;
+    }
   }
 }
 
 /// 内存存储（单元测试）。
 class MemoryChatDefaultsStorage implements ChatDefaultsStorage {
   MemoryChatDefaultsStorage([ChatDefaults? initial])
-      : _defaults = (initial ?? ChatDefaults.recommended).sanitized();
+    : _defaults = (initial ?? ChatDefaults.recommended).sanitized();
 
   ChatDefaults _defaults;
 

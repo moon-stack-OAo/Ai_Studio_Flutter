@@ -171,6 +171,145 @@ void main() {
     );
   });
 
+  test('非 2xx 响应体悬挂使用本次请求超时并取消流订阅', () async {
+    final cancelled = Completer<void>();
+    final responseBody = StreamController<List<int>>(
+      onCancel: () => cancelled.complete(),
+    );
+    addTearDown(responseBody.close);
+    final client = MockClient.streaming((request, bodyStream) async {
+      await bodyStream.drain();
+      return http.StreamedResponse(responseBody.stream, 500);
+    });
+    final chat = OpenAiCompatibleChatClient(
+      client: client,
+      timeout: const Duration(seconds: 30),
+    );
+    await expectLater(
+      chat
+          .streamChat(
+            baseUrl: 'https://api.example.com/v1',
+            apiKey: 'sk-test',
+            model: 'm',
+            messages: const [],
+            timeout: const Duration(milliseconds: 20),
+          )
+          .timeout(const Duration(seconds: 2)),
+      throwsA(
+        isA<ChatApiException>().having(
+          (e) => e.message,
+          'message',
+          '请求超时，请稍后重试或增大超时时间',
+        ),
+      ),
+    );
+    await cancelled.future.timeout(const Duration(seconds: 2));
+  });
+
+  test('非 2xx 响应体收到部分数据后悬挂仍使用客户端默认超时', () async {
+    final responseBody = StreamController<List<int>>();
+    addTearDown(responseBody.close);
+    responseBody.add(utf8.encode('{"error":{"message":"sk-secret-partial'));
+    final client = MockClient.streaming((request, bodyStream) async {
+      await bodyStream.drain();
+      return http.StreamedResponse(responseBody.stream, 400);
+    });
+    final chat = OpenAiCompatibleChatClient(
+      client: client,
+      timeout: const Duration(milliseconds: 20),
+    );
+    await expectLater(
+      chat
+          .streamChat(
+            baseUrl: 'https://api.example.com/v1',
+            apiKey: 'sk-test',
+            model: 'm',
+            messages: const [],
+          )
+          .timeout(const Duration(seconds: 2)),
+      throwsA(
+        isA<ChatApiException>().having(
+          (e) => e.message,
+          'message',
+          '请求超时，请稍后重试或增大超时时间',
+        ),
+      ),
+    );
+  });
+
+  test('非 2xx 响应体读取取消仍返回已取消', () async {
+    final client = MockClient.streaming((request, bodyStream) async {
+      await bodyStream.drain();
+      return http.StreamedResponse(
+        Stream<List<int>>.error(http.ClientException('Connection closed')),
+        500,
+      );
+    });
+    final chat = OpenAiCompatibleChatClient(client: client);
+    await expectLater(
+      chat.streamChat(
+        baseUrl: 'https://api.example.com/v1',
+        apiKey: 'sk-test',
+        model: 'm',
+        messages: const [],
+      ),
+      throwsA(
+        isA<ChatAbortException>().having((e) => e.message, 'message', '已取消'),
+      ),
+    );
+  });
+
+  test('非 2xx 响应体读取异常仍回退 HTTP 状态文案', () async {
+    final client = MockClient.streaming((request, bodyStream) async {
+      await bodyStream.drain();
+      return http.StreamedResponse(
+        Stream<List<int>>.error(StateError('读取失败 sk-secret-must-not-leak')),
+        401,
+      );
+    });
+    final chat = OpenAiCompatibleChatClient(client: client);
+    await expectLater(
+      chat.streamChat(
+        baseUrl: 'https://api.example.com/v1',
+        apiKey: 'sk-test',
+        model: 'm',
+        messages: const [],
+      ),
+      throwsA(
+        isA<ChatApiException>()
+            .having((e) => e.message, 'message', '鉴权失败，请检查 API Key')
+            .having((e) => e.statusCode, 'statusCode', 401),
+      ),
+    );
+  });
+
+  for (final body in [
+    '{"error":{"message":"bad key sk-secret-must-not-leak"}}',
+    'bad key sk-secret-must-not-leak',
+  ]) {
+    test('非 2xx ${body.startsWith('{') ? 'JSON' : '纯文本'}错误响应仍脱敏', () async {
+      final client = MockClient.streaming((request, bodyStream) async {
+        await bodyStream.drain();
+        return http.StreamedResponse(Stream.value(utf8.encode(body)), 401);
+      });
+      final chat = OpenAiCompatibleChatClient(client: client);
+      await expectLater(
+        chat.streamChat(
+          baseUrl: 'https://api.example.com/v1',
+          apiKey: 'sk-secret-must-not-leak',
+          model: 'm',
+          messages: const [],
+        ),
+        throwsA(
+          isA<ChatApiException>()
+              .having((e) => e.message, 'message', contains('bad key'))
+              .having((e) => e.message, 'secret', isNot(contains('sk-secret')))
+              .having((e) => e.statusCode, 'statusCode', 401),
+        ),
+      );
+    });
+  }
+
   test('关闭 client 视为取消', () async {
     final real = http.Client();
     final chat = OpenAiCompatibleChatClient(client: real);
@@ -191,7 +330,10 @@ void main() {
   test('isAbortLike / toAbortError', () {
     expect(toAbortError().message, '已取消');
     expect(isAbortLike(const ChatAbortException()), isTrue);
-    expect(isAbortLike(Exception('ClientException: Connection closed')), isTrue);
+    expect(
+      isAbortLike(Exception('ClientException: Connection closed')),
+      isTrue,
+    );
   });
 
   test('错误 toString 不泄露 key', () {
