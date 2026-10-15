@@ -40,9 +40,11 @@ class AppShell extends StatefulWidget {
     this.updatePrefs,
     this.startupUpdateCheckDelay = const Duration(milliseconds: 800),
     this.exitConfirmWindow = const Duration(seconds: 2),
+    this.skillRepository,
   });
 
   final ThemeController themeController;
+  final SkillRepository? skillRepository;
   final ProviderRepository providerRepository;
   final ChatSessionRepository sessionRepository;
   final ImageSessionRepository imageSessionRepository;
@@ -70,6 +72,7 @@ class AppShell extends StatefulWidget {
 class _AppShellState extends State<AppShell> {
   AppSection _section = AppSection.chat;
   int _settingsTabIndex = 0;
+  late final SkillRepository _skills;
   late final UpdatePrefs _updatePrefs;
   late final MobileUpdateController _updater;
   late final bool _ownsUpdater;
@@ -88,6 +91,8 @@ class _AppShellState extends State<AppShell> {
   @override
   void initState() {
     super.initState();
+    _skills = widget.skillRepository ?? SkillRepository(storage: MemorySkillStorage());
+    if (!_skills.isLoaded) unawaited(_skills.load().catchError((Object _) {}));
     _ownsUpdater = widget.updateController == null;
     _updater = widget.updateController ??
         MobileUpdateController(
@@ -109,6 +114,7 @@ class _AppShellState extends State<AppShell> {
     _updater.removeListener(_onUpdaterChanged);
     _updatePrefs.removeListener(_onUpdaterChanged);
     if (_ownsUpdater) _updater.dispose();
+    if (widget.skillRepository == null) _skills.dispose();
     super.dispose();
   }
 
@@ -286,6 +292,7 @@ class _AppShellState extends State<AppShell> {
               for (final section in AppSection.values)
                 if (section == AppSection.chat)
                   ChatPage(
+                    skillRepository: _skills,
                     providerRepository: widget.providerRepository,
                     sessionRepository: widget.sessionRepository,
                     chatDefaultsRepository: widget.chatDefaultsRepository,
@@ -298,6 +305,7 @@ class _AppShellState extends State<AppShell> {
                   )
                 else if (section == AppSection.image)
                   ImagePage(
+                    skillRepository: _skills,
                     providerRepository: widget.providerRepository,
                     sessionRepository: widget.imageSessionRepository,
                     chatDefaultsRepository: widget.chatDefaultsRepository,
@@ -309,6 +317,7 @@ class _AppShellState extends State<AppShell> {
                   )
                 else if (section == AppSection.video)
                   VideoPage(
+                    skillRepository: _skills,
                     providerRepository: widget.providerRepository,
                     sessionRepository: widget.videoSessionRepository,
                     chatDefaultsRepository: widget.chatDefaultsRepository,
@@ -321,6 +330,7 @@ class _AppShellState extends State<AppShell> {
                   )
                 else if (section == AppSection.settings)
                   SettingsPage(
+                    skillRepository: _skills,
                     themeController: widget.themeController,
                     providerRepository: widget.providerRepository,
                     chatDefaultsRepository: widget.chatDefaultsRepository,

@@ -12,9 +12,11 @@ class VideoController extends ChangeNotifier {
     required this.generation,
     AppLogRepository? appLogRepository,
     OpenAiCompatibleVideoClient? videoClient,
-  })  : _providers = providerRepository,
-        _sessions = sessionRepository {
+    SkillRepository? skillRepository,
+  }) : _providers = providerRepository,
+       _sessions = sessionRepository {
     _facade = VideoJobFacade(
+      skillRepository: skillRepository,
       providers: providerRepository,
       sessions: sessionRepository,
       generation: generation,
@@ -197,10 +199,7 @@ class VideoController extends ChangeNotifier {
     await setReferenceFromPath(path);
   }
 
-  Future<void> setReferenceFromPath(
-    String path, {
-    String? displayName,
-  }) async {
+  Future<void> setReferenceFromPath(String path, {String? displayName}) async {
     try {
       final trimmed = path.trim();
       if (trimmed.isEmpty) {
@@ -479,8 +478,12 @@ class VideoController extends ChangeNotifier {
   Future<bool> _openPath(String path) async {
     try {
       if (Platform.isWindows) {
-        await Process.start('cmd', ['/c', 'start', '', path],
-            mode: ProcessStartMode.detached);
+        await Process.start('cmd', [
+          '/c',
+          'start',
+          '',
+          path,
+        ], mode: ProcessStartMode.detached);
         return true;
       }
       if (Platform.isMacOS) {
@@ -488,8 +491,9 @@ class VideoController extends ChangeNotifier {
         return true;
       }
       if (Platform.isLinux) {
-        await Process.start('xdg-open', [path],
-            mode: ProcessStartMode.detached);
+        await Process.start('xdg-open', [
+          path,
+        ], mode: ProcessStartMode.detached);
         return true;
       }
     } catch (e) {

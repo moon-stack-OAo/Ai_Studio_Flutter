@@ -26,13 +26,15 @@ class ChatController extends ChangeNotifier {
     required this.generation,
     AppLogRepository? appLogRepository,
     OpenAiCompatibleChatClient? chatClient,
+    SkillRepository? skillRepository,
     McpServerRepository? mcpServerRepository,
     McpSessionFactory? mcpSessionFactory,
     Future<bool> Function(ToolAuthPrompt prompt)? toolAuthPrompter,
-  })  : _providers = providerRepository,
-        _sessions = sessionRepository,
-        _mcpServers = mcpServerRepository {
+  }) : _providers = providerRepository,
+       _sessions = sessionRepository,
+       _mcpServers = mcpServerRepository {
     _facade = ChatSessionFacade(
+      skillRepository: skillRepository,
       providers: providerRepository,
       sessions: sessionRepository,
       chatDefaults: chatDefaultsRepository,
@@ -201,10 +203,7 @@ class ChatController extends ChangeNotifier {
     if (isStreamingActiveSession) return;
     final session = _sessions.activeSession;
     if (session == null) return;
-    await _sessions.recallUserMessage(
-      session.id,
-      userMessageId: userMessageId,
-    );
+    await _sessions.recallUserMessage(session.id, userMessageId: userMessageId);
   }
 
   void stop() => _facade.stop();

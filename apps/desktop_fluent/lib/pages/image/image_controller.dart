@@ -12,9 +12,11 @@ class ImageController extends ChangeNotifier {
     required this.generation,
     AppLogRepository? appLogRepository,
     OpenAiCompatibleImageClient? imageClient,
-  })  : _providers = providerRepository,
-        _sessions = sessionRepository {
+    SkillRepository? skillRepository,
+  }) : _providers = providerRepository,
+       _sessions = sessionRepository {
     _facade = ImageSessionFacade(
+      skillRepository: skillRepository,
       providers: providerRepository,
       sessions: sessionRepository,
       generation: generation,
@@ -76,8 +78,7 @@ class ImageController extends ChangeNotifier {
     _facade.syncParamsToActiveProvider(onNotify: notifyListeners);
   }
 
-  String get promptAssistMode =>
-      hasReferenceImage ? 'img2img' : 'txt2img';
+  String get promptAssistMode => hasReferenceImage ? 'img2img' : 'txt2img';
 
   void setPromptDraft(String value) {
     _facade.setPromptDraft(value, onNotify: notifyListeners);
@@ -191,10 +192,7 @@ class ImageController extends ChangeNotifier {
     await setReferenceFromPath(path);
   }
 
-  Future<void> setReferenceFromPath(
-    String path, {
-    String? displayName,
-  }) async {
+  Future<void> setReferenceFromPath(String path, {String? displayName}) async {
     try {
       final trimmed = path.trim();
       if (trimmed.isEmpty) {

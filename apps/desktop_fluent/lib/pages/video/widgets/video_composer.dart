@@ -7,6 +7,7 @@ import 'package:design_fluent/design_fluent.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 
 import '../../../widgets/media_model_combo.dart';
+import '../../../widgets/skill_summary.dart';
 
 /// F-VideoParams + F-PromptBox + F-VideoPrimary（右侧参数窗格，宽 300）。
 class VideoComposer extends StatefulWidget {
@@ -43,6 +44,9 @@ class VideoComposer extends StatefulWidget {
     this.supportsReferenceImage = true,
     this.onPromptAssist,
     this.onProviderSwitched,
+    this.skillRepository,
+    this.onManageSkills,
+    this.skillsEnabled = true,
   });
 
   final String prompt;
@@ -76,6 +80,9 @@ class VideoComposer extends StatefulWidget {
   final bool supportsReferenceImage;
   final VoidCallback? onPromptAssist;
   final VoidCallback? onProviderSwitched;
+  final SkillRepository? skillRepository;
+  final VoidCallback? onManageSkills;
+  final bool skillsEnabled;
 
   @override
   State<VideoComposer> createState() => _VideoComposerState();
@@ -96,8 +103,9 @@ class _VideoComposerState extends State<VideoComposer> {
     if (widget.prompt != _promptCtrl.text &&
         widget.prompt != oldWidget.prompt) {
       _promptCtrl.text = widget.prompt;
-      _promptCtrl.selection =
-          TextSelection.collapsed(offset: _promptCtrl.text.length);
+      _promptCtrl.selection = TextSelection.collapsed(
+        offset: _promptCtrl.text.length,
+      );
     }
   }
 
@@ -213,8 +221,9 @@ class _VideoComposerState extends State<VideoComposer> {
                   textField: true,
                   child: TextBox(
                     controller: _promptCtrl,
-                    onChanged:
-                        widget.generating ? null : widget.onPromptChanged,
+                    onChanged: widget.generating
+                        ? null
+                        : widget.onPromptChanged,
                     maxLines: 12,
                     minLines: 8,
                     enabled: !widget.generating,
@@ -228,6 +237,16 @@ class _VideoComposerState extends State<VideoComposer> {
                   ),
                 ),
                 const SizedBox(height: 12),
+                if (widget.skillRepository != null) ...[
+                  SkillSummary(
+                    repository: widget.skillRepository!,
+                    target: SkillTarget.video,
+                    prompt: widget.prompt,
+                    enabled: widget.skillsEnabled && !widget.generating,
+                    onManage: widget.onManageSkills,
+                  ),
+                  const SizedBox(height: 12),
+                ],
                 _label(tokens, '参考图（可选）'),
                 const SizedBox(height: 6),
                 _VideoReferenceBox(
@@ -237,8 +256,7 @@ class _VideoComposerState extends State<VideoComposer> {
                   unsupportedHint: widget.supportsReferenceImage
                       ? null
                       : '当前提供商不支持图生视频',
-                  onClear:
-                      widget.generating ? null : widget.onClearReference,
+                  onClear: widget.generating ? null : widget.onClearReference,
                   onPick: widget.generating ? null : widget.onPickReference,
                   onDrop: widget.generating ? null : widget.onDropReference,
                 ),
@@ -282,10 +300,12 @@ class _VideoComposerState extends State<VideoComposer> {
                             child: Button(
                               onPressed: widget.onStop,
                               style: ButtonStyle(
-                                backgroundColor:
-                                    WidgetStatePropertyAll(tokens.danger),
-                                foregroundColor:
-                                    const WidgetStatePropertyAll(Colors.white),
+                                backgroundColor: WidgetStatePropertyAll(
+                                  tokens.danger,
+                                ),
+                                foregroundColor: const WidgetStatePropertyAll(
+                                  Colors.white,
+                                ),
                               ),
                               child: const Text('停止任务'),
                             ),
@@ -302,12 +322,11 @@ class _VideoComposerState extends State<VideoComposer> {
                                 : '创建视频任务',
                             excludeSemantics: true,
                             child: FilledButton(
-                              onPressed:
-                                  widget.enabled ? widget.onGenerate : null,
+                              onPressed: widget.enabled
+                                  ? widget.onGenerate
+                                  : null,
                               child: Text(
-                                widget.referenceImage != null
-                                    ? '图生视频'
-                                    : '创建任务',
+                                widget.referenceImage != null ? '图生视频' : '创建任务',
                               ),
                             ),
                           ),
@@ -386,9 +405,7 @@ class _SegItem extends StatelessWidget {
       excludeSemantics: true,
       child: HoverButton(
         onPressed: enabled ? onTap : null,
-        cursor: enabled
-            ? SystemMouseCursors.click
-            : SystemMouseCursors.basic,
+        cursor: enabled ? SystemMouseCursors.click : SystemMouseCursors.basic,
         builder: (context, states) {
           final focused = states.isFocused;
           return AnimatedContainer(
@@ -413,8 +430,8 @@ class _SegItem extends StatelessWidget {
                 color: !enabled
                     ? tokens.inkMuted
                     : active
-                        ? tokens.primaryPressed
-                        : tokens.inkSecondary,
+                    ? tokens.primaryPressed
+                    : tokens.inkSecondary,
                 fontFamily: tokens.fontFamily,
               ),
             ),
@@ -479,8 +496,8 @@ class _ChipWrap extends StatelessWidget {
                       color: focused
                           ? tokens.primary
                           : active
-                              ? Color.lerp(tokens.primary, tokens.border, 0.5)!
-                              : tokens.border,
+                          ? Color.lerp(tokens.primary, tokens.border, 0.5)!
+                          : tokens.border,
                       width: focused ? 1.5 : 1,
                     ),
                   ),
@@ -491,8 +508,8 @@ class _ChipWrap extends StatelessWidget {
                       color: !enabled
                           ? tokens.inkMuted
                           : active
-                              ? tokens.primaryPressed
-                              : tokens.inkSecondary,
+                          ? tokens.primaryPressed
+                          : tokens.inkSecondary,
                       fontFamily: tokens.fontFamily,
                     ),
                   ),
@@ -603,18 +620,13 @@ class _VideoReferenceBoxState extends State<_VideoReferenceBox> {
                 : SystemMouseCursors.basic,
             child: CustomPaint(
               painter: useDashed
-                  ? _DashedRRectBorderPainter(
-                      color: borderColor,
-                      radius: 8,
-                    )
+                  ? _DashedRRectBorderPainter(color: borderColor, radius: 8)
                   : null,
               child: Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(8),
-                  border: useDashed
-                      ? null
-                      : Border.all(color: borderColor),
+                  border: useDashed ? null : Border.all(color: borderColor),
                   color: bgColor,
                 ),
                 child: hasRef
@@ -701,10 +713,7 @@ class _VideoReferenceBoxState extends State<_VideoReferenceBox> {
 }
 
 class _DashedRRectBorderPainter extends CustomPainter {
-  const _DashedRRectBorderPainter({
-    required this.color,
-    required this.radius,
-  });
+  const _DashedRRectBorderPainter({required this.color, required this.radius});
 
   final Color color;
   final double radius;

@@ -23,6 +23,8 @@ class ImagePage extends StatefulWidget {
     this.chatClient,
     this.imageClient,
     this.onOpenProviders,
+    this.skillRepository,
+    this.onManageSkills,
   });
 
   final ProviderRepository providerRepository;
@@ -33,6 +35,8 @@ class ImagePage extends StatefulWidget {
   final OpenAiCompatibleChatClient? chatClient;
   final OpenAiCompatibleImageClient? imageClient;
   final VoidCallback? onOpenProviders;
+  final SkillRepository? skillRepository;
+  final VoidCallback? onManageSkills;
 
   @override
   State<ImagePage> createState() => _ImagePageState();
@@ -40,11 +44,16 @@ class ImagePage extends StatefulWidget {
 
 class _ImagePageState extends State<ImagePage> {
   late final ImageController _controller;
+  late final SkillRepository _skills;
 
   @override
   void initState() {
     super.initState();
+    _skills =
+        widget.skillRepository ??
+        SkillRepository(storage: MemorySkillStorage());
     _controller = ImageController(
+      skillRepository: _skills,
       providerRepository: widget.providerRepository,
       sessionRepository: widget.sessionRepository,
       appLogRepository: widget.appLogRepository,
@@ -56,6 +65,7 @@ class _ImagePageState extends State<ImagePage> {
   @override
   void dispose() {
     _controller.dispose();
+    if (widget.skillRepository == null) _skills.dispose();
     super.dispose();
   }
 
@@ -185,6 +195,7 @@ class _ImagePageState extends State<ImagePage> {
                       ),
                     Expanded(
                       child: ImageTimeline(
+                        key: ValueKey(session?.id),
                         items: items,
                         loadBytes: widget.sessionRepository.readImageBytes,
                         onPreview: _openLightbox,
@@ -225,6 +236,9 @@ class _ImagePageState extends State<ImagePage> {
                 ),
               ),
               ImageComposer(
+                skillRepository: _skills,
+                onManageSkills: widget.onManageSkills,
+                skillsEnabled: !widget.generation.busy,
                 prompt: _controller.promptDraft,
                 onPromptChanged: _controller.setPromptDraft,
                 n: _controller.n,
@@ -256,6 +270,7 @@ class _ImagePageState extends State<ImagePage> {
                 onProviderSwitched: _controller.syncParamsToActiveProvider,
                 onPromptAssist: () {
                   showFluentPromptAssist(
+                    skillRepository: _skills,
                     context,
                     domain: PromptDomain.image,
                     mode: _controller.promptAssistMode,
@@ -341,10 +356,7 @@ class _ImageHeader extends StatelessWidget {
           ],
           const Spacer(),
           if (onClear != null)
-            Button(
-              onPressed: onClear,
-              child: const Text('清空本页结果'),
-            ),
+            Button(onPressed: onClear, child: const Text('清空本页结果')),
         ],
       ),
     );

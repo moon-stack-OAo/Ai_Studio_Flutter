@@ -9,9 +9,11 @@ import '../../platform/gallery_saver.dart';
 import '../../platform/share_helper.dart';
 import '../../shell/back_host.dart';
 import '../../widgets/empty_illustrations.dart';
+import '../../widgets/history_scroll_controller.dart';
 import '../../widgets/material_empty_states.dart';
 import '../../widgets/media_model_picker_sheet.dart';
 import '../../widgets/prompt_assist_sheet.dart';
+import '../../widgets/skill_summary.dart';
 import '../image/widgets/image_lightbox.dart';
 import 'video_controller.dart';
 import 'widgets/video_composer.dart';
@@ -30,9 +32,11 @@ class VideoPage extends StatefulWidget {
     this.videoClient,
     this.videoPosterService,
     this.onOpenProviders,
+    this.skillRepository,
   });
 
   final ProviderRepository providerRepository;
+  final SkillRepository? skillRepository;
   final VideoSessionRepository sessionRepository;
   final GenerationRuntime generation;
   final ChatDefaultsRepository? chatDefaultsRepository;
@@ -48,24 +52,33 @@ class VideoPage extends StatefulWidget {
 
 class _VideoPageState extends State<VideoPage> {
   late final VideoController _controller;
-  final ScrollController _scroll = ScrollController();
+  late final SkillRepository _skills;
+  final HistoryScrollController _scroll = HistoryScrollController();
   final FocusNode _promptFocus = FocusNode();
   String? _lastBanner;
   String? _lastInfo;
   int _lastItemCount = 0;
   String _lastTail = '';
+  String? _lastSessionId;
 
   @override
   void initState() {
     super.initState();
+    _skills =
+        widget.skillRepository ??
+        SkillRepository(storage: MemorySkillStorage());
+    if (!_skills.isLoaded) unawaited(_skills.load().catchError((Object _) {}));
     _controller = VideoController(
+      skillRepository: _skills,
       providerRepository: widget.providerRepository,
       sessionRepository: widget.sessionRepository,
       appLogRepository: widget.appLogRepository,
       generation: widget.generation,
       videoClient: widget.videoClient,
     );
+    _controller.syncParamsToActiveProvider();
     _controller.addListener(_onControllerChanged);
+    widget.providerRepository.addListener(_onProviderChanged);
     widget.sessionRepository.addListener(_onSessionChanged);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
@@ -75,6 +88,7 @@ class _VideoPageState extends State<VideoPage> {
   }
 
   void _focusPrompt() {
+    _scroll.cancelPendingScroll();
     if (!_scroll.hasClients) {
       _promptFocus.requestFocus();
       return;
@@ -91,7 +105,10 @@ class _VideoPageState extends State<VideoPage> {
 
   void _onSessionChanged() => _maybeScrollToBottom();
 
+  void _onProviderChanged() => _controller.syncParamsToActiveProvider();
+
   void _maybeScrollToBottom() {
+    if (!mounted) return;
     final session = widget.sessionRepository.activeSession;
     final items = session?.items ?? const <VideoItem>[];
     final count = items.length;
@@ -103,25 +120,33 @@ class _VideoPageState extends State<VideoPage> {
             );
             return '${last.id}:${last.status.name}:${last.progress}';
           }();
-    if (count == _lastItemCount && tail == _lastTail) return;
+    final sessionId = session?.id;
+    if (sessionId == _lastSessionId &&
+        count == _lastItemCount &&
+        tail == _lastTail) {
+      return;
+    }
+    _lastSessionId = sessionId;
     _lastItemCount = count;
     _lastTail = tail;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!_scroll.hasClients) return;
-      _scroll.animateTo(
-        _scroll.position.maxScrollExtent,
-        duration: MaterialMotion.micro,
-        curve: MaterialMotion.standard,
-      );
-    });
+    if (items.isEmpty) {
+      _scroll.cancelPendingScroll();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted &&
+            _scroll.hasClients &&
+            widget.sessionRepository.activeSession?.id == sessionId) {
+          _scroll.jumpTo(0);
+        }
+      });
+    } else {
+      _scroll.scrollToBottom();
+    }
   }
 
   void _onControllerChanged() {
     if (!mounted) return;
     final banner = _controller.bannerError;
-    if (banner != null &&
-        banner.isNotEmpty &&
-        banner != _lastBanner) {
+    if (banner != null && banner.isNotEmpty && banner != _lastBanner) {
       _lastBanner = banner;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -154,9 +179,11 @@ class _VideoPageState extends State<VideoPage> {
 
   @override
   void dispose() {
+    widget.providerRepository.removeListener(_onProviderChanged);
     widget.sessionRepository.removeListener(_onSessionChanged);
     _controller.removeListener(_onControllerChanged);
     _controller.dispose();
+    if (widget.skillRepository == null) _skills.dispose();
     _scroll.dispose();
     _promptFocus.dispose();
     super.dispose();
@@ -191,8 +218,7 @@ class _VideoPageState extends State<VideoPage> {
   final ShareHelper _shareHelper = const ShareHelper();
 
   Future<void> _pickVideoModel() async {
-    final ready =
-        widget.providerRepository.providersReadyFor(ModelKind.video);
+    final ready = widget.providerRepository.providersReadyFor(ModelKind.video);
     if (ready.isEmpty) return;
     await showMediaModelPickerSheet(
       context: context,
@@ -213,8 +239,7 @@ class _VideoPageState extends State<VideoPage> {
       refs: item.referenceImages,
       initialIndex: index,
       source: ImageLightboxSource.reference,
-      loadBytes: () =>
-          widget.sessionRepository.readReferenceImageBytes(ref),
+      loadBytes: () => widget.sessionRepository.readReferenceImageBytes(ref),
       loadBytesFor: widget.sessionRepository.readReferenceImageBytes,
     );
   }
@@ -243,9 +268,7 @@ class _VideoPageState extends State<VideoPage> {
     final path = await _resolveLocalVideoPath(item);
     if (!mounted) return;
     if (path == null || path.isEmpty) {
-      messenger.showSnackBar(
-        const SnackBar(content: Text('没有可分享的本地文件')),
-      );
+      messenger.showSnackBar(const SnackBar(content: Text('没有可分享的本地文件')));
       return;
     }
 
@@ -269,8 +292,9 @@ class _VideoPageState extends State<VideoPage> {
         local.startsWith('data:')) {
       return null;
     }
-    final path =
-        local.startsWith('file:') ? Uri.parse(local).toFilePath() : local;
+    final path = local.startsWith('file:')
+        ? Uri.parse(local).toFilePath()
+        : local;
     final f = File(path);
     if (await f.exists()) return path;
     return null;
@@ -295,9 +319,7 @@ class _VideoPageState extends State<VideoPage> {
       try {
         final res = await client.get(Uri.parse(remote));
         if (res.statusCode < 200 || res.statusCode >= 300) {
-          return GallerySaveResult.failure(
-            '下载视频失败：HTTP ${res.statusCode}',
-          );
+          return GallerySaveResult.failure('下载视频失败：HTTP ${res.statusCode}');
         }
         if (res.bodyBytes.isEmpty) {
           return GallerySaveResult.failure('视频数据为空');
@@ -313,9 +335,7 @@ class _VideoPageState extends State<VideoPage> {
     // 走控制器另存逻辑拿字节：落文档目录副本再写入相册
     final path = await _controller.saveVideoCopy(item);
     if (path == null || path.isEmpty) {
-      return GallerySaveResult.failure(
-        _controller.bannerError ?? '无法读取视频数据',
-      );
+      return GallerySaveResult.failure(_controller.bannerError ?? '无法读取视频数据');
     }
     try {
       final result = await _gallerySaver.saveVideoFile(path);
@@ -355,22 +375,18 @@ class _VideoPageState extends State<VideoPage> {
             ? ''
             : '${creds.providerName} · ${creds.videoModel}';
         final generating = _controller.isGeneratingActiveSession;
-        final modelPickerEnabled = !generating &&
+        final modelPickerEnabled =
+            !generating &&
             widget.providerRepository
                 .providersReadyFor(ModelKind.video)
                 .isNotEmpty;
         final title = session?.title ?? '新视频';
-        _controller.syncParamsToActiveProvider();
 
         return Scaffold(
           backgroundColor: tokens.canvas,
           resizeToAvoidBottomInset: true,
           appBar: AppBar(
-            title: Text(
-              title,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
+            title: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis),
             leading: IconButton(
               tooltip: '会话列表',
               icon: const Icon(Icons.menu),
@@ -429,151 +445,165 @@ class _VideoPageState extends State<VideoPage> {
                   ),
                 ),
               Expanded(
-                child: CustomScrollView(
-                  controller: _scroll,
-                  slivers: [
-                    SliverPadding(
-                      padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
-                      sliver: SliverToBoxAdapter(
-                        child: VideoComposer(
-                          prompt: _controller.promptDraft,
-                          promptFocusNode: _promptFocus,
-                          onPromptChanged: _controller.setPromptDraft,
-                          duration: _controller.duration,
-                          onDurationChanged: _controller.setDuration,
-                          size: _controller.size,
-                          onSizeChanged: _controller.setSize,
-                          aspectRatio: _controller.aspectRatio,
-                          onAspectRatioChanged: _controller.setAspectRatio,
-                          useAspectRatio: _controller.useAspectRatio,
-                          showSize: _controller.showSize,
-                          useResolution: _controller.useResolution,
-                          resolution: _controller.resolution,
-                          onResolutionChanged: _controller.setResolution,
-                          resolutionOptions: VideoController.resolutionOptions,
-                          durationOptions: _controller.activeDurationOptions,
-                          sizeOptions: _controller.activeSizeOptions,
-                          aspectOptions: _controller.activeAspectOptions,
-                          modelLabel: modelLabel,
-                          refBytes: _controller.refBytes,
-                          onPickRef: _controller.pickRefImage,
-                          onClearRef: _controller.clearRefImage,
-                          supportsReferenceImage:
-                              _controller.supportsReferenceImage,
-                          enabled: _controller.canGenerate,
-                          generating: generating,
-                          onGenerate: _controller.generate,
-                          onStop: _controller.stop,
-                          onPickModel: _pickVideoModel,
-                          modelPickerEnabled: modelPickerEnabled,
-                          onPromptAssist: () {
-                            showMaterialPromptAssist(
-                              context,
-                              domain: PromptDomain.video,
-                              mode: _controller.promptAssistMode,
-                              draftPrompt: _controller.promptDraft,
-                              providerRepository: widget.providerRepository,
-                              chatDefaultsRepository:
-                                  widget.chatDefaultsRepository,
-                              chatClient: widget.chatClient,
-                              onApply: _controller.applyPromptPreset,
-                            );
-                          },
+                child: NotificationListener<ScrollStartNotification>(
+                  onNotification: _scroll.handleScrollStart,
+                  child: CustomScrollView(
+                    key: ValueKey(session?.id),
+                    controller: _scroll,
+                    slivers: [
+                      SliverPadding(
+                        padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+                        sliver: SliverToBoxAdapter(
+                          child: VideoComposer(
+                            skillSummary: SkillSummary(
+                              repository: _skills,
+                              target: SkillTarget.video,
+                              prompt: _controller.promptDraft,
+                              enabled: !widget.generation.busy,
+                            ),
+                            prompt: _controller.promptDraft,
+                            promptFocusNode: _promptFocus,
+                            onPromptChanged: _controller.setPromptDraft,
+                            duration: _controller.duration,
+                            onDurationChanged: _controller.setDuration,
+                            size: _controller.size,
+                            onSizeChanged: _controller.setSize,
+                            aspectRatio: _controller.aspectRatio,
+                            onAspectRatioChanged: _controller.setAspectRatio,
+                            useAspectRatio: _controller.useAspectRatio,
+                            showSize: _controller.showSize,
+                            useResolution: _controller.useResolution,
+                            resolution: _controller.resolution,
+                            onResolutionChanged: _controller.setResolution,
+                            resolutionOptions:
+                                VideoController.resolutionOptions,
+                            durationOptions: _controller.activeDurationOptions,
+                            sizeOptions: _controller.activeSizeOptions,
+                            aspectOptions: _controller.activeAspectOptions,
+                            modelLabel: modelLabel,
+                            refBytes: _controller.refBytes,
+                            onPickRef: _controller.pickRefImage,
+                            onClearRef: _controller.clearRefImage,
+                            supportsReferenceImage:
+                                _controller.supportsReferenceImage,
+                            enabled: _controller.canGenerate,
+                            generating: generating,
+                            onGenerate: _controller.generate,
+                            onStop: _controller.stop,
+                            onPickModel: _pickVideoModel,
+                            modelPickerEnabled: modelPickerEnabled,
+                            onPromptAssist: () {
+                              showMaterialPromptAssist(
+                                context,
+                                domain: PromptDomain.video,
+                                skillRepository: _skills,
+                                mode: _controller.promptAssistMode,
+                                draftPrompt: _controller.promptDraft,
+                                providerRepository: widget.providerRepository,
+                                chatDefaultsRepository:
+                                    widget.chatDefaultsRepository,
+                                chatClient: widget.chatClient,
+                                onApply: _controller.applyPromptPreset,
+                              );
+                            },
+                          ),
                         ),
                       ),
-                    ),
-                    SliverPadding(
-                      padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
-                      sliver: SliverToBoxAdapter(
-                        child: VideoQueue(
-                          items: items,
-                          emptyActionLabel: '创建任务',
-                          onEmptyAction: () {
-                            if (_controller.canGenerate) {
-                              _controller.generate();
-                            } else {
-                              _focusPrompt();
-                            }
-                          },
-                          emptySecondaryActionLabel: '先写提示词',
-                          onEmptySecondaryAction: _focusPrompt,
-                          posterService: widget.videoPosterService,
-                          loadReferenceBytes: widget
-                              .sessionRepository.readReferenceImageBytes,
-                          onPreviewReference: _openReferenceLightbox,
-                          onPosterCached: (item, path) {
-                            final sid = widget.sessionRepository.activeId;
-                            if (sid.isEmpty) return;
-                            unawaited(
-                              widget.sessionRepository.setPosterLocalPath(
-                                sid,
-                                item.id,
-                                path,
-                              ),
-                            );
-                          },
-                          onPlay: (item) {
-                            Navigator.of(context).push<void>(
-                              materialFadeSlideRoute(
-                                builder: (_) => VideoPlayerPage(
-                                  item: item,
-                                  onSaveAlbum: _onSaveAlbum,
-                                  onShare: _onShare,
-                                  onOpenSystem: _controller.openVideo,
-                                  onRerun: (rerunItem) {
-                                    unawaited(
-                                      _controller.rerunFromItem(rerunItem),
-                                    );
-                                  },
-                                  rerunEnabled: !widget.generation.busy,
+                      SliverPadding(
+                        padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
+                        sliver: SliverToBoxAdapter(
+                          child: VideoQueue(
+                            items: items,
+                            emptyActionLabel: '创建任务',
+                            onEmptyAction: () {
+                              if (_controller.canGenerate) {
+                                _controller.generate();
+                              } else {
+                                _focusPrompt();
+                              }
+                            },
+                            emptySecondaryActionLabel: '先写提示词',
+                            onEmptySecondaryAction: _focusPrompt,
+                            posterService: widget.videoPosterService,
+                            loadReferenceBytes: widget
+                                .sessionRepository
+                                .readReferenceImageBytes,
+                            onPreviewReference: _openReferenceLightbox,
+                            onPosterCached: (item, path) {
+                              final sid = session?.id ?? '';
+                              if (sid.isEmpty) return;
+                              unawaited(
+                                widget.sessionRepository.setPosterLocalPath(
+                                  sid,
+                                  item.id,
+                                  path,
                                 ),
-                              ),
-                            );
-                          },
-                          onOpen: (item) async {
-                            final ok = await _controller.openVideo(item);
-                            if (ok && context.mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text('已打开')),
                               );
-                            }
-                          },
-                          onSave: (item) async {
-                            final path =
-                                await _controller.saveVideoCopy(item);
-                            if (path != null && context.mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(content: Text('已保存：$path')),
+                            },
+                            onPlay: (item) {
+                              Navigator.of(context).push<void>(
+                                materialFadeSlideRoute(
+                                  builder: (_) => VideoPlayerPage(
+                                    item: item,
+                                    onSaveAlbum: _onSaveAlbum,
+                                    onShare: _onShare,
+                                    onOpenSystem: _controller.openVideo,
+                                    onRerun: (rerunItem) {
+                                      unawaited(
+                                        _controller.rerunFromItem(rerunItem),
+                                      );
+                                    },
+                                    rerunEnabled: !widget.generation.busy,
+                                  ),
+                                ),
                               );
-                            }
-                          },
-                          onReload: (item) {
-                            _controller.reloadVideo(item);
-                          },
-                          isReloading: (item) =>
-                              _controller.isReloading(item.id),
-                          onResume: (item) {
-                            _controller.resumeItem(
-                              widget.sessionRepository.activeId,
-                              item.id,
-                            );
-                          },
-                          onAbandon: (item) {
-                            _controller.abandonItem(
-                              widget.sessionRepository.activeId,
-                              item.id,
-                            );
-                          },
-                          onRerun: (item) {
-                            unawaited(_controller.rerunFromItem(item));
-                          },
-                          rerunEnabled: !widget.generation.busy,
-                          onSaveAlbum: _onSaveAlbum,
-                          onShare: _onShare,
+                            },
+                            onOpen: (item) async {
+                              final ok = await _controller.openVideo(item);
+                              if (ok && context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(content: Text('已打开')),
+                                );
+                              }
+                            },
+                            onSave: (item) async {
+                              final path = await _controller.saveVideoCopy(
+                                item,
+                              );
+                              if (path != null && context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(content: Text('已保存：$path')),
+                                );
+                              }
+                            },
+                            onReload: (item) {
+                              _controller.reloadVideo(item);
+                            },
+                            isReloading: (item) =>
+                                _controller.isReloading(item.id),
+                            onResume: (item) {
+                              _controller.resumeItem(
+                                widget.sessionRepository.activeId,
+                                item.id,
+                              );
+                            },
+                            onAbandon: (item) {
+                              _controller.abandonItem(
+                                widget.sessionRepository.activeId,
+                                item.id,
+                              );
+                            },
+                            onRerun: (item) {
+                              unawaited(_controller.rerunFromItem(item));
+                            },
+                            rerunEnabled: !widget.generation.busy,
+                            onSaveAlbum: _onSaveAlbum,
+                            onShare: _onShare,
+                          ),
                         ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ],
@@ -646,10 +676,8 @@ class _VideoSessionListPage extends StatelessWidget {
               )
             : ListView.separated(
                 itemCount: sessions.length,
-                separatorBuilder: (_, _) => Divider(
-                  height: 1,
-                  color: tokens.border,
-                ),
+                separatorBuilder: (_, _) =>
+                    Divider(height: 1, color: tokens.border),
                 itemBuilder: (context, index) {
                   final s = sessions[index];
                   final active = s.id == activeId;

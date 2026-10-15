@@ -14,6 +14,8 @@ import 'settings_chat_defaults_page.dart';
 import 'settings_logs_page.dart';
 import 'settings_mcp_page.dart';
 import 'settings_providers_page.dart';
+import 'settings_skills_page.dart';
+import 'widgets/settings_typography.dart';
 
 class SettingsShell extends StatefulWidget {
   const SettingsShell({
@@ -31,6 +33,8 @@ class SettingsShell extends StatefulWidget {
     this.mcpServerRepository,
     this.mcpSessionFactory,
     this.hiddenPortalPrefs,
+    this.skillRepository,
+    this.active = true,
   });
 
   final SettingsCategory category;
@@ -46,18 +50,34 @@ class SettingsShell extends StatefulWidget {
   final McpServerRepository? mcpServerRepository;
   final McpSessionFactory? mcpSessionFactory;
   final HiddenPortalPrefs? hiddenPortalPrefs;
+  final SkillRepository? skillRepository;
+  final bool active;
 
   @override
-  State<SettingsShell> createState() => _SettingsShellState();
+  State<SettingsShell> createState() => SettingsShellState();
 }
 
-class _SettingsShellState extends State<SettingsShell> {
+class SettingsShellState extends State<SettingsShell> {
   late final HiddenPortalPrefs _portalPrefs;
+  late final SkillRepository _skills;
+  final _skillsKey = GlobalKey<SettingsSkillsPageState>();
+
+  Future<bool> confirmLeave({Future<void> Function()? beforePrompt}) async =>
+      await _skillsKey.currentState?.confirmLeave(beforePrompt: beforePrompt) ??
+      true;
+
+  Future<void> _changeCategory(SettingsCategory value) async {
+    if (value == widget.category) return;
+    if (await confirmLeave() && mounted) widget.onCategoryChanged(value);
+  }
 
   @override
   void initState() {
     super.initState();
     _portalPrefs = widget.hiddenPortalPrefs ?? HiddenPortalPrefs();
+    _skills =
+        widget.skillRepository ??
+        SkillRepository(storage: MemorySkillStorage());
     _portalPrefs.addListener(_onPortalPrefsChanged);
     unawaited(_portalPrefs.ensureLoaded());
   }
@@ -80,6 +100,7 @@ class _SettingsShellState extends State<SettingsShell> {
   @override
   void dispose() {
     _portalPrefs.removeListener(_onPortalPrefsChanged);
+    if (widget.skillRepository == null) _skills.dispose();
     super.dispose();
   }
 
@@ -98,78 +119,74 @@ class _SettingsShellState extends State<SettingsShell> {
   @override
   Widget build(BuildContext context) {
     final tokens = fluentTokensOf(context);
-    final density =
-        UiDensity.fromVisualDensity(FluentTheme.of(context).visualDensity);
+    final density = UiDensity.fromVisualDensity(
+      FluentTheme.of(context).visualDensity,
+    );
     final categories = _categories;
     final selected = categories.contains(widget.category)
         ? widget.category
         : SettingsCategory.about;
 
-    return FocusTraversalGroup(
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          SizedBox(
-            width: tokens.settingsCatWidth,
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                color: tokens.surface,
-                border: Border(right: BorderSide(color: tokens.border)),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Padding(
-                    padding: EdgeInsets.fromLTRB(
-                      16,
-                      density == UiDensity.compact ? 10 : 14,
-                      16,
-                      density == UiDensity.compact ? 6 : 10,
-                    ),
-                    child: Text(
-                      '设置',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: tokens.inkSecondary,
-                        fontFamily: tokens.fontFamily,
+    return SettingsTypography(
+      child: FocusTraversalGroup(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            SizedBox(
+              width: tokens.settingsCatWidth,
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: tokens.surface,
+                  border: Border(right: BorderSide(color: tokens.border)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Padding(
+                      padding: EdgeInsets.fromLTRB(
+                        16,
+                        density == UiDensity.compact ? 10 : 14,
+                        16,
+                        density == UiDensity.compact ? 6 : 10,
+                      ),
+                      child: Text(
+                        '设置',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: context.settingsText.label,
                       ),
                     ),
-                  ),
-                  Expanded(
-                    child: ListView(
-                      padding: const EdgeInsets.fromLTRB(8, 0, 8, 12),
-                      children: [
-                        for (final item in categories)
-                          _SettingsCatTile(
-                            category: item,
-                            selected: item == selected,
-                            tileVPad: density.settingsCatTileVertical,
-                            onPressed: () => widget.onCategoryChanged(item),
-                          ),
-                      ],
+                    Expanded(
+                      child: ListView(
+                        padding: const EdgeInsets.fromLTRB(8, 0, 8, 12),
+                        children: [
+                          for (final item in categories)
+                            _SettingsCatTile(
+                              category: item,
+                              selected: item == selected,
+                              tileVPad: density.settingsCatTileVertical,
+                              onPressed: () => _changeCategory(item),
+                            ),
+                        ],
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
-          ),
-          Expanded(
-            // 分类切换保活：避免提供商/MCP 表单切走即 dispose，导致「要切页才看见」的错觉。
-            child: IndexedStack(
-              index: () {
-                final i = categories.indexOf(selected);
-                return i < 0 ? 0 : i;
-              }(),
-              sizing: StackFit.expand,
-              children: [
-                for (final item in categories) _pageFor(item),
-              ],
+            Expanded(
+              // 分类切换保活：避免提供商/MCP 表单切走即 dispose，导致「要切页才看见」的错觉。
+              child: IndexedStack(
+                index: () {
+                  final i = categories.indexOf(selected);
+                  return i < 0 ? 0 : i;
+                }(),
+                sizing: StackFit.expand,
+                children: [for (final item in categories) _pageFor(item)],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -179,26 +196,32 @@ class _SettingsShellState extends State<SettingsShell> {
       key: ValueKey('settings_page_${category.name}'),
       child: switch (category) {
         SettingsCategory.providers => SettingsProvidersPage(
-            repository: widget.providerRepository,
-          ),
+          repository: widget.providerRepository,
+        ),
         SettingsCategory.mcp => _buildMcpPage(),
         SettingsCategory.chatDefaults => SettingsChatDefaultsPage(
-            repository: widget.chatDefaultsRepository,
-          ),
+          repository: widget.chatDefaultsRepository,
+        ),
+        SettingsCategory.skills => SettingsSkillsPage(
+          key: _skillsKey,
+          repository: _skills,
+          active: widget.active && widget.category == SettingsCategory.skills,
+        ),
         SettingsCategory.appearance => SettingsAppearancePage(
-            themeController: widget.themeController,
-          ),
+          themeController: widget.themeController,
+        ),
         SettingsCategory.logs => SettingsLogsPage(
-            repository: widget.appLogRepository,
-          ),
+          repository: widget.appLogRepository,
+        ),
         SettingsCategory.about => SettingsAboutPage(
-            appearanceRepository: widget.appearanceRepository,
-            dataBackupService: widget.dataBackupService,
-            themeController: widget.themeController,
-            generation: widget.generation,
-            updateController: widget.updateController,
-            onUnlockHiddenPortal: _toggleLab,
-          ),
+          skillRepository: _skills,
+          appearanceRepository: widget.appearanceRepository,
+          dataBackupService: widget.dataBackupService,
+          themeController: widget.themeController,
+          generation: widget.generation,
+          updateController: widget.updateController,
+          onUnlockHiddenPortal: _toggleLab,
+        ),
         SettingsCategory.lab => const HiddenPortalPage(),
       },
     );
@@ -215,10 +238,7 @@ class _SettingsShellState extends State<SettingsShell> {
         ),
       );
     }
-    return SettingsMcpPage(
-      repository: repo,
-      sessionFactory: factory,
-    );
+    return SettingsMcpPage(repository: repo, sessionFactory: factory);
   }
 }
 
@@ -284,11 +304,9 @@ class _SettingsCatTile extends StatelessWidget {
                   category.label,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 13,
+                  style: context.settingsText.body.copyWith(
                     fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
                     color: fg,
-                    fontFamily: tokens.fontFamily,
                   ),
                 ),
                 const SizedBox(height: 2),
@@ -296,11 +314,7 @@ class _SettingsCatTile extends StatelessWidget {
                   category.description,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: tokens.inkMuted,
-                    fontFamily: tokens.fontFamily,
-                  ),
+                  style: context.settingsText.caption,
                 ),
               ],
             ),

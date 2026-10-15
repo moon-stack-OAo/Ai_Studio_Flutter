@@ -134,10 +134,7 @@ class FluentSessionListEmpty extends StatelessWidget {
                 button: true,
                 label: actionLabel,
                 excludeSemantics: true,
-                child: Button(
-                  onPressed: onCreate,
-                  child: Text(actionLabel),
-                ),
+                child: Button(onPressed: onCreate, child: Text(actionLabel)),
               ),
             ],
           ),
@@ -156,6 +153,8 @@ class FluentContentEmpty extends StatelessWidget {
     this.illustration,
     this.actionLabel,
     this.onAction,
+    this.hintStyle,
+    this.subtitleStyle,
   });
 
   final String hint;
@@ -163,6 +162,8 @@ class FluentContentEmpty extends StatelessWidget {
   final Widget? illustration;
   final String? actionLabel;
   final VoidCallback? onAction;
+  final TextStyle? hintStyle;
+  final TextStyle? subtitleStyle;
 
   @override
   Widget build(BuildContext context) {
@@ -183,24 +184,28 @@ class FluentContentEmpty extends StatelessWidget {
               Text(
                 hint,
                 textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w500,
-                  color: tokens.inkSecondary,
-                  fontFamily: tokens.fontFamily,
-                ),
+                style:
+                    hintStyle ??
+                    TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                      color: tokens.inkSecondary,
+                      fontFamily: tokens.fontFamily,
+                    ),
               ),
               if (subtitle != null && subtitle!.isNotEmpty) ...[
                 const SizedBox(height: 6),
                 Text(
                   subtitle!,
                   textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 12,
-                    height: 1.4,
-                    color: tokens.inkMuted,
-                    fontFamily: tokens.fontFamily,
-                  ),
+                  style:
+                      subtitleStyle ??
+                      TextStyle(
+                        fontSize: 12,
+                        height: 1.4,
+                        color: tokens.inkMuted,
+                        fontFamily: tokens.fontFamily,
+                      ),
                 ),
               ],
               if (showAction) ...[
@@ -229,10 +234,14 @@ class FluentProvidersListEmpty extends StatelessWidget {
     super.key,
     this.onAdd,
     this.illustration,
+    this.titleStyle,
+    this.messageStyle,
   });
 
   final VoidCallback? onAdd;
   final Widget? illustration;
+  final TextStyle? titleStyle;
+  final TextStyle? messageStyle;
 
   @override
   Widget build(BuildContext context) {
@@ -251,30 +260,31 @@ class FluentProvidersListEmpty extends StatelessWidget {
               Text(
                 '暂无提供商',
                 textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  color: tokens.ink,
-                  fontFamily: tokens.fontFamily,
-                ),
+                style:
+                    titleStyle ??
+                    TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: tokens.ink,
+                      fontFamily: tokens.fontFamily,
+                    ),
               ),
               const SizedBox(height: 6),
               Text(
                 '添加 OpenAI / xAI 或兼容源后即可对话与生成。',
                 textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 12,
-                  height: 1.4,
-                  color: tokens.inkMuted,
-                  fontFamily: tokens.fontFamily,
-                ),
+                style:
+                    messageStyle ??
+                    TextStyle(
+                      fontSize: 12,
+                      height: 1.4,
+                      color: tokens.inkMuted,
+                      fontFamily: tokens.fontFamily,
+                    ),
               ),
               if (onAdd != null) ...[
                 const SizedBox(height: 12),
-                Button(
-                  onPressed: onAdd,
-                  child: const Text('添加提供商'),
-                ),
+                Button(onPressed: onAdd, child: const Text('添加提供商')),
               ],
             ],
           ),

@@ -62,6 +62,7 @@ Future<void> main() async {
     storage: PrefsChatDefaultsStorage(),
   );
   final appLogs = AppLogRepository(storage: PrefsAppLogStorage());
+  final skills = SkillRepository(storage: PrefsSkillStorage());
 
   final generation = GenerationRuntime();
   final chatClient = OpenAiCompatibleChatClient();
@@ -69,6 +70,7 @@ Future<void> main() async {
   final videoClient = OpenAiCompatibleVideoClient(logs: appLogs);
 
   final dataBackup = DataBackupService(
+    skillRepository: skills,
     providers: providers,
     appearance: appearance,
     chatDefaults: chatDefaults,
@@ -91,6 +93,7 @@ Future<void> main() async {
 
   runApp(
     AiStudioApp(
+      skillRepository: skills,
       themeController: themeController,
       providerRepository: providers,
       sessionRepository: sessions,
@@ -117,6 +120,7 @@ Future<void> main() async {
           videoSessions.load(),
           chatDefaults.load(),
           appLogs.load(),
+          skills.load(),
           updateController.ensurePrefsLoaded(),
         ]);
         // 移动端不支持本地 stdio：导入配置若启用则强制停用，避免对话误暴露 tools。
@@ -159,9 +163,11 @@ class AiStudioApp extends StatefulWidget {
     this.startupUpdateCheckDelay = const Duration(milliseconds: 800),
     this.showBrandIntro = true,
     this.bootstrap,
+    this.skillRepository,
   });
 
   final ThemeController themeController;
+  final SkillRepository? skillRepository;
   final ProviderRepository providerRepository;
   final ChatSessionRepository sessionRepository;
   final ImageSessionRepository imageSessionRepository;
@@ -253,6 +259,7 @@ class _AiStudioAppState extends State<AiStudioApp> {
               final ready = _shellReady.value;
               final shell = ready
                   ? AppShell(
+                      skillRepository: widget.skillRepository,
                       themeController: widget.themeController,
                       providerRepository: widget.providerRepository,
                       sessionRepository: widget.sessionRepository,

@@ -156,10 +156,7 @@ class _FilterableModelPickerState extends State<FilterableModelPicker> {
           placeholder: widget.options.isEmpty
               ? '${widget.placeholder}（先拉取模型）'
               : '搜索已拉取模型…',
-          style: TextStyle(
-            fontSize: 13,
-            color: tokens.ink,
-          ).withMonoFont(tokens),
+          style: FluentTheme.of(context).typography.body?.withMonoFont(tokens),
           onTap: widget.enabled ? _open : null,
           onChanged: widget.enabled
               ? (text) {
@@ -216,11 +213,9 @@ class _FilterableModelPickerState extends State<FilterableModelPicker> {
           const SizedBox(height: 6),
           Text(
             '拉取模型后，点击输入框或 ▼ 展开列表；输入即过滤。',
-            style: TextStyle(
-              fontSize: 11,
-              color: tokens.inkMuted,
-              fontFamily: tokens.fontFamily,
-            ),
+            style: FluentTheme.of(
+              context,
+            ).typography.caption?.copyWith(color: tokens.inkMuted),
           ),
         ],
         if (_tagText.isNotEmpty) ...[
@@ -267,11 +262,9 @@ class _ModelComboList extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
               child: Text(
                 emptyHint,
-                style: TextStyle(
-                  fontSize: 12,
-                  color: tokens.inkMuted,
-                  fontFamily: tokens.fontFamily,
-                ),
+                style: FluentTheme.of(
+                  context,
+                ).typography.caption?.copyWith(color: tokens.inkMuted),
               ),
             )
           : ListView.builder(
@@ -288,8 +281,8 @@ class _ModelComboList extends StatelessWidget {
                     final bg = active
                         ? Color.lerp(tokens.primary, tokens.surface, 0.86)
                         : hovered
-                            ? Color.lerp(tokens.ink, tokens.surface, 0.94)
-                            : Colors.transparent;
+                        ? Color.lerp(tokens.ink, tokens.surface, 0.94)
+                        : Colors.transparent;
                     return Container(
                       width: double.infinity,
                       padding: const EdgeInsets.symmetric(
@@ -305,21 +298,20 @@ class _ModelComboList extends StatelessWidget {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: o.manual
-                            ? TextStyle(
-                                fontSize: 13,
-                                fontFamily: tokens.fontFamily,
+                            ? FluentTheme.of(context).typography.body?.copyWith(
                                 color: tokens.inkMuted,
                                 fontWeight: active
                                     ? FontWeight.w600
                                     : FontWeight.w400,
                               )
-                            : TextStyle(
-                                fontSize: 13,
-                                color: tokens.ink,
-                                fontWeight: active
-                                    ? FontWeight.w600
-                                    : FontWeight.w400,
-                              ).withMonoFont(tokens),
+                            : FluentTheme.of(context).typography.body
+                                  ?.copyWith(
+                                    color: tokens.ink,
+                                    fontWeight: active
+                                        ? FontWeight.w600
+                                        : FontWeight.w400,
+                                  )
+                                  .withMonoFont(tokens),
                       ),
                     );
                   },
@@ -331,10 +323,7 @@ class _ModelComboList extends StatelessWidget {
 }
 
 class _ModelTag extends StatelessWidget {
-  const _ModelTag({
-    required this.label,
-    this.onClear,
-  });
+  const _ModelTag({required this.label, this.onClear});
 
   final String label;
   final VoidCallback? onClear;
@@ -364,10 +353,9 @@ class _ModelTag extends StatelessWidget {
                   label,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: tokens.inkSecondary,
-                  ).withMonoFont(tokens),
+                  style: FluentTheme.of(context).typography.caption
+                      ?.copyWith(color: tokens.inkSecondary)
+                      .withMonoFont(tokens),
                 ),
               ),
               if (onClear != null)

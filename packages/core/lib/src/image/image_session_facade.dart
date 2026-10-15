@@ -10,6 +10,7 @@ import '../chat/generation_runtime.dart';
 import '../logging/app_log_entry.dart';
 import '../logging/app_log_level.dart';
 import '../logging/app_log_repository.dart';
+import '../prompt/custom_skills.dart';
 import '../provider/agnes_profile.dart';
 import '../provider/provider_connection.dart';
 import '../provider/provider_models_cache.dart';
@@ -32,23 +33,26 @@ class ImageSessionFacade {
     required ImageSessionRepository sessions,
     required this.generation,
     AppLogRepository? appLogs,
+    SkillRepository? skillRepository,
     OpenAiCompatibleImageClient? imageClient,
     http.Client Function()? createHttpClient,
     VoidCallback? onModelsChanged,
-  })  : _providers = providers,
-        _sessions = sessions,
-        _appLogs = appLogs,
-        _ownsClient = imageClient == null,
-        _imageClient = imageClient ?? OpenAiCompatibleImageClient(),
-        _createHttpClient = createHttpClient ?? createSafeHttpClient,
-        modelsCache = ProviderModelsCache(
-          providers: providers,
-          onChanged: onModelsChanged,
-        );
+  }) : _providers = providers,
+       _sessions = sessions,
+       _appLogs = appLogs,
+       _skillRepository = skillRepository,
+       _ownsClient = imageClient == null,
+       _imageClient = imageClient ?? OpenAiCompatibleImageClient(),
+       _createHttpClient = createHttpClient ?? createSafeHttpClient,
+       modelsCache = ProviderModelsCache(
+         providers: providers,
+         onChanged: onModelsChanged,
+       );
 
   final ProviderRepository _providers;
   final ImageSessionRepository _sessions;
   final AppLogRepository? _appLogs;
+  final SkillRepository? _skillRepository;
   final GenerationRuntime generation;
   final OpenAiCompatibleImageClient _imageClient;
   final bool _ownsClient;
@@ -62,19 +66,9 @@ class ImageSessionFacade {
   String _quality = defaultImageQuality;
   String _promptDraft = '';
 
-  static const sizeOptions = <String>[
-    '1024x1024',
-    '1024x1792',
-    '1792x1024',
-  ];
+  static const sizeOptions = <String>['1024x1024', '1024x1792', '1792x1024'];
 
-  static const aspectOptions = <String>[
-    '1:1',
-    '16:9',
-    '9:16',
-    '4:3',
-    '3:4',
-  ];
+  static const aspectOptions = <String>['1:1', '16:9', '9:16', '4:3', '3:4'];
 
   static const qualityOptions = imageQualityOptions;
 
@@ -94,11 +88,11 @@ class ImageSessionFacade {
       generation.isCurrent(_sessions.activeId);
 
   bool get canGenerate => canGenerateImage(
-        generation: generation,
-        activeSessionId: _sessions.activeId,
-        hasConfiguredImageProvider: _providers.hasConfiguredImageProvider,
-        promptDraft: _promptDraft,
-      );
+    generation: generation,
+    activeSessionId: _sessions.activeId,
+    hasConfiguredImageProvider: _providers.hasConfiguredImageProvider,
+    promptDraft: _promptDraft,
+  );
 
   ActiveImageCredentials? get _imageCreds => _providers.activeImageCredentials;
 
@@ -143,9 +137,7 @@ class ImageSessionFacade {
     var changed = false;
     final sizes = activeSizeOptions;
     if (sizes.isNotEmpty && !sizes.contains(_size)) {
-      _size = isAgnesImageActive
-          ? normalizeAgnesImageSize(_size)
-          : sizes.first;
+      _size = isAgnesImageActive ? normalizeAgnesImageSize(_size) : sizes.first;
       if (!sizes.contains(_size)) _size = sizes.first;
       changed = true;
     }
@@ -256,6 +248,13 @@ class ImageSessionFacade {
     bool clearPromptDraft = true,
   }) async {
     final text = (prompt ?? _promptDraft).trim();
+    final appliedSkills =
+        _skillRepository?.snapshotFor(SkillTarget.image) ??
+        const <SkillSnapshot>[];
+    final finalPrompt = composeSkillPrompt(
+      prompt: text,
+      skills: appliedSkills,
+    ).trim();
     if (text.isEmpty) return;
 
     final useN = n ?? _n;
@@ -280,8 +279,9 @@ class ImageSessionFacade {
       return;
     }
 
-    final refBytes =
-        (imageBytes != null && imageBytes.isNotEmpty) ? imageBytes : null;
+    final refBytes = (imageBytes != null && imageBytes.isNotEmpty)
+        ? imageBytes
+        : null;
     final isEdit = refBytes != null;
     final refPreview = isEdit ? 'ref:${refBytes.length}' : null;
     final refName = (imageFileName ?? 'image.png').trim();
@@ -301,8 +301,9 @@ class ImageSessionFacade {
     final passAspect = useAspectRatio;
     final passSize = showSize;
     final effectiveSize = agnes ? normalizeAgnesImageSize(useSize) : useSize;
-    final effectiveAspect =
-        agnes ? normalizeAgnesImageRatio(useAspect) : useAspect;
+    final effectiveAspect = agnes
+        ? normalizeAgnesImageRatio(useAspect)
+        : useAspect;
     final pendingId = createId('imgi');
     final persistedRefs = isEdit
         ? await _sessions.persistReferenceImages(pendingId, [refBytes])
@@ -312,6 +313,8 @@ class ImageSessionFacade {
       id: pendingId,
       mode: isEdit ? ImageGenMode.edit : ImageGenMode.text,
       prompt: text,
+      finalPrompt: finalPrompt,
+      appliedSkills: appliedSkills,
       model: creds.imageModel,
       providerName: creds.providerName,
       n: useN,
@@ -335,7 +338,7 @@ class ImageSessionFacade {
           apiKey: creds.apiKey,
           model: creds.imageModel,
           providerType: creds.type,
-          prompt: text,
+          prompt: finalPrompt,
           imageBytes: refBytes,
           imageFileName: effectiveRefName,
           n: useN,
@@ -347,7 +350,7 @@ class ImageSessionFacade {
       } else {
         refs = await _imageClient.generateTextToImageWithCredentials(
           creds,
-          prompt: text,
+          prompt: finalPrompt,
           n: useN,
           size: passSize ? effectiveSize : null,
           aspectRatio: passAspect ? effectiveAspect : null,

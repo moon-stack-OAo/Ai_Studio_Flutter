@@ -12,8 +12,9 @@ import 'settings_appearance_tab.dart';
 import 'settings_chat_defaults_tab.dart';
 import 'settings_logs_tab.dart';
 import 'settings_providers_tab.dart';
+import 'settings_skills_tab.dart';
 
-/// Material 设置：默认五 Tab；解锁后追加「实验室」。
+/// Material 设置：默认六 Tab；解锁后追加「实验室」。
 class SettingsPage extends StatefulWidget {
   const SettingsPage({
     super.key,
@@ -29,9 +30,11 @@ class SettingsPage extends StatefulWidget {
     this.mcpServerRepository,
     this.mcpSessionFactory,
     this.hiddenPortalPrefs,
+    this.skillRepository,
   });
 
   final ThemeController themeController;
+  final SkillRepository? skillRepository;
   final ProviderRepository providerRepository;
   final ChatDefaultsRepository chatDefaultsRepository;
   final AppearanceRepository appearanceRepository;
@@ -53,8 +56,9 @@ class _SettingsPageState extends State<SettingsPage>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
   late final HiddenPortalPrefs _portalPrefs;
+  late final SkillRepository _skills;
 
-  static const _baseTabs = <String>['提供商', '对话', '外观', '日志', '关于'];
+  static const _baseTabs = <String>['提供商', '对话', '技能', '外观', '日志', '关于'];
   static const _labTabLabel = '实验室';
 
   List<String> get _tabs => _portalPrefs.unlocked
@@ -66,6 +70,8 @@ class _SettingsPageState extends State<SettingsPage>
   @override
   void initState() {
     super.initState();
+    _skills = widget.skillRepository ?? SkillRepository(storage: MemorySkillStorage());
+    if (!_skills.isLoaded) unawaited(_skills.load().catchError((Object _) {}));
     _portalPrefs = widget.hiddenPortalPrefs ?? HiddenPortalPrefs();
     _portalPrefs.addListener(_onPortalPrefsChanged);
     final initial = widget.initialTabIndex.clamp(0, _baseTabs.length - 1);
@@ -137,6 +143,7 @@ class _SettingsPageState extends State<SettingsPage>
   void dispose() {
     _portalPrefs.removeListener(_onPortalPrefsChanged);
     _tabController.dispose();
+    if (widget.skillRepository == null) _skills.dispose();
     super.dispose();
   }
 
@@ -151,13 +158,14 @@ class _SettingsPageState extends State<SettingsPage>
         title: const Text('设置'),
         bottom: TabBar(
           controller: _tabController,
-          isScrollable: tabs.length > 5,
+          isScrollable: true,
+          tabAlignment: TabAlignment.start,
           labelColor: tokens.primaryPressed,
           unselectedLabelColor: tokens.inkMuted,
           indicatorColor: tokens.primary,
           indicatorSize: TabBarIndicatorSize.tab,
           dividerColor: tokens.border,
-          labelPadding: EdgeInsets.zero,
+          labelPadding: const EdgeInsets.symmetric(horizontal: 18),
           labelStyle: TextStyle(
             fontSize: 13,
             fontWeight: FontWeight.w600,
@@ -182,9 +190,11 @@ class _SettingsPageState extends State<SettingsPage>
             mcpSessionFactory: widget.mcpSessionFactory,
           ),
           SettingsChatDefaultsTab(repository: widget.chatDefaultsRepository),
+          SettingsSkillsTab(repository: _skills),
           SettingsAppearanceTab(themeController: widget.themeController),
           SettingsLogsTab(repository: widget.appLogRepository),
           SettingsAboutTab(
+            skillRepository: _skills,
             dataBackupService: widget.dataBackupService,
             themeController: widget.themeController,
             generation: widget.generation,

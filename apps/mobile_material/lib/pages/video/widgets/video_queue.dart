@@ -9,6 +9,7 @@ import 'package:flutter/services.dart';
 import '../../../widgets/collapsible_prompt.dart';
 import '../../../widgets/empty_illustrations.dart';
 import '../../../widgets/material_empty_states.dart';
+import '../../../widgets/skill_summary.dart';
 
 /// M-VideoQueue：按回合时间分隔 — 提示词 + 任务卡 + 进度。
 class VideoQueue extends StatefulWidget {
@@ -324,6 +325,7 @@ class _TurnCard extends StatelessWidget {
               ? null
               : (index, ref) => onPreviewReference!(item, index, ref),
         ),
+        AppliedSkillsButton(skills: item.appliedSkills, finalPrompt: item.finalPrompt),
         const SizedBox(height: 8),
         Container(
           padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),

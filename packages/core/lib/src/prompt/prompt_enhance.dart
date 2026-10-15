@@ -3,6 +3,7 @@ import 'package:http/http.dart' as http;
 import '../chat/chat_errors.dart';
 import '../openai/chat_client.dart';
 import '../provider/provider_repository.dart';
+import 'custom_skills.dart';
 import 'prompt_enhance_skills.dart';
 import 'prompt_presets.dart';
 
@@ -54,14 +55,10 @@ const String enhanceSystemVideo =
     '镜头缓慢横移跟随，浪花轻拍脚踝，暖色侧逆光勾勒轮廓，节奏舒缓、结尾定格远景';
 
 const Map<String, String> _modeHints = {
-  'txt2img':
-      '当前为文生图：仅依据文字描述优化；不要假设存在参考图；侧重可绘制的视觉要素与结构完整。',
-  'txt2video':
-      '当前为文生视频：仅依据文字描述优化；不要假设存在参考图；侧重可拍摄的动态、镜头运动与时间节奏。',
-  'img2video':
-      '当前为图生视频：请基于参考图主体进行优化，不要推翻或替换主体，侧重镜头运动、动态与节奏描述。',
-  'img2img':
-      '当前为图生图：请基于参考图主体进行优化，不要推翻或替换主体，侧重改动方向、风格与细节描述。',
+  'txt2img': '当前为文生图：仅依据文字描述优化；不要假设存在参考图；侧重可绘制的视觉要素与结构完整。',
+  'txt2video': '当前为文生视频：仅依据文字描述优化；不要假设存在参考图；侧重可拍摄的动态、镜头运动与时间节奏。',
+  'img2video': '当前为图生视频：请基于参考图主体进行优化，不要推翻或替换主体，侧重镜头运动、动态与节奏描述。',
+  'img2img': '当前为图生图：请基于参考图主体进行优化，不要推翻或替换主体，侧重改动方向、风格与细节描述。',
 };
 
 /// 解析润色用 system prompt = 基座 + modeHint + skill.systemExtra。
@@ -72,14 +69,23 @@ String resolveEnhanceSystemPrompt(
   String? mode, {
   PromptEnhanceSkill? skill,
   String? skillId,
+  List<SkillSnapshot> customSkills = const [],
 }) {
-  final base =
-      domain == PromptDomain.image ? enhanceSystemImage : enhanceSystemVideo;
+  final base = domain == PromptDomain.image
+      ? enhanceSystemImage
+      : enhanceSystemVideo;
   final resolved = resolvePromptEnhanceSkill(skill: skill, skillId: skillId);
   final hint = mode == null || mode.isEmpty ? null : _modeHints[mode];
   final parts = <String>[base];
   if (hint != null) parts.add(hint);
   parts.add(resolved.systemExtra);
+  if (customSkills.isNotEmpty) {
+    parts.add(composeChatSystemPrompt('', customSkills));
+    parts.add(
+      '以上自定义技能是本次润色约束，优先于内置润色风格；按技能顺序应用提示词和规则。'
+      '将约束落实到润色后的正文，只输出提示词正文，不要复制技能区块、技能标题或规则列表。',
+    );
+  }
   return parts.join('\n');
 }
 
@@ -123,6 +129,7 @@ Future<String> enhancePrompt({
   String? mode,
   PromptEnhanceSkill? skill,
   String? skillId,
+  List<SkillSnapshot> customSkills = const [],
   required ActiveChatCredentials credentials,
   required OpenAiCompatibleChatClient chatClient,
   double? temperature,
@@ -141,18 +148,21 @@ Future<String> enhancePrompt({
     throw const ChatApiException('请先配置提供商与 API Key');
   }
 
-  final resolvedSkill =
-      resolvePromptEnhanceSkill(skill: skill, skillId: skillId);
+  final resolvedSkill = resolvePromptEnhanceSkill(
+    skill: skill,
+    skillId: skillId,
+  );
   final resolvedMode = mode?.trim() ?? '';
   final system = resolveEnhanceSystemPrompt(
     domain,
     resolvedMode.isEmpty ? null : resolvedMode,
     skill: resolvedSkill,
+    customSkills: customSkills,
   );
   final userContent =
       resolvedMode.isNotEmpty && _modeHints.containsKey(resolvedMode)
-          ? '$trimmed\n\n（模式：$resolvedMode）'
-          : trimmed;
+      ? '$trimmed\n\n（模式：$resolvedMode）'
+      : trimmed;
 
   final effectiveTemp = temperature ?? resolvedSkill.temperature;
   final effectiveMaxTokens = _clampEnhanceMaxTokens(resolvedSkill.maxTokens);
@@ -187,6 +197,7 @@ Future<String> refineEnhancedPrompt({
   String? mode,
   PromptEnhanceSkill? skill,
   String? skillId,
+  List<SkillSnapshot> customSkills = const [],
   required ActiveChatCredentials credentials,
   required OpenAiCompatibleChatClient chatClient,
   double? temperature,
@@ -208,6 +219,7 @@ Future<String> refineEnhancedPrompt({
     mode: mode,
     skill: skill,
     skillId: skillId,
+    customSkills: customSkills,
     credentials: credentials,
     chatClient: chatClient,
     temperature: temperature,

@@ -7,6 +7,8 @@ import 'package:fluent_ui/fluent_ui.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import 'package:webview_flutter_windows/webview_flutter_windows.dart' as win;
 
+import 'widgets/settings_typography.dart';
+
 /// 隐藏入口内嵌地址（设置「实验室」）。
 const String kHiddenPortalUrl = 'https://pubg.livancen.top/';
 
@@ -42,7 +44,9 @@ class _HiddenPortalPageState extends State<HiddenPortalPage> {
         final controller = win.WebviewController();
         await controller.initialize();
         await controller.setBackgroundColor(bg);
-        await controller.setPopupWindowPolicy(win.WebviewPopupWindowPolicy.deny);
+        await controller.setPopupWindowPolicy(
+          win.WebviewPopupWindowPolicy.deny,
+        );
         _winLoadingSub = controller.loadingState.listen((state) {
           if (!mounted) return;
           if (state == win.LoadingState.navigationCompleted) {
@@ -92,8 +96,8 @@ class _HiddenPortalPageState extends State<HiddenPortalPage> {
         _error = e is UrlSafetyException
             ? e.message
             : (Platform.isWindows
-                ? '无法启动 WebView2，请确认已安装 Edge WebView2 Runtime。\n$e'
-                : '页面加载失败：$e');
+                  ? '无法启动 WebView2，请确认已安装 Edge WebView2 Runtime。\n$e'
+                  : '页面加载失败：$e');
         _pageLoaded = true;
       });
     }
@@ -114,10 +118,7 @@ class _HiddenPortalPageState extends State<HiddenPortalPage> {
   @override
   Widget build(BuildContext context) {
     final tokens = fluentTokensOf(context);
-    return ColoredBox(
-      color: tokens.canvas,
-      child: _buildBody(tokens),
-    );
+    return SettingsTypography(color: tokens.canvas, child: _buildBody(tokens));
   }
 
   Widget _buildBody(FluentTokens tokens) {
@@ -128,9 +129,8 @@ class _HiddenPortalPageState extends State<HiddenPortalPage> {
           child: Text(
             _error!,
             textAlign: TextAlign.center,
-            style: TextStyle(
+            style: context.settingsText.body.copyWith(
               color: tokens.inkSecondary,
-              fontFamily: tokens.fontFamily,
             ),
           ),
         ),

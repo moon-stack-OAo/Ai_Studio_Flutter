@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 
 import '../image/image_asset_store.dart';
 import '../image/image_models.dart';
+import '../prompt/custom_skills.dart';
 import '../util/id.dart';
 import 'video_asset_store.dart';
 import 'video_models.dart';
@@ -13,10 +14,9 @@ class VideoSessionRepository extends ChangeNotifier {
     required VideoSessionStorage storage,
     VideoAssetStore? assetStore,
     ImageAssetStore? referenceImageStore,
-  })  : _storage = storage,
-        _assetStore = assetStore ?? MemoryVideoAssetStore(),
-        _referenceImageStore =
-            referenceImageStore ?? MemoryImageAssetStore();
+  }) : _storage = storage,
+       _assetStore = assetStore ?? MemoryVideoAssetStore(),
+       _referenceImageStore = referenceImageStore ?? MemoryImageAssetStore();
 
   final VideoSessionStorage _storage;
   final VideoAssetStore _assetStore;
@@ -149,10 +149,7 @@ class VideoSessionRepository extends ChangeNotifier {
     final index = _indexOf(id);
     if (index < 0) return;
     final t = title.trim().isEmpty ? '新视频' : title.trim();
-    _replace(
-      index,
-      _sessions[index].copyWith(title: t, updatedAt: _now()),
-    );
+    _replace(index, _sessions[index].copyWith(title: t, updatedAt: _now()));
     await _persist();
     notifyListeners();
   }
@@ -188,9 +185,7 @@ class VideoSessionRepository extends ChangeNotifier {
 
   /// 用快照整体替换（导入备份用）；不迁移媒体二进制。
   Future<void> replaceAll(VideoStoreSnapshot snapshot) async {
-    await _deleteItemAssets(
-      _sessions.expand((s) => s.items).toList(),
-    );
+    await _deleteItemAssets(_sessions.expand((s) => s.items).toList());
     var sessions = List<VideoSession>.from(snapshot.sessions);
     var activeId = snapshot.activeId;
     if (sessions.isEmpty) {
@@ -209,9 +204,7 @@ class VideoSessionRepository extends ChangeNotifier {
 
   /// 清除全部生视频会话与关联本地媒体文件。幂等。
   Future<void> clearAllSessions({bool clearMediaCache = true}) async {
-    await _deleteItemAssets(
-      _sessions.expand((s) => s.items).toList(),
-    );
+    await _deleteItemAssets(_sessions.expand((s) => s.items).toList());
     if (clearMediaCache) {
       try {
         await _assetStore.clearAll();
@@ -234,6 +227,8 @@ class VideoSessionRepository extends ChangeNotifier {
     String sessionId, {
     required VideoGenMode mode,
     required String prompt,
+    String? finalPrompt,
+    List<SkillSnapshot> appliedSkills = const [],
     String model = '',
     String providerId = '',
     String providerName = '',
@@ -257,6 +252,8 @@ class VideoSessionRepository extends ChangeNotifier {
       createdAt: createdAt ?? _now(),
       mode: mode,
       prompt: prompt,
+      finalPrompt: finalPrompt,
+      appliedSkills: List.unmodifiable(appliedSkills),
       model: model,
       providerId: providerId,
       providerName: providerName,
@@ -318,20 +315,23 @@ class VideoSessionRepository extends ChangeNotifier {
     final itemIndex = session.items.indexWhere((i) => i.id == itemId);
     if (itemIndex < 0) return;
     final prev = session.items[itemIndex];
-    final nextVideoUrl =
-        (videoUrl != null && videoUrl == prev.videoUrl) ? null : videoUrl;
+    final nextVideoUrl = (videoUrl != null && videoUrl == prev.videoUrl)
+        ? null
+        : videoUrl;
     final nextRemoteVideoUrl =
         (remoteVideoUrl != null && remoteVideoUrl == prev.remoteVideoUrl)
-            ? null
-            : remoteVideoUrl;
-    final nextLocalPath =
-        (localPath != null && localPath == prev.localPath) ? null : localPath;
-    final nextPosterUrl =
-        (posterUrl != null && posterUrl == prev.posterUrl) ? null : posterUrl;
+        ? null
+        : remoteVideoUrl;
+    final nextLocalPath = (localPath != null && localPath == prev.localPath)
+        ? null
+        : localPath;
+    final nextPosterUrl = (posterUrl != null && posterUrl == prev.posterUrl)
+        ? null
+        : posterUrl;
     final nextPosterLocalPath =
         (posterLocalPath != null && posterLocalPath == prev.posterLocalPath)
-            ? null
-            : posterLocalPath;
+        ? null
+        : posterLocalPath;
     var next = prev.copyWith(
       status: status,
       jobId: jobId,
@@ -358,8 +358,10 @@ class VideoSessionRepository extends ChangeNotifier {
     if (prevRemote != null &&
         RegExp(r'^https?://', caseSensitive: false).hasMatch(prevRemote) &&
         (next.remoteVideoUrl == null ||
-            !RegExp(r'^https?://', caseSensitive: false)
-                .hasMatch(next.remoteVideoUrl!))) {
+            !RegExp(
+              r'^https?://',
+              caseSensitive: false,
+            ).hasMatch(next.remoteVideoUrl!))) {
       next = next.copyWith(remoteVideoUrl: prevRemote);
     }
     if (_itemPlaybackFieldsEqual(prev, next)) {
@@ -367,10 +369,7 @@ class VideoSessionRepository extends ChangeNotifier {
     }
     final items = List<VideoItem>.from(session.items);
     items[itemIndex] = next;
-    _replace(
-      index,
-      session.copyWith(items: items, updatedAt: _now()),
-    );
+    _replace(index, session.copyWith(items: items, updatedAt: _now()));
     if (persist) await _persist();
     notifyListeners();
   }
@@ -424,11 +423,7 @@ class VideoSessionRepository extends ChangeNotifier {
   ) async {
     final trimmed = path.trim();
     if (trimmed.isEmpty) return;
-    await updateItem(
-      sessionId,
-      itemId,
-      posterLocalPath: trimmed,
-    );
+    await updateItem(sessionId, itemId, posterLocalPath: trimmed);
   }
 
   Future<void> failItem(
@@ -470,8 +465,7 @@ class VideoSessionRepository extends ChangeNotifier {
       remoteVideoUrl: remoteVideoUrl,
       videoUrl: videoUrl,
       jobId: jobId,
-      errorMessage:
-          errorMessage ?? '视频已生成但本地加载失败，可尝试重新加载',
+      errorMessage: errorMessage ?? '视频已生成但本地加载失败，可尝试重新加载',
     );
   }
 

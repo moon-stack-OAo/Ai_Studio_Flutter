@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../image/widgets/image_lightbox.dart';
+import '../../../widgets/skill_summary.dart';
 import 'markdown_host.dart';
 import 'tool_call_trace_card.dart';
 
@@ -246,6 +247,7 @@ class MessageBubble extends StatelessWidget {
               ),
             ),
           ),
+          AppliedSkillsButton(skills: message.appliedSkills),
           if (message.stopped)
             Padding(
               padding: const EdgeInsets.only(top: 4, left: 4, right: 4),

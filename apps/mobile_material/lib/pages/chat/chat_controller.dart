@@ -23,6 +23,7 @@ class ChatController extends ChangeNotifier {
     required ChatDefaultsRepository chatDefaultsRepository,
     required this.generation,
     AppLogRepository? appLogRepository,
+    SkillRepository? skillRepository,
     OpenAiCompatibleChatClient? chatClient,
     McpServerRepository? mcpServerRepository,
     McpSessionFactory? mcpSessionFactory,
@@ -33,6 +34,7 @@ class ChatController extends ChangeNotifier {
         _mcpServers = mcpServerRepository,
         _picker = imagePicker ?? ImagePicker() {
     _facade = ChatSessionFacade(
+      skillRepository: skillRepository,
       providers: providerRepository,
       sessions: sessionRepository,
       chatDefaults: chatDefaultsRepository,

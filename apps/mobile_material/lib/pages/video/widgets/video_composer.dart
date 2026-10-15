@@ -37,6 +37,7 @@ class VideoComposer extends StatefulWidget {
     this.onPickModel,
     this.modelPickerEnabled = true,
     this.promptFocusNode,
+    this.skillSummary,
   });
 
   final String prompt;
@@ -69,6 +70,7 @@ class VideoComposer extends StatefulWidget {
   final VoidCallback? onPickModel;
   final bool modelPickerEnabled;
   final FocusNode? promptFocusNode;
+  final Widget? skillSummary;
 
   @override
   State<VideoComposer> createState() => _VideoComposerState();
@@ -362,6 +364,7 @@ class _VideoComposerState extends State<VideoComposer> {
                     ),
                   ),
                   const SizedBox(height: 8),
+                  if (widget.skillSummary != null) widget.skillSummary!,
                   _fieldLabel(tokens, '参考图（可选）'),
                   const SizedBox(height: 4),
                   if (!widget.supportsReferenceImage)

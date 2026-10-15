@@ -3,15 +3,13 @@ import 'package:design_fluent/design_fluent.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 
 import '../../widgets/back_to_top_host.dart';
+import 'widgets/settings_typography.dart';
 import '../../widgets/filterable_model_picker.dart';
 import '../../widgets/empty_illustrations.dart';
 import '../../widgets/fluent_empty_states.dart';
 
 class SettingsProvidersPage extends StatefulWidget {
-  const SettingsProvidersPage({
-    super.key,
-    required this.repository,
-  });
+  const SettingsProvidersPage({super.key, required this.repository});
 
   final ProviderRepository repository;
 
@@ -87,8 +85,7 @@ class _SettingsProvidersPageState extends State<SettingsProvidersPage> {
 
   void _onRepoChanged() {
     if (!mounted) return;
-    final exists =
-        _repo.providers.any((p) => p.id == _selectedId);
+    final exists = _repo.providers.any((p) => p.id == _selectedId);
     if (!exists) {
       _selectedId = _repo.activeProviderId;
       _loadFormFromSelected();
@@ -366,7 +363,7 @@ class _SettingsProvidersPageState extends State<SettingsProvidersPage> {
     final providers = _repo.providers;
     final selected = _selected;
 
-    return ColoredBox(
+    return SettingsTypography(
       color: tokens.canvas,
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -388,12 +385,7 @@ class _SettingsProvidersPageState extends State<SettingsProvidersPage> {
                         Expanded(
                           child: Text(
                             '提供商',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
-                              color: tokens.ink,
-                              fontFamily: tokens.fontFamily,
-                            ),
+                            style: context.settingsText.paneTitle,
                           ),
                         ),
                         FilledButton(
@@ -406,6 +398,8 @@ class _SettingsProvidersPageState extends State<SettingsProvidersPage> {
                   Expanded(
                     child: providers.isEmpty
                         ? FluentProvidersListEmpty(
+                            titleStyle: context.settingsText.label,
+                            messageStyle: context.settingsText.caption,
                             onAdd: _addProvider,
                             illustration:
                                 const FluentEmptyIllustration.noProviders(),
@@ -413,8 +407,7 @@ class _SettingsProvidersPageState extends State<SettingsProvidersPage> {
                         : BackToTopHost(
                             builder: (context, scroll) => ListView.separated(
                               controller: scroll,
-                              padding:
-                                  const EdgeInsets.fromLTRB(10, 0, 10, 16),
+                              padding: const EdgeInsets.fromLTRB(10, 0, 10, 16),
                               itemCount: providers.length,
                               separatorBuilder: (_, _) =>
                                   const SizedBox(height: 6),
@@ -437,6 +430,8 @@ class _SettingsProvidersPageState extends State<SettingsProvidersPage> {
           Expanded(
             child: selected == null
                 ? FluentContentEmpty(
+                    hintStyle: context.settingsText.body,
+                    subtitleStyle: context.settingsText.caption,
                     hint: '选择或添加一个提供商',
                     subtitle: '左侧列表点选后编辑；也可点「添加提供商」。',
                     illustration: const FluentEmptyIllustration.noProviders(),
@@ -566,18 +561,12 @@ class _ProviderListTile extends StatelessWidget {
               Expanded(
                 child: Text(
                   provider.name,
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: tokens.ink,
-                    fontFamily: tokens.fontFamily,
-                  ),
+                  style: context.settingsText.label.copyWith(color: tokens.ink),
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                 decoration: BoxDecoration(
                   color: pillBg,
                   borderRadius: BorderRadius.circular(999),
@@ -587,11 +576,7 @@ class _ProviderListTile extends StatelessWidget {
                 ),
                 child: Text(
                   pill,
-                  style: TextStyle(
-                    fontSize: 10,
-                    color: pillFg,
-                    fontFamily: tokens.fontFamily,
-                  ),
+                  style: context.settingsText.badge.copyWith(color: pillFg),
                 ),
               ),
             ],
@@ -599,11 +584,7 @@ class _ProviderListTile extends StatelessWidget {
           const SizedBox(height: 6),
           Text(
             meta,
-            style: TextStyle(
-              fontSize: 11,
-              color: tokens.inkMuted,
-              fontFamily: tokens.fontFamily,
-            ),
+            style: context.settingsText.caption,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
@@ -685,23 +666,11 @@ class _ProviderForm extends StatelessWidget {
                 controller: scroll,
                 padding: const EdgeInsets.fromLTRB(28, 20, 28, 16),
                 children: [
-                  Text(
-                    '编辑提供商',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w600,
-                      color: tokens.ink,
-                      fontFamily: tokens.fontFamily,
-                    ),
-                  ),
+                  Text('编辑提供商', style: context.settingsText.pageTitle),
                   const SizedBox(height: 4),
                   Text(
                     '元数据存本机；密钥存 OS 凭据库（不上传）；完整 Key 不写入日志。',
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: tokens.inkMuted,
-                      fontFamily: tokens.fontFamily,
-                    ),
+                    style: context.settingsText.caption,
                   ),
                   const SizedBox(height: 20),
                   _Section(
@@ -786,35 +755,27 @@ class _ProviderForm extends StatelessWidget {
                           crossAxisAlignment: WrapCrossAlignment.center,
                           children: [
                             Button(
-                              onPressed:
-                                  (!canProbe || testing) ? null : onTest,
+                              onPressed: (!canProbe || testing) ? null : onTest,
                               child: Text(testing ? '测试中…' : '测试连接'),
                             ),
                             FilledButton(
                               onPressed: (!canProbe || listingModels)
                                   ? null
                                   : onPullModels,
-                              child:
-                                  Text(listingModels ? '拉取中…' : '拉取模型'),
+                              child: Text(listingModels ? '拉取中…' : '拉取模型'),
                             ),
                             if (!canProbe)
                               Text(
                                 '需先填写 Base URL 与 API Key',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: tokens.inkMuted,
-                                  fontFamily: tokens.fontFamily,
-                                ),
+                                style: context.settingsText.caption,
                               )
                             else if (statusText != null)
                               Text(
                                 '● $statusText',
-                                style: TextStyle(
-                                  fontSize: 12,
+                                style: context.settingsText.caption.copyWith(
                                   color: statusOk
                                       ? tokens.success
                                       : tokens.danger,
-                                  fontFamily: tokens.fontFamily,
                                 ),
                               ),
                           ],
@@ -855,11 +816,7 @@ class _ProviderForm extends StatelessWidget {
                         const SizedBox(height: 8),
                         Text(
                           '先「拉取模型」；列表可搜索筛选，也可直接输入自定义模型名。',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: tokens.inkMuted,
-                            fontFamily: tokens.fontFamily,
-                          ),
+                          style: context.settingsText.caption,
                         ),
                       ],
                     ),
@@ -890,8 +847,7 @@ class _ProviderForm extends StatelessWidget {
                   Button(
                     onPressed: onDelete,
                     style: ButtonStyle(
-                      foregroundColor:
-                          WidgetStatePropertyAll(tokens.danger),
+                      foregroundColor: WidgetStatePropertyAll(tokens.danger),
                     ),
                     child: const Text('删除'),
                   ),
@@ -924,15 +880,7 @@ class _Section extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            title,
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-              color: tokens.inkSecondary,
-              fontFamily: tokens.fontFamily,
-            ),
-          ),
+          Text(title, style: context.settingsText.sectionTitle),
           const SizedBox(height: 12),
           child,
         ],
@@ -942,11 +890,7 @@ class _Section extends StatelessWidget {
 }
 
 class _LabeledField extends StatelessWidget {
-  const _LabeledField({
-    required this.label,
-    required this.child,
-    this.hint,
-  });
+  const _LabeledField({required this.label, required this.child, this.hint});
 
   final String label;
   final Widget child;
@@ -954,35 +898,17 @@ class _LabeledField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = fluentTokensOf(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.w600,
-            color: tokens.inkSecondary,
-            fontFamily: tokens.fontFamily,
-          ),
-        ),
+        Text(label, style: context.settingsText.label),
         const SizedBox(height: 6),
         child,
         if (hint != null) ...[
           const SizedBox(height: 6),
-          Text(
-            hint!,
-            style: TextStyle(
-              fontSize: 12,
-              color: tokens.inkMuted,
-              fontFamily: tokens.fontFamily,
-            ),
-          ),
+          Text(hint!, style: context.settingsText.caption),
         ],
       ],
     );
   }
 }
-
-

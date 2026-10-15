@@ -17,6 +17,7 @@ import '../mcp/mcp_server_repository.dart';
 import '../mcp/mcp_tool_policy.dart';
 import '../mcp/tool_call_orchestrator.dart';
 import '../openai/chat_client.dart';
+import '../prompt/custom_skills.dart';
 import '../provider/provider_connection.dart';
 import '../provider/provider_models_cache.dart';
 import '../provider/provider_repository.dart';
@@ -46,6 +47,7 @@ class ChatSessionFacade {
     required ChatDefaultsRepository chatDefaults,
     required this.generation,
     AppLogRepository? appLogs,
+    SkillRepository? skillRepository,
     OpenAiCompatibleChatClient? chatClient,
     VoidCallback? onModelsChanged,
     McpServerRepository? mcpServers,
@@ -55,22 +57,23 @@ class ChatSessionFacade {
     this.maxMcpToolRounds = kDefaultMcpMaxToolRounds,
     ToolCallTraceListener? onToolTrace,
     http.Client Function()? createHttpClient,
-  })  : _providers = providers,
-        _sessions = sessions,
-        _chatDefaults = chatDefaults,
-        _appLogs = appLogs,
-        _ownsClient = chatClient == null,
-        _chatClient = chatClient ?? OpenAiCompatibleChatClient(),
-        _mcpServers = mcpServers,
-        _mcpSessionFactory = mcpSessionFactory,
-        _toolAuthPrompter = toolAuthPrompter,
-        _toolCallOrchestrator = toolCallOrchestrator,
-        _onToolTrace = onToolTrace,
-        _createHttpClient = createHttpClient ?? createSafeHttpClient,
-        modelsCache = ProviderModelsCache(
-          providers: providers,
-          onChanged: onModelsChanged,
-        ) {
+  }) : _providers = providers,
+       _sessions = sessions,
+       _chatDefaults = chatDefaults,
+       _appLogs = appLogs,
+       _skillRepository = skillRepository,
+       _ownsClient = chatClient == null,
+       _chatClient = chatClient ?? OpenAiCompatibleChatClient(),
+       _mcpServers = mcpServers,
+       _mcpSessionFactory = mcpSessionFactory,
+       _toolAuthPrompter = toolAuthPrompter,
+       _toolCallOrchestrator = toolCallOrchestrator,
+       _onToolTrace = onToolTrace,
+       _createHttpClient = createHttpClient ?? createSafeHttpClient,
+       modelsCache = ProviderModelsCache(
+         providers: providers,
+         onChanged: onModelsChanged,
+       ) {
     _mcpServers?.addListener(_onMcpConfigurationChanged);
     _sessions.addListener(_pruneSessionGrants);
     _onMcpConfigurationChanged();
@@ -80,6 +83,7 @@ class ChatSessionFacade {
   final ChatSessionRepository _sessions;
   final ChatDefaultsRepository _chatDefaults;
   final AppLogRepository? _appLogs;
+  final SkillRepository? _skillRepository;
   final GenerationRuntime generation;
   final OpenAiCompatibleChatClient _chatClient;
   final bool _ownsClient;
@@ -135,10 +139,10 @@ class ChatSessionFacade {
 
   /// 发送门闩（提供商已配置且未占用）；正文/附图由 UI 或 [canSendWith] 再判。
   bool get canSend => canSendChatMessage(
-        generation: generation,
-        activeSessionId: _sessions.activeId,
-        hasConfiguredChatProvider: _providers.hasConfiguredChatProvider,
-      );
+    generation: generation,
+    activeSessionId: _sessions.activeId,
+    hasConfiguredChatProvider: _providers.hasConfiguredChatProvider,
+  );
 
   /// 含正文 / 附图的发送门闩（CHAT-ATTACH：有图可空文）。
   bool canSendWith({String textDraft = '', bool hasAttachments = false}) {
@@ -196,6 +200,9 @@ class ChatSessionFacade {
     List<String?>? attachmentMimes,
   }) async {
     final text = raw.trim();
+    final appliedSkills =
+        _skillRepository?.snapshotFor(SkillTarget.chat) ??
+        const <SkillSnapshot>[];
     final bytesList = attachmentBytes ?? const <Uint8List>[];
     final hasAtt = bytesList.isNotEmpty;
 
@@ -263,6 +270,7 @@ class ChatSessionFacade {
       role: ChatRole.user,
       content: text,
       attachments: attachments,
+      appliedSkills: appliedSkills,
     );
     if (userMsg == null) return;
 
@@ -286,8 +294,10 @@ class ChatSessionFacade {
       maxCharsEnabled: defaults.contextMaxCharsEnabled,
       maxChars: defaults.contextMaxChars,
     );
-    final systemPrompt =
-        session.overrides.systemPrompt ?? defaults.systemPrompt;
+    final systemPrompt = composeChatSystemPrompt(
+      session.overrides.systemPrompt ?? defaults.systemPrompt,
+      appliedSkills,
+    );
 
     final attachmentDataUrls = await _collectAttachmentDataUrls(
       trimmed.messages,
@@ -427,8 +437,9 @@ class ChatSessionFacade {
         ];
 
         for (final tr in callResults) {
-          final content =
-              tr.content.isEmpty ? (tr.isError ? '工具调用失败' : '') : tr.content;
+          final content = tr.content.isEmpty
+              ? (tr.isError ? '工具调用失败' : '')
+              : tr.content;
           await _sessions.appendMessage(
             sessionId,
             role: ChatRole.tool,
@@ -689,7 +700,8 @@ class ChatSessionFacade {
   ) async {
     if (_streamingAssistantId != messageId) return;
     final now = DateTime.now();
-    final shouldPersist = _lastPersistAt == null ||
+    final shouldPersist =
+        _lastPersistAt == null ||
         now.difference(_lastPersistAt!) > const Duration(milliseconds: 400);
     if (shouldPersist) _lastPersistAt = now;
     await _sessions.updateMessage(

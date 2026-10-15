@@ -7,6 +7,7 @@ import 'package:fluent_ui/fluent_ui.dart';
 import '../../widgets/back_to_top_host.dart';
 import '../../widgets/empty_illustrations.dart';
 import '../../widgets/fluent_empty_states.dart';
+import 'widgets/settings_typography.dart';
 
 /// SET-MCP / SET-MCP-EDIT / SET-MCP-POLICY：业务 MCP Server 配置（含桌面 stdio）。
 class SettingsMcpPage extends StatefulWidget {
@@ -171,14 +172,15 @@ class _SettingsMcpPageState extends State<SettingsMcpPage> {
       _cwdCtrl.text = s.cwd ?? '';
       _envCtrl.text = _formatEnv(s.env);
       _transport = s.transport;
-      _authKind =
-          s.authKind == McpAuthKind.oauth ? McpAuthKind.none : s.authKind;
+      _authKind = s.authKind == McpAuthKind.oauth
+          ? McpAuthKind.none
+          : s.authKind;
       _enabled = s.enabled;
       _hasStoredToken = await _repo.hasBearerSecret(s.id);
       _confirmedStdioSummary =
           s.transport == McpTransport.stdio && s.isStdioApproved
-              ? mcpStdioFingerprint(s)
-              : null;
+          ? mcpStdioFingerprint(s)
+          : null;
       if (s.lastError != null && s.lastError!.isNotEmpty) {
         _statusText = s.lastError;
         _statusOk = s.probeStatus == McpProbeStatus.ready;
@@ -245,10 +247,7 @@ class _SettingsMcpPageState extends State<SettingsMcpPage> {
         children: [
           const Text('将启动本机进程（仅桌面可用；移动端不支持本地 stdio）：'),
           const SizedBox(height: 10),
-          SelectableText(
-            summary,
-            style: const TextStyle(fontFamily: 'Consolas', fontSize: 12),
-          ),
+          SelectableText(summary, style: context.settingsText.code),
           if (cwd.isNotEmpty) ...[const SizedBox(height: 8), Text('工作目录：$cwd')],
           if (envNames.isNotEmpty) ...[
             const SizedBox(height: 4),
@@ -314,11 +313,12 @@ class _SettingsMcpPageState extends State<SettingsMcpPage> {
                       Text(
                         '粘贴本 App 推荐的 mcpServers，或兼容 OpenCode 的 mcp / '
                         'Cursor 的 mcpServers。Bearer 写入本机凭据库，不会在结果中回显。',
-                        style: TextStyle(fontSize: 12, color: tokens.inkMuted),
+                        style: ctx.settingsText.caption,
                       ),
                       const SizedBox(height: 10),
                       TextBox(
                         controller: jsonCtrl,
+                        style: ctx.settingsText.code,
                         maxLines: 12,
                         placeholder:
                             '{\n  "mcpServers": {\n    "biz": { "url": "https://…" }\n  }\n}',
@@ -357,7 +357,9 @@ class _SettingsMcpPageState extends State<SettingsMcpPage> {
                         const SizedBox(height: 8),
                         Text(
                           parseHint!,
-                          style: TextStyle(fontSize: 12, color: tokens.danger),
+                          style: ctx.settingsText.caption.copyWith(
+                            color: tokens.danger,
+                          ),
                         ),
                       ],
                       if (preview != null && preview!.hasEntries) ...[
@@ -365,8 +367,7 @@ class _SettingsMcpPageState extends State<SettingsMcpPage> {
                         Text(
                           '将导入 ${preview!.entries.length} 个'
                           '${preview!.skipped.isNotEmpty ? '，跳过 ${preview!.skipped.length} 个' : ''}：',
-                          style: TextStyle(
-                            fontWeight: FontWeight.w600,
+                          style: ctx.settingsText.label.copyWith(
                             color: tokens.ink,
                           ),
                         ),
@@ -376,21 +377,14 @@ class _SettingsMcpPageState extends State<SettingsMcpPage> {
                             padding: const EdgeInsets.only(bottom: 4),
                             child: Text(
                               _importEntrySummary(e),
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontFamily: 'Consolas',
-                                color: tokens.ink,
-                              ),
+                              style: ctx.settingsText.code,
                             ),
                           ),
                         if (preview!.skipped.isNotEmpty) ...[
                           const SizedBox(height: 6),
                           Text(
                             '跳过：${preview!.skipped.join('；')}',
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: tokens.inkMuted,
-                            ),
+                            style: ctx.settingsText.caption,
                           ),
                         ],
                       ],
@@ -428,12 +422,13 @@ class _SettingsMcpPageState extends State<SettingsMcpPage> {
       final lines = result.entries
           .where((e) => e.draft.transport == McpTransport.stdio)
           .map((e) {
-        final d = e.draft;
-        final cmd = d.command ?? '';
-        final line = d.args.isEmpty ? cmd : '$cmd ${d.args.join(' ')}';
-        return '· ${e.name}：$line\n工作目录：${d.cwd ?? '默认'}'
-            '\n环境变量（值已隐藏）：${d.env.keys.join('、')}';
-      }).join('\n');
+            final d = e.draft;
+            final cmd = d.command ?? '';
+            final line = d.args.isEmpty ? cmd : '$cmd ${d.args.join(' ')}';
+            return '· ${e.name}：$line\n工作目录：${d.cwd ?? '默认'}'
+                '\n环境变量（值已隐藏）：${d.env.keys.join('、')}';
+          })
+          .join('\n');
       final ok = await showFluentConfirmDialog(
         context: context,
         title: '确认启动本机进程？',
@@ -443,10 +438,7 @@ class _SettingsMcpPageState extends State<SettingsMcpPage> {
           children: [
             const Text('导入配置含本地 stdio，将允许本应用按配置启动本机进程（仅桌面）：'),
             const SizedBox(height: 10),
-            SelectableText(
-              lines,
-              style: const TextStyle(fontFamily: 'Consolas', fontSize: 12),
-            ),
+            SelectableText(lines, style: context.settingsText.code),
             const SizedBox(height: 10),
             const Text('请确认命令来源可信。取消则不会导入。'),
           ],
@@ -459,8 +451,9 @@ class _SettingsMcpPageState extends State<SettingsMcpPage> {
       if (!ok || !mounted) return;
     }
 
-    final existingNames =
-        _repo.servers.map((s) => s.displayName).toList(growable: true);
+    final existingNames = _repo.servers
+        .map((s) => s.displayName)
+        .toList(growable: true);
     var imported = 0;
     String? lastId;
     for (final e in result.entries) {
@@ -479,8 +472,9 @@ class _SettingsMcpPageState extends State<SettingsMcpPage> {
         args: d.args,
         env: d.env,
         cwd: d.cwd,
-        authKind:
-            token != null && token.isNotEmpty ? McpAuthKind.bearer : d.authKind,
+        authKind: token != null && token.isNotEmpty
+            ? McpAuthKind.bearer
+            : d.authKind,
         bearerToken: token,
         enabled: d.enabled,
         stdioConfirmed: d.transport == McpTransport.stdio,
@@ -511,10 +505,12 @@ class _SettingsMcpPageState extends State<SettingsMcpPage> {
       final clipped = line.length > 72 ? '${line.substring(0, 72)}…' : line;
       return '· ${e.name} · stdio · $clipped';
     }
-    final url =
-        d.baseUrl.length > 64 ? '${d.baseUrl.substring(0, 64)}…' : d.baseUrl;
-    final auth =
-        e.bearerToken != null && e.bearerToken!.isNotEmpty ? ' · Bearer' : '';
+    final url = d.baseUrl.length > 64
+        ? '${d.baseUrl.substring(0, 64)}…'
+        : d.baseUrl;
+    final auth = e.bearerToken != null && e.bearerToken!.isNotEmpty
+        ? ' · Bearer'
+        : '';
     return '· ${e.name} · http · $url$auth';
   }
 
@@ -549,8 +545,9 @@ class _SettingsMcpPageState extends State<SettingsMcpPage> {
         return false;
       }
     }
-    final urlRisk =
-        _transport == McpTransport.http ? warnUnsafeUrl(baseUrl) : null;
+    final urlRisk = _transport == McpTransport.http
+        ? warnUnsafeUrl(baseUrl)
+        : null;
 
     final args = _parseArgsLines(_argsCtrl.text);
     final env = _parseEnvLines(_envCtrl.text);
@@ -565,8 +562,9 @@ class _SettingsMcpPageState extends State<SettingsMcpPage> {
       clearCommand: _transport != McpTransport.stdio,
       args: _transport == McpTransport.stdio ? args : const [],
       env: _transport == McpTransport.stdio ? env : const {},
-      cwd:
-          _transport == McpTransport.stdio && cwdRaw.isNotEmpty ? cwdRaw : null,
+      cwd: _transport == McpTransport.stdio && cwdRaw.isNotEmpty
+          ? cwdRaw
+          : null,
       clearCwd: _transport != McpTransport.stdio || cwdRaw.isEmpty,
       enabled: _enabled,
       authKind: _transport == McpTransport.stdio ? McpAuthKind.none : _authKind,
@@ -781,7 +779,7 @@ class _SettingsMcpPageState extends State<SettingsMcpPage> {
     final servers = _repo.servers;
     final selected = _selected;
 
-    return ColoredBox(
+    return SettingsTypography(
       color: tokens.canvas,
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -798,27 +796,24 @@ class _SettingsMcpPageState extends State<SettingsMcpPage> {
                 children: [
                   Padding(
                     padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
-                    child: Row(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Expanded(
-                          child: Text(
-                            '业务 MCP',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
-                              color: tokens.ink,
-                              fontFamily: tokens.fontFamily,
+                        Text('业务 MCP', style: context.settingsText.paneTitle),
+                        const SizedBox(height: 12),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: [
+                            Button(
+                              onPressed: _importJson,
+                              child: const Text('导入 JSON'),
                             ),
-                          ),
-                        ),
-                        Button(
-                          onPressed: _importJson,
-                          child: const Text('导入 JSON'),
-                        ),
-                        const SizedBox(width: 8),
-                        FilledButton(
-                          onPressed: _addServer,
-                          child: const Text('添加 Server'),
+                            FilledButton(
+                              onPressed: _addServer,
+                              child: const Text('添加 Server'),
+                            ),
+                          ],
                         ),
                       ],
                     ),
@@ -826,6 +821,8 @@ class _SettingsMcpPageState extends State<SettingsMcpPage> {
                   Expanded(
                     child: servers.isEmpty
                         ? FluentContentEmpty(
+                            hintStyle: context.settingsText.body,
+                            subtitleStyle: context.settingsText.caption,
                             hint: '尚未配置 MCP Server',
                             subtitle: '添加业务 MCP 后，对话模型可调用其 tools。',
                             illustration:
@@ -858,6 +855,8 @@ class _SettingsMcpPageState extends State<SettingsMcpPage> {
           Expanded(
             child: selected == null
                 ? FluentContentEmpty(
+                    hintStyle: context.settingsText.body,
+                    subtitleStyle: context.settingsText.caption,
                     hint: '选择或添加一个 MCP Server',
                     subtitle: '左侧列表点选后编辑；也可点「添加 Server」。',
                     illustration: const FluentEmptyIllustration.noProviders(),
@@ -975,11 +974,11 @@ class _McpListTile extends StatelessWidget {
 
     final meta = isStdio
         ? (server.hasCommand
-            ? [server.command!.trim(), ...server.args].join(' ')
-            : '未填写 command')
+              ? [server.command!.trim(), ...server.args].join(' ')
+              : '未填写 command')
         : (server.baseUrl.trim().isNotEmpty
-            ? server.baseUrl.trim()
-            : '未填写 Base URL');
+              ? server.baseUrl.trim()
+              : '未填写 Base URL');
 
     return Button(
       onPressed: onPressed,
@@ -1001,12 +1000,7 @@ class _McpListTile extends StatelessWidget {
               Expanded(
                 child: Text(
                   server.displayName,
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: tokens.ink,
-                    fontFamily: tokens.fontFamily,
-                  ),
+                  style: context.settingsText.label.copyWith(color: tokens.ink),
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
@@ -1020,11 +1014,7 @@ class _McpListTile extends StatelessWidget {
                 ),
                 child: Text(
                   isStdio ? 'stdio' : 'HTTP',
-                  style: TextStyle(
-                    fontSize: 10,
-                    color: tokens.inkSecondary,
-                    fontFamily: tokens.fontFamily,
-                  ),
+                  style: context.settingsText.badge,
                 ),
               ),
               Container(
@@ -1038,11 +1028,7 @@ class _McpListTile extends StatelessWidget {
                 ),
                 child: Text(
                   pill,
-                  style: TextStyle(
-                    fontSize: 10,
-                    color: pillFg,
-                    fontFamily: tokens.fontFamily,
-                  ),
+                  style: context.settingsText.badge.copyWith(color: pillFg),
                 ),
               ),
             ],
@@ -1050,11 +1036,7 @@ class _McpListTile extends StatelessWidget {
           const SizedBox(height: 6),
           Text(
             meta,
-            style: TextStyle(
-              fontSize: 11,
-              color: tokens.inkMuted,
-              fontFamily: tokens.fontFamily,
-            ),
+            style: context.settingsText.caption,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
@@ -1132,7 +1114,7 @@ class _McpForm extends StatefulWidget {
   final VoidCallback onProbe;
   final ValueChanged<McpToolPolicyLevel?> onDefaultPolicyChanged;
   final void Function(String toolName, McpToolPolicyLevel? level)
-      onPolicyChanged;
+  onPolicyChanged;
 
   @override
   State<_McpForm> createState() => _McpFormState();
@@ -1187,6 +1169,7 @@ class _McpFormState extends State<_McpForm> {
                 hint: '如 node、npx 或绝对路径',
                 child: TextBox(
                   controller: widget.commandCtrl,
+                  style: context.settingsText.code,
                   placeholder: 'node',
                   onChanged: widget.onFieldChanged,
                 ),
@@ -1197,6 +1180,7 @@ class _McpFormState extends State<_McpForm> {
                 hint: '每行一个参数',
                 child: TextBox(
                   controller: widget.argsCtrl,
+                  style: context.settingsText.code,
                   maxLines: 4,
                   placeholder: 'path/to/server.js',
                   onChanged: widget.onFieldChanged,
@@ -1217,6 +1201,7 @@ class _McpFormState extends State<_McpForm> {
                 hint: '每行 KEY=VALUE；含密钥时勿依赖默认备份',
                 child: TextBox(
                   controller: widget.envCtrl,
+                  style: context.settingsText.code,
                   maxLines: 4,
                   placeholder: 'API_KEY=…',
                   onChanged: widget.onFieldChanged,
@@ -1235,26 +1220,18 @@ class _McpFormState extends State<_McpForm> {
             const SizedBox(height: 12),
             Row(
               children: [
-                Text(
-                  '启用',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: tokens.inkSecondary,
-                    fontFamily: tokens.fontFamily,
-                  ),
-                ),
+                Text('启用', style: context.settingsText.label),
                 const SizedBox(width: 12),
                 ToggleSwitch(
                   checked: widget.enabled,
                   onChanged: widget.onEnabledChanged,
                 ),
-                const Spacer(),
-                Text(
-                  widget.enabled ? '对话可暴露其 tools' : '已停用，不参与对话',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: tokens.inkMuted,
-                    fontFamily: tokens.fontFamily,
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    widget.enabled ? '对话可暴露其 tools' : '已停用，不参与对话',
+                    textAlign: TextAlign.end,
+                    style: context.settingsText.caption,
                   ),
                 ),
               ],
@@ -1333,19 +1310,13 @@ class _McpFormState extends State<_McpForm> {
                 if (!widget.canProbe)
                   Text(
                     _isStdio ? '需先填写 command' : '需先填写 Base URL',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: tokens.inkMuted,
-                      fontFamily: tokens.fontFamily,
-                    ),
+                    style: context.settingsText.caption,
                   )
                 else if (widget.statusText != null)
                   Text(
                     '● ${widget.statusText}',
-                    style: TextStyle(
-                      fontSize: 12,
+                    style: context.settingsText.caption.copyWith(
                       color: widget.statusOk ? tokens.success : tokens.danger,
-                      fontFamily: tokens.fontFamily,
                     ),
                   ),
               ],
@@ -1362,11 +1333,7 @@ class _McpFormState extends State<_McpForm> {
                 _isStdio
                     ? '尚未拉取工具列表。保存 command 后点「测试连接 / 刷新 tools」。'
                     : '尚未拉取工具列表。保存 URL 后点「测试连接 / 刷新 tools」。',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: tokens.inkMuted,
-                  fontFamily: tokens.fontFamily,
-                ),
+                style: context.settingsText.caption,
               ),
             ],
           ],
@@ -1396,13 +1363,11 @@ class _McpFormState extends State<_McpForm> {
             padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
             child: Text(
               label,
-              style: TextStyle(
-                fontSize: 13,
+              style: context.settingsText.body.copyWith(
                 fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
                 color: selected
                     ? tokens.primaryPressed
                     : (hovered ? tokens.ink : tokens.inkMuted),
-                fontFamily: tokens.fontFamily,
               ),
             ),
           ),
@@ -1426,25 +1391,13 @@ class _McpFormState extends State<_McpForm> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Text(
-                    '编辑 MCP Server',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w600,
-                      color: tokens.ink,
-                      fontFamily: tokens.fontFamily,
-                    ),
-                  ),
+                  Text('编辑 MCP Server', style: context.settingsText.pageTitle),
                   const SizedBox(height: 4),
                   Text(
                     _isStdio
                         ? '本地 stdio 仅桌面可用；将启动本机子进程。移动端不支持。元数据存本机。'
                         : '元数据存本机；Bearer Token 存 OS 凭据库。HTTP/SSE（Streamable JSON-RPC）。',
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: tokens.inkMuted,
-                      fontFamily: tokens.fontFamily,
-                    ),
+                    style: context.settingsText.caption,
                   ),
                   const SizedBox(height: 14),
                   DecoratedBox(
@@ -1486,11 +1439,7 @@ class _McpFormState extends State<_McpForm> {
                                     _isStdio
                                         ? '尚未拉取工具列表。请到「连接配置」保存 command 后测试连接。'
                                         : '尚未拉取工具列表。请到「连接配置」保存 URL 后测试连接。',
-                                    style: TextStyle(
-                                      fontSize: 13,
-                                      color: tokens.inkMuted,
-                                      fontFamily: tokens.fontFamily,
-                                    ),
+                                    style: context.settingsText.caption,
                                   ),
                                 ),
                               )
@@ -1499,12 +1448,7 @@ class _McpFormState extends State<_McpForm> {
                                 children: [
                                   Text(
                                     '按工具覆盖（可选）',
-                                    style: TextStyle(
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.w600,
-                                      color: tokens.ink,
-                                      fontFamily: tokens.fontFamily,
-                                    ),
+                                    style: context.settingsText.sectionTitle,
                                   ),
                                   const SizedBox(height: 8),
                                   Expanded(
@@ -1513,14 +1457,15 @@ class _McpFormState extends State<_McpForm> {
                                       bottom: 12,
                                       builder: (context, scroll) =>
                                           _ToolsPolicyTable(
-                                        tokens: tokens,
-                                        scrollController: scroll,
-                                        tools: widget.tools,
-                                        defaultToolPolicy:
-                                            widget.defaultToolPolicy,
-                                        overrides: widget.policyOverrides,
-                                        onPolicyChanged: widget.onPolicyChanged,
-                                      ),
+                                            tokens: tokens,
+                                            scrollController: scroll,
+                                            tools: widget.tools,
+                                            defaultToolPolicy:
+                                                widget.defaultToolPolicy,
+                                            overrides: widget.policyOverrides,
+                                            onPolicyChanged:
+                                                widget.onPolicyChanged,
+                                          ),
                                     ),
                                   ),
                                   const SizedBox(height: 8),
@@ -1579,34 +1524,22 @@ class _ServerDefaultPolicyRow extends StatelessWidget {
   final ValueChanged<McpToolPolicyLevel?> onChanged;
 
   static String _levelShort(McpToolPolicyLevel level) => switch (level) {
-        McpToolPolicyLevel.deny => '拒绝',
-        McpToolPolicyLevel.confirmAlways => '每次确认',
-        McpToolPolicyLevel.confirmOnce => '本会话确认一次',
-        McpToolPolicyLevel.autoAllow => '自动允许',
-      };
+    McpToolPolicyLevel.deny => '拒绝',
+    McpToolPolicyLevel.confirmAlways => '每次确认',
+    McpToolPolicyLevel.confirmOnce => '本会话确认一次',
+    McpToolPolicyLevel.autoAllow => '自动允许',
+  };
 
   @override
   Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text(
-          '本 Server 默认授权',
-          style: TextStyle(
-            fontSize: 13,
-            fontWeight: FontWeight.w600,
-            color: tokens.ink,
-            fontFamily: tokens.fontFamily,
-          ),
-        ),
+        Text('本 Server 默认授权', style: context.settingsText.label),
         const SizedBox(height: 4),
         Text(
           '未单独覆盖的工具走此默认；读操作仍可按元数据自动允许（选「按副作用」时）。',
-          style: TextStyle(
-            fontSize: 12,
-            color: tokens.inkMuted,
-            fontFamily: tokens.fontFamily,
-          ),
+          style: context.settingsText.caption,
         ),
         const SizedBox(height: 8),
         ComboBox<String>(
@@ -1662,14 +1595,14 @@ class _ToolsPolicyTable extends StatelessWidget {
   final McpToolPolicyLevel? defaultToolPolicy;
   final Map<String, McpToolPolicyLevel> overrides;
   final void Function(String toolName, McpToolPolicyLevel? level)
-      onPolicyChanged;
+  onPolicyChanged;
   final ScrollController? scrollController;
 
   static String _sideLabel(McpToolSideEffect s) => switch (s) {
-        McpToolSideEffect.read => '读',
-        McpToolSideEffect.write => '写',
-        McpToolSideEffect.unknown => '未知',
-      };
+    McpToolSideEffect.read => '读',
+    McpToolSideEffect.write => '写',
+    McpToolSideEffect.unknown => '未知',
+  };
 
   static String _policyLabel(
     McpToolPolicyLevel? level,
@@ -1693,11 +1626,11 @@ class _ToolsPolicyTable extends StatelessWidget {
   }
 
   static String _levelShort(McpToolPolicyLevel level) => switch (level) {
-        McpToolPolicyLevel.deny => '拒绝',
-        McpToolPolicyLevel.confirmAlways => '每次确认',
-        McpToolPolicyLevel.confirmOnce => '本会话确认一次',
-        McpToolPolicyLevel.autoAllow => '自动允许',
-      };
+    McpToolPolicyLevel.deny => '拒绝',
+    McpToolPolicyLevel.confirmAlways => '每次确认',
+    McpToolPolicyLevel.confirmOnce => '本会话确认一次',
+    McpToolPolicyLevel.autoAllow => '自动允许',
+  };
 
   @override
   Widget build(BuildContext context) {
@@ -1730,11 +1663,8 @@ class _ToolsPolicyTable extends StatelessWidget {
                     Expanded(
                       child: Text(
                         tool.displayTitle,
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
+                        style: context.settingsText.label.copyWith(
                           color: tokens.ink,
-                          fontFamily: tokens.fontFamily,
                         ),
                       ),
                     ),
@@ -1749,25 +1679,14 @@ class _ToolsPolicyTable extends StatelessWidget {
                       ),
                       child: Text(
                         _sideLabel(tool.sideEffect),
-                        style: TextStyle(
-                          fontSize: 10,
-                          color: tokens.inkMuted,
-                          fontFamily: tokens.fontFamily,
-                        ),
+                        style: context.settingsText.badge,
                       ),
                     ),
                   ],
                 ),
                 if (tool.name != tool.displayTitle) ...[
                   const SizedBox(height: 2),
-                  Text(
-                    tool.name,
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: tokens.inkMuted,
-                      fontFamily: tokens.fontFamily,
-                    ),
-                  ),
+                  Text(tool.name, style: context.settingsText.caption),
                 ],
                 if (tool.description?.trim().isNotEmpty == true) ...[
                   const SizedBox(height: 6),
@@ -1775,24 +1694,15 @@ class _ToolsPolicyTable extends StatelessWidget {
                     tool.description!.trim(),
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 12,
+                    style: context.settingsText.caption.copyWith(
                       color: tokens.inkSecondary,
-                      fontFamily: tokens.fontFamily,
                     ),
                   ),
                 ],
                 const SizedBox(height: 10),
                 Row(
                   children: [
-                    Text(
-                      '授权',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: tokens.inkSecondary,
-                        fontFamily: tokens.fontFamily,
-                      ),
-                    ),
+                    Text('授权', style: context.settingsText.label),
                     const SizedBox(width: 12),
                     Expanded(
                       child: ComboBox<String>(
@@ -1865,15 +1775,7 @@ class _Section extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            title,
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-              color: tokens.ink,
-              fontFamily: tokens.fontFamily,
-            ),
-          ),
+          Text(title, style: context.settingsText.sectionTitle),
           const SizedBox(height: 12),
           child,
         ],
@@ -1891,28 +1793,13 @@ class _LabeledField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = fluentTokensOf(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: 12,
-            color: tokens.inkSecondary,
-            fontFamily: tokens.fontFamily,
-          ),
-        ),
+        Text(label, style: context.settingsText.label),
         if (hint != null) ...[
           const SizedBox(height: 2),
-          Text(
-            hint!,
-            style: TextStyle(
-              fontSize: 11,
-              color: tokens.inkMuted,
-              fontFamily: tokens.fontFamily,
-            ),
-          ),
+          Text(hint!, style: context.settingsText.caption),
         ],
         const SizedBox(height: 6),
         child,

@@ -14,12 +14,14 @@ class VideoController extends ChangeNotifier {
     required VideoSessionRepository sessionRepository,
     required this.generation,
     AppLogRepository? appLogRepository,
+    SkillRepository? skillRepository,
     OpenAiCompatibleVideoClient? videoClient,
     ImagePicker? imagePicker,
   })  : _providers = providerRepository,
         _sessions = sessionRepository,
         _picker = imagePicker ?? ImagePicker() {
     _facade = VideoJobFacade(
+      skillRepository: skillRepository,
       providers: providerRepository,
       sessions: sessionRepository,
       generation: generation,

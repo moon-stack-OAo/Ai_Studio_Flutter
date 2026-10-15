@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 
 import '../image/image_asset_store.dart';
 import '../image/image_models.dart';
+import '../prompt/custom_skills.dart';
 import '../util/id.dart';
 import 'chat_attach.dart';
 import 'chat_models.dart';
@@ -17,8 +18,8 @@ class ChatSessionRepository extends ChangeNotifier {
   ChatSessionRepository({
     required ChatSessionStorage storage,
     ImageAssetStore? attachmentStore,
-  })  : _storage = storage,
-        _attachmentStore = attachmentStore ?? MemoryImageAssetStore();
+  }) : _storage = storage,
+       _attachmentStore = attachmentStore ?? MemoryImageAssetStore();
 
   final ChatSessionStorage _storage;
   final ImageAssetStore _attachmentStore;
@@ -175,10 +176,7 @@ class ChatSessionRepository extends ChangeNotifier {
     final index = _indexOf(id);
     if (index < 0) return;
     final t = title.trim().isEmpty ? '新对话' : title.trim();
-    _replace(
-      index,
-      _sessions[index].copyWith(title: t, updatedAt: _now()),
-    );
+    _replace(index, _sessions[index].copyWith(title: t, updatedAt: _now()));
     await _persist();
     notifyListeners();
   }
@@ -227,9 +225,7 @@ class ChatSessionRepository extends ChangeNotifier {
   ///
   /// 导入前清理当前会话附件文件，避免残留。
   Future<void> replaceAll(ChatStoreSnapshot snapshot) async {
-    await _deleteMessageAssets(
-      _sessions.expand((s) => s.messages).toList(),
-    );
+    await _deleteMessageAssets(_sessions.expand((s) => s.messages).toList());
     var sessions = List<ChatSession>.from(snapshot.sessions);
     var activeId = snapshot.activeId;
     if (sessions.isEmpty) {
@@ -248,9 +244,7 @@ class ChatSessionRepository extends ChangeNotifier {
 
   /// 清除全部对话会话（保留一条空会话）。幂等。
   Future<void> clearAllSessions({bool clearAttachmentCache = true}) async {
-    await _deleteMessageAssets(
-      _sessions.expand((s) => s.messages).toList(),
-    );
+    await _deleteMessageAssets(_sessions.expand((s) => s.messages).toList());
     if (clearAttachmentCache) {
       try {
         await _attachmentStore.clearAll();
@@ -278,6 +272,7 @@ class ChatSessionRepository extends ChangeNotifier {
     int? createdAt,
     List<ImageRef> attachments = const [],
     List<ChatToolCall> toolCalls = const [],
+    List<SkillSnapshot> appliedSkills = const [],
     String? toolCallId,
   }) async {
     final index = _indexOf(sessionId);
@@ -297,6 +292,7 @@ class ChatSessionRepository extends ChangeNotifier {
       latencyMs: latencyMs,
       attachments: capped,
       toolCalls: toolCalls,
+      appliedSkills: List.unmodifiable(appliedSkills),
       toolCallId: toolCallId,
     );
     var title = session.title;
@@ -337,6 +333,7 @@ class ChatSessionRepository extends ChangeNotifier {
     bool clearLatencyMs = false,
     List<ImageRef>? attachments,
     List<ChatToolCall>? toolCalls,
+    List<SkillSnapshot>? appliedSkills,
     String? toolCallId,
     bool clearToolCallId = false,
     bool persist = true,
@@ -358,9 +355,11 @@ class ChatSessionRepository extends ChangeNotifier {
       clearModel: clearModel,
       latencyMs: latencyMs,
       clearLatencyMs: clearLatencyMs,
-      attachments:
-          attachments == null ? null : sanitizeChatAttachments(attachments),
+      attachments: attachments == null
+          ? null
+          : sanitizeChatAttachments(attachments),
       toolCalls: toolCalls,
+      appliedSkills: appliedSkills,
       toolCallId: toolCallId,
       clearToolCallId: clearToolCallId,
     );
@@ -455,10 +454,7 @@ class ChatSessionRepository extends ChangeNotifier {
     await _deleteMessageAssets(toDelete);
     final nextMsgs = List<ChatMessage>.from(msgs)
       ..removeRange(idx, idx + deleteCount);
-    _replace(
-      index,
-      session.copyWith(messages: nextMsgs, updatedAt: _now()),
-    );
+    _replace(index, session.copyWith(messages: nextMsgs, updatedAt: _now()));
     await _persist();
     notifyListeners();
     return removedIds;

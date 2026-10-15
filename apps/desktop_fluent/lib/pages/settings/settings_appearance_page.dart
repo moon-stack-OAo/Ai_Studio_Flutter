@@ -3,6 +3,7 @@ import 'package:fluent_ui/fluent_ui.dart';
 
 import '../../app/theme_controller.dart';
 import '../../widgets/back_to_top_host.dart';
+import 'widgets/settings_typography.dart';
 
 class SettingsAppearancePage extends StatelessWidget {
   const SettingsAppearancePage({super.key, required this.themeController});
@@ -12,15 +13,16 @@ class SettingsAppearancePage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final tokens = fluentTokensOf(context);
-    final density =
-        UiDensity.fromVisualDensity(FluentTheme.of(context).visualDensity);
+    final density = UiDensity.fromVisualDensity(
+      FluentTheme.of(context).visualDensity,
+    );
     final sectionPad = density.settingsSectionPadding;
     final formGap = density.settingsFormGap;
     return ListenableBuilder(
       listenable: themeController,
       builder: (context, _) {
         final selected = themeController.preference;
-        return ColoredBox(
+        return SettingsTypography(
           color: tokens.canvas,
           child: BackToTopHost(
             builder: (context, scroll) => ListView(
@@ -31,12 +33,7 @@ class SettingsAppearancePage extends StatelessWidget {
                   '外观',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w600,
-                    color: tokens.ink,
-                    fontFamily: tokens.fontFamily,
-                  ),
+                  style: context.settingsText.pageTitle,
                 ),
                 SizedBox(height: formGap + 6),
                 Container(
@@ -49,15 +46,7 @@ class SettingsAppearancePage extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        '主题',
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          color: tokens.inkSecondary,
-                          fontFamily: tokens.fontFamily,
-                        ),
-                      ),
+                      Text('主题', style: context.settingsText.sectionTitle),
                       SizedBox(height: formGap),
                       Row(
                         children: [
@@ -89,15 +78,7 @@ class SettingsAppearancePage extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        '字号与密度',
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          color: tokens.inkSecondary,
-                          fontFamily: tokens.fontFamily,
-                        ),
-                      ),
+                      Text('字号与密度', style: context.settingsText.sectionTitle),
                       SizedBox(height: formGap),
                       _LabeledField(
                         label: '字号',
@@ -141,11 +122,7 @@ class SettingsAppearancePage extends StatelessWidget {
                       SizedBox(height: formGap - 2),
                       Text(
                         '舒适：列表与窗格更疏；紧凑：会话行、Composer 与设置侧栏更紧。桌面默认舒适。',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: tokens.inkMuted,
-                          fontFamily: tokens.fontFamily,
-                        ),
+                        style: context.settingsText.caption,
                       ),
                     ],
                   ),
@@ -167,19 +144,10 @@ class _LabeledField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = fluentTokensOf(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.w500,
-            color: tokens.inkSecondary,
-            fontFamily: tokens.fontFamily,
-          ),
-        ),
+        Text(label, style: context.settingsText.label),
         const SizedBox(height: 6),
         child,
       ],
@@ -229,11 +197,9 @@ class _ThemeSegButton extends StatelessWidget {
             label,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              fontSize: 12,
+            style: context.settingsText.body.copyWith(
               fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
               color: fg,
-              fontFamily: tokens.fontFamily,
             ),
           ),
         ),

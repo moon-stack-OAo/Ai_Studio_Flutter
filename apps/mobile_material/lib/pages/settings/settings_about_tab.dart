@@ -26,9 +26,11 @@ class SettingsAboutTab extends StatefulWidget {
     this.packageInfo,
     this.updateController,
     this.onUnlockHiddenPortal,
+    this.skillRepository,
   });
 
   final DataBackupService dataBackupService;
+  final SkillRepository? skillRepository;
   final ThemeController? themeController;
   final GenerationRuntime? generation;
 
@@ -91,6 +93,21 @@ class _SettingsAboutTabState extends State<SettingsAboutTab> {
     _loadPackageInfo();
     _loadUsage();
     _loadChangelog();
+    widget.skillRepository?.addListener(_onSkillsChanged);
+  }
+
+  void _onSkillsChanged() {
+    if (mounted) unawaited(_loadUsage());
+  }
+
+  @override
+  void didUpdateWidget(covariant SettingsAboutTab oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.skillRepository != widget.skillRepository) {
+      oldWidget.skillRepository?.removeListener(_onSkillsChanged);
+      widget.skillRepository?.addListener(_onSkillsChanged);
+      unawaited(_loadUsage());
+    }
   }
 
   void _onUpdaterChanged() {
@@ -100,6 +117,7 @@ class _SettingsAboutTabState extends State<SettingsAboutTab> {
   @override
   void dispose() {
     _updater.removeListener(_onUpdaterChanged);
+    widget.skillRepository?.removeListener(_onSkillsChanged);
     if (_ownsUpdater) _updater.dispose();
     super.dispose();
   }
@@ -429,6 +447,7 @@ class _SettingsAboutTabState extends State<SettingsAboutTab> {
   Future<void> _onExport() async {
     if (_busy) return;
     var includeSecrets = false;
+    var includeSkills = true;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogCtx) {
@@ -443,10 +462,17 @@ class _SettingsAboutTabState extends State<SettingsAboutTab> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const Text(
-                      '将导出提供商、业务 MCP、外观、对话默认与会话元数据为 JSON。'
+                      '将导出提供商、业务 MCP、外观、对话默认、自定义技能与会话元数据为 JSON。'
                       '媒体二进制不会写入备份。',
                     ),
                     const SizedBox(height: 12),
+                    CheckboxListTile(
+                      contentPadding: EdgeInsets.zero,
+                      value: includeSkills,
+                      onChanged: (v) => setLocal(() => includeSkills = v == true),
+                      title: const Text('包含自定义技能'),
+                      controlAffinity: ListTileControlAffinity.leading,
+                    ),
                     CheckboxListTile(
                       contentPadding: EdgeInsets.zero,
                       value: includeSecrets,
@@ -485,7 +511,7 @@ class _SettingsAboutTabState extends State<SettingsAboutTab> {
     setState(() => _busy = true);
     try {
       final json = await _backup.exportBackupJson(
-        DataBackupExportOptions(includeSecrets: includeSecrets),
+        DataBackupExportOptions(includeSecrets: includeSecrets, includeSkills: includeSkills),
       );
       final path = await _writeExportJson(json);
       if (!mounted) return;
@@ -572,6 +598,7 @@ class _SettingsAboutTabState extends State<SettingsAboutTab> {
 
     if (!mounted) return;
     var importSecrets = false;
+    var importSkills = true;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogCtx) {
@@ -586,10 +613,20 @@ class _SettingsAboutTabState extends State<SettingsAboutTab> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      '将合并提供商、业务 MCP 与外观，并用备份会话替换本地会话。'
+                      '将合并提供商、业务 MCP、自定义技能与外观，并用备份会话替换本地会话。'
                       '\n本地 stdio 配置不适用于移动端，将跳过。'
                       '${widget.generation?.busy == true ? '\n\n检测到进行中的生成，导入前将尝试停止。' : ''}',
                     ),
+                    if (payload.skills != null) ...[
+                      const SizedBox(height: 8),
+                      CheckboxListTile(
+                        contentPadding: EdgeInsets.zero,
+                        value: importSkills,
+                        onChanged: (v) => setLocal(() => importSkills = v == true),
+                        title: Text('合并自定义技能（${payload.skills!.length} 项）'),
+                        controlAffinity: ListTileControlAffinity.leading,
+                      ),
+                    ],
                     if (payload.includeSecrets) ...[
                       const SizedBox(height: 8),
                       CheckboxListTile(
@@ -638,6 +675,7 @@ class _SettingsAboutTabState extends State<SettingsAboutTab> {
         raw,
         options: DataBackupImportOptions(
           importSecrets: importSecrets,
+          importSkills: importSkills,
           allowStdio: false,
         ),
       );
@@ -652,6 +690,7 @@ class _SettingsAboutTabState extends State<SettingsAboutTab> {
         if (result.appearanceImported) '外观',
         if (result.chatDefaultsImported) '对话默认',
         if (result.sessionsImported) '会话',
+        if (result.skillsImported) '技能（新增 ${result.skillsAdded} · 合并 ${result.skillsMerged}）',
         if (result.secretsApplied) '密钥',
         if (result.mcpServersSkipped > 0)
           '跳过 ${result.mcpServersSkipped} 个本地 MCP',
@@ -707,7 +746,7 @@ class _SettingsAboutTabState extends State<SettingsAboutTab> {
                       ),
                     if (choice == _ClearChoice.all)
                       Text(
-                        '将清除会话、媒体缓存、外观与对话默认、提供商与业务 MCP、日志以及全部 API Key / MCP Token。',
+                        '将清除会话、媒体缓存、外观与对话默认、自定义技能、提供商与业务 MCP、日志以及全部 API Key / MCP Token。',
                         style: TextStyle(fontSize: 12, color: tokens.danger),
                       ),
                   ],
@@ -767,7 +806,7 @@ class _SettingsAboutTabState extends State<SettingsAboutTab> {
     final sessions =
         u.chatSessionCount + u.imageSessionCount + u.videoSessionCount;
     return '约 ${_formatBytes(u.totalApproxBytes)} · 会话 $sessions · '
-        '媒体 ${_formatBytes(u.mediaCacheBytes)}';
+        '技能 ${u.skillCount} · 媒体 ${_formatBytes(u.mediaCacheBytes)}';
   }
 
   Widget _statusPill(MaterialTokens tokens) {

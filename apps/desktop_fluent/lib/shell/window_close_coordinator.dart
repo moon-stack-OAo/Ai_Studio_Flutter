@@ -21,10 +21,12 @@ class WindowCloseCoordinator with WindowListener {
 
   final AppearanceRepository _appearance;
   final GlobalKey<NavigatorState> _navigatorKey;
+
   /// 真正退出前回调（如 [GenerationRuntime.abort]）；最小化到托盘不触发。
   final VoidCallback? onBeforeQuit;
   VoidCallback? onOpenSettings;
   VoidCallback? onCheckUpdate;
+  Future<bool> Function()? onConfirmQuit;
 
   SystemTrayController? _tray;
   bool _attached = false;
@@ -102,7 +104,10 @@ class WindowCloseCoordinator with WindowListener {
           return StatefulBuilder(
             builder: (dialogCtx, setLocal) {
               return ContentDialog(
-                constraints: const BoxConstraints(maxWidth: 420, maxHeight: 756),
+                constraints: const BoxConstraints(
+                  maxWidth: 420,
+                  maxHeight: 756,
+                ),
                 title: const Text('关闭 AI Studio'),
                 content: Column(
                   mainAxisSize: MainAxisSize.min,
@@ -123,9 +128,9 @@ class WindowCloseCoordinator with WindowListener {
                       '可在「设置 → 关于与更新」中重置为每次询问',
                       style: TextStyle(
                         fontSize: 11,
-                        color: FluentTheme.of(dialogCtx)
-                            .resources
-                            .textFillColorSecondary,
+                        color: FluentTheme.of(
+                          dialogCtx,
+                        ).resources.textFillColorSecondary,
                       ),
                     ),
                   ],
@@ -159,8 +164,7 @@ class WindowCloseCoordinator with WindowListener {
 
       if (action == null) return;
 
-      if (remember &&
-          AppearanceSettings.closeBehaviorValues.contains(action)) {
+      if (remember && AppearanceSettings.closeBehaviorValues.contains(action)) {
         // 不阻塞窗口消失 / 退出路径；失败仍可观察。
         unawaited(_rememberCloseBehavior(action));
       }
@@ -180,6 +184,14 @@ class WindowCloseCoordinator with WindowListener {
       await _appearance.update(closeBehavior: action);
     } catch (e, st) {
       debugPrint('记住关闭行为失败: $e\n$st');
+    }
+  }
+
+  /// 仅在交互不可见时恢复窗口；无确认交互的退出不会走此入口。
+  Future<void> prepareForInteraction() async {
+    if (!supportsCustomTitleBar) return;
+    if (!await windowManager.isVisible() || await windowManager.isMinimized()) {
+      await showMainWindow();
     }
   }
 
@@ -209,6 +221,16 @@ class WindowCloseCoordinator with WindowListener {
   Future<void> quitApp() async {
     if (_quitting) return;
     _quitting = true;
+    try {
+      if (!(await onConfirmQuit?.call() ?? true)) {
+        _quitting = false;
+        return;
+      }
+    } catch (e, st) {
+      _quitting = false;
+      debugPrint('确认退出失败: $e\n$st');
+      return;
+    }
     try {
       // 1. 尽快让窗口消失，避免 destroy 拆 IndexedStack 时的体感卡顿。
       if (supportsCustomTitleBar) {

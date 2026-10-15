@@ -3,6 +3,7 @@ import 'dart:convert';
 import '../chat/chat_models.dart';
 import '../image/image_models.dart';
 import '../mcp/mcp_models.dart';
+import '../prompt/custom_skills.dart';
 import '../provider/provider_config.dart';
 import '../video/video_models.dart';
 import 'appearance_settings.dart';
@@ -18,6 +19,7 @@ class DataBackupExportOptions {
     this.includeSessions = true,
     this.includeChatDefaults = true,
     this.includeMcpServers = true,
+    this.includeSkills = true,
   });
 
   /// 是否导出 API Key / MCP Bearer 明文。默认 false；true 时见 SECURITY.md 风险说明。
@@ -31,6 +33,7 @@ class DataBackupExportOptions {
 
   /// 是否导出业务 MCP Server 元数据（默认 true；密钥仍受 [includeSecrets] 约束）。
   final bool includeMcpServers;
+  final bool includeSkills;
 }
 
 /// 导入选项。
@@ -42,6 +45,7 @@ class DataBackupImportOptions {
     this.replaceSessions = true,
     this.importMcpServers = true,
     this.allowStdio = true,
+    this.importSkills = true,
   });
 
   /// 是否接受备份中的 API Key / MCP Bearer。仅当导出时含密钥且本项为 true 时覆盖本地密钥。
@@ -61,6 +65,7 @@ class DataBackupImportOptions {
 
   /// 移动端不接受本地进程配置。
   final bool allowStdio;
+  final bool importSkills;
 }
 
 /// 清数据档位 / 开关。
@@ -119,6 +124,7 @@ class StorageUsageEstimate {
     required this.imageCacheBytes,
     required this.videoCacheBytes,
     required this.approxJsonBytes,
+    this.skillCount = 0,
   });
 
   final int chatSessionCount;
@@ -132,6 +138,7 @@ class StorageUsageEstimate {
 
   /// 会话/设置 JSON 大致字节（UTF-8 编码长度估算）。
   final int approxJsonBytes;
+  final int skillCount;
 
   int get mediaCacheBytes => imageCacheBytes + videoCacheBytes;
 
@@ -152,6 +159,9 @@ class DataBackupImportResult {
     this.mcpServersAdded = 0,
     this.mcpImported = false,
     this.mcpServersSkipped = 0,
+    this.skillsImported = false,
+    this.skillsMerged = 0,
+    this.skillsAdded = 0,
   });
 
   final int schemaVersion;
@@ -165,6 +175,9 @@ class DataBackupImportResult {
   final int mcpServersAdded;
   final bool mcpImported;
   final int mcpServersSkipped;
+  final bool skillsImported;
+  final int skillsMerged;
+  final int skillsAdded;
 }
 
 /// 清数据结果摘要。
@@ -230,8 +243,9 @@ class DataBackupMcpServer {
 
   factory DataBackupMcpServer.fromJson(Map<String, dynamic> json) {
     final tokenRaw = json['authToken']?.toString();
-    final token =
-        (tokenRaw == null || tokenRaw.trim().isEmpty) ? null : tokenRaw.trim();
+    final token = (tokenRaw == null || tokenRaw.trim().isEmpty)
+        ? null
+        : tokenRaw.trim();
     final cleaned = Map<String, dynamic>.from(json)
       ..remove('authToken')
       ..remove('authSecretRef')
@@ -262,6 +276,7 @@ class DataBackupPayload {
     required this.videoSessions,
     required this.videoActiveId,
     this.mcpServers,
+    this.skills,
   });
 
   final int schemaVersion;
@@ -281,11 +296,15 @@ class DataBackupPayload {
   /// 旧备份无 mcp 段时为 null（导入不崩、不改本地 MCP）。
   final List<DataBackupMcpServer>? mcpServers;
 
+  /// null 表示旧备份或未导出，不修改本地技能。
+  final List<CustomSkill>? skills;
+
   Map<String, dynamic> toJson() {
     final map = <String, dynamic>{
       'schemaVersion': schemaVersion,
       'exportedAtMs': exportedAtMs,
       'includeSecrets': includeSecrets,
+      if (skills != null) 'skills': skills!.map((s) => s.toJson()).toList(),
       if (appearance != null) 'appearance': appearance!.toJson(),
       if (chatDefaults != null) 'chatDefaults': chatDefaults!.toJson(),
       'providers': {
@@ -367,8 +386,8 @@ class DataBackupPayload {
     final version = versionRaw is int
         ? versionRaw
         : (versionRaw is num
-            ? versionRaw.toInt()
-            : int.tryParse(versionRaw?.toString() ?? ''));
+              ? versionRaw.toInt()
+              : int.tryParse(versionRaw?.toString() ?? ''));
     if (version == null) {
       throw DataBackupFormatException('缺少 schemaVersion');
     }
@@ -450,11 +469,30 @@ class DataBackupPayload {
     }
 
     final exportedAt = map['exportedAtMs'];
+    List<CustomSkill>? skills;
+    if (map.containsKey('skills') && map['skills'] != null) {
+      final rawSkills = map['skills'];
+      if (rawSkills is! List) throw DataBackupFormatException('skills 必须是数组');
+      final parsed = <CustomSkill>[];
+      final ids = <String>{};
+      try {
+        for (final entry in rawSkills) {
+          if (entry is! Map) throw const FormatException('技能必须是对象');
+          final skill = CustomSkill.fromJson(Map<String, dynamic>.from(entry));
+          validateCustomSkill(skill);
+          if (!ids.add(skill.id)) throw const FormatException('技能 ID 重复');
+          parsed.add(skill);
+        }
+      } catch (_) {
+        throw DataBackupFormatException('备份包含无效技能或重复技能 ID');
+      }
+      skills = List.unmodifiable(parsed);
+    }
     final exportedAtMs = exportedAt is int
         ? exportedAt
         : (exportedAt is num
-            ? exportedAt.toInt()
-            : DateTime.now().millisecondsSinceEpoch);
+              ? exportedAt.toInt()
+              : DateTime.now().millisecondsSinceEpoch);
 
     return DataBackupPayload(
       schemaVersion: version,
@@ -471,6 +509,7 @@ class DataBackupPayload {
       videoSessions: videoSessions,
       videoActiveId: videoActiveId,
       mcpServers: mcpServers,
+      skills: skills,
     );
   }
 }

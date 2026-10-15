@@ -7,6 +7,7 @@ import 'package:design_fluent/design_fluent.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 
 import '../../../widgets/media_model_combo.dart';
+import '../../../widgets/skill_summary.dart';
 
 /// F-ImageParams + F-PromptBox + F-GenPrimary（右侧参数窗格，宽 300）。
 class ImageComposer extends StatefulWidget {
@@ -42,6 +43,9 @@ class ImageComposer extends StatefulWidget {
     this.onPickReference,
     this.onDropReference,
     this.onProviderSwitched,
+    this.skillRepository,
+    this.onManageSkills,
+    this.skillsEnabled = true,
   });
 
   final String prompt;
@@ -74,6 +78,9 @@ class ImageComposer extends StatefulWidget {
   final VoidCallback? onPickReference;
   final Future<void> Function(String path)? onDropReference;
   final VoidCallback? onProviderSwitched;
+  final SkillRepository? skillRepository;
+  final VoidCallback? onManageSkills;
+  final bool skillsEnabled;
 
   @override
   State<ImageComposer> createState() => _ImageComposerState();
@@ -94,8 +101,9 @@ class _ImageComposerState extends State<ImageComposer> {
     if (widget.prompt != _promptCtrl.text &&
         widget.prompt != oldWidget.prompt) {
       _promptCtrl.text = widget.prompt;
-      _promptCtrl.selection =
-          TextSelection.collapsed(offset: _promptCtrl.text.length);
+      _promptCtrl.selection = TextSelection.collapsed(
+        offset: _promptCtrl.text.length,
+      );
     }
   }
 
@@ -179,7 +187,8 @@ class _ImageComposerState extends State<ImageComposer> {
                     options: widget.sizeOptions,
                     value: widget.size,
                     enabled: !widget.generating,
-                    labelOf: (e) => e.contains('x') ? e.replaceAll('x', '×') : e,
+                    labelOf: (e) =>
+                        e.contains('x') ? e.replaceAll('x', '×') : e,
                     onChanged: widget.onSizeChanged,
                   ),
                 ],
@@ -208,8 +217,9 @@ class _ImageComposerState extends State<ImageComposer> {
                   textField: true,
                   child: TextBox(
                     controller: _promptCtrl,
-                    onChanged:
-                        widget.generating ? null : widget.onPromptChanged,
+                    onChanged: widget.generating
+                        ? null
+                        : widget.onPromptChanged,
                     maxLines: 12,
                     minLines: 8,
                     enabled: !widget.generating,
@@ -223,6 +233,16 @@ class _ImageComposerState extends State<ImageComposer> {
                   ),
                 ),
                 const SizedBox(height: 12),
+                if (widget.skillRepository != null) ...[
+                  SkillSummary(
+                    repository: widget.skillRepository!,
+                    target: SkillTarget.image,
+                    prompt: widget.prompt,
+                    enabled: widget.skillsEnabled && !widget.generating,
+                    onManage: widget.onManageSkills,
+                  ),
+                  const SizedBox(height: 12),
+                ],
                 _label(tokens, '参考图'),
                 const SizedBox(height: 6),
                 _ReferenceBox(
@@ -273,10 +293,12 @@ class _ImageComposerState extends State<ImageComposer> {
                             child: Button(
                               onPressed: widget.onStop,
                               style: ButtonStyle(
-                                backgroundColor:
-                                    WidgetStatePropertyAll(tokens.danger),
-                                foregroundColor:
-                                    const WidgetStatePropertyAll(Colors.white),
+                                backgroundColor: WidgetStatePropertyAll(
+                                  tokens.danger,
+                                ),
+                                foregroundColor: const WidgetStatePropertyAll(
+                                  Colors.white,
+                                ),
                               ),
                               child: const Text('停止生成'),
                             ),
@@ -289,8 +311,9 @@ class _ImageComposerState extends State<ImageComposer> {
                             label: '生成图片',
                             excludeSemantics: true,
                             child: FilledButton(
-                              onPressed:
-                                  widget.enabled ? widget.onGenerate : null,
+                              onPressed: widget.enabled
+                                  ? widget.onGenerate
+                                  : null,
                               child: const Text('生成'),
                             ),
                           ),
@@ -369,9 +392,7 @@ class _SegItem extends StatelessWidget {
       excludeSemantics: true,
       child: HoverButton(
         onPressed: enabled ? onTap : null,
-        cursor: enabled
-            ? SystemMouseCursors.click
-            : SystemMouseCursors.basic,
+        cursor: enabled ? SystemMouseCursors.click : SystemMouseCursors.basic,
         builder: (context, states) {
           final focused = states.isFocused;
           return AnimatedContainer(
@@ -396,8 +417,8 @@ class _SegItem extends StatelessWidget {
                 color: !enabled
                     ? tokens.inkMuted
                     : active
-                        ? tokens.primaryPressed
-                        : tokens.inkSecondary,
+                    ? tokens.primaryPressed
+                    : tokens.inkSecondary,
                 fontFamily: tokens.fontFamily,
               ),
             ),
@@ -462,8 +483,8 @@ class _ChipWrap extends StatelessWidget {
                       color: focused
                           ? tokens.primary
                           : active
-                              ? Color.lerp(tokens.primary, tokens.border, 0.5)!
-                              : tokens.border,
+                          ? Color.lerp(tokens.primary, tokens.border, 0.5)!
+                          : tokens.border,
                       width: focused ? 1.5 : 1,
                     ),
                   ),
@@ -474,8 +495,8 @@ class _ChipWrap extends StatelessWidget {
                       color: !enabled
                           ? tokens.inkMuted
                           : active
-                              ? tokens.primaryPressed
-                              : tokens.inkSecondary,
+                          ? tokens.primaryPressed
+                          : tokens.inkSecondary,
                       fontFamily: tokens.fontFamily,
                     ),
                   ),
@@ -542,9 +563,7 @@ class _ReferenceBoxState extends State<_ReferenceBox> {
       },
       child: Semantics(
         button: !hasRef && widget.onPick != null,
-        label: hasRef
-            ? '参考图已设置，可清除或拖放替换'
-            : '选择或拖放参考图',
+        label: hasRef ? '参考图已设置，可清除或拖放替换' : '选择或拖放参考图',
         excludeSemantics: hasRef,
         child: GestureDetector(
           onTap: hasRef || widget.onPick == null ? null : widget.onPick,

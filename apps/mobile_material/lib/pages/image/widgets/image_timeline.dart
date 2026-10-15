@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 import '../../../widgets/collapsible_prompt.dart';
 import '../../../widgets/empty_illustrations.dart';
 import '../../../widgets/material_empty_states.dart';
+import '../../../widgets/skill_summary.dart';
 
 /// M-ImageTimeline：竖向卡片流；回合分隔可读。
 class ImageTimeline extends StatefulWidget {
@@ -223,6 +224,7 @@ class ImageTimelineTurn extends StatelessWidget {
                       : (index, ref) =>
                           onPreviewReference!(item, index, ref),
                 ),
+                AppliedSkillsButton(skills: item.appliedSkills, finalPrompt: item.finalPrompt),
                 const SizedBox(height: 10),
                 if (isError)
                   Container(

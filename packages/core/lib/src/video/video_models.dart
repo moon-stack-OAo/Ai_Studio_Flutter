@@ -1,6 +1,7 @@
 /// 生视频会话与条目模型。
 
 import '../image/image_models.dart';
+import '../prompt/custom_skills.dart';
 
 enum VideoGenMode {
   text,
@@ -21,8 +22,7 @@ enum VideoGenMode {
 
   String get wire => name;
 
-  String get apiMode =>
-      this == VideoGenMode.image ? 'img2video' : 'txt2video';
+  String get apiMode => this == VideoGenMode.image ? 'img2video' : 'txt2video';
 }
 
 enum VideoItemStatus {
@@ -54,12 +54,12 @@ enum VideoItemStatus {
   }
 
   String get wire => switch (this) {
-        VideoItemStatus.loading => 'loading',
-        VideoItemStatus.pendingResume => 'pending_resume',
-        VideoItemStatus.success => 'success',
-        VideoItemStatus.error => 'error',
-        VideoItemStatus.abandoned => 'abandoned',
-      };
+    VideoItemStatus.loading => 'loading',
+    VideoItemStatus.pendingResume => 'pending_resume',
+    VideoItemStatus.success => 'success',
+    VideoItemStatus.error => 'error',
+    VideoItemStatus.abandoned => 'abandoned',
+  };
 }
 
 /// 上游任务归一化状态（轮询用）。
@@ -71,10 +71,7 @@ enum VideoJobWireStatus {
 
   static VideoJobWireStatus normalize(String? raw) {
     final s = (raw ?? '').trim().toLowerCase();
-    if (s == 'completed' ||
-        s == 'done' ||
-        s == 'success' ||
-        s == 'succeeded') {
+    if (s == 'completed' || s == 'done' || s == 'success' || s == 'succeeded') {
       return VideoJobWireStatus.completed;
     }
     if (s == 'failed' ||
@@ -87,9 +84,7 @@ enum VideoJobWireStatus {
     if (s == 'queued' || s == 'pending') {
       return VideoJobWireStatus.queued;
     }
-    if (s == 'in_progress' ||
-        s == 'processing' ||
-        s == 'running') {
+    if (s == 'in_progress' || s == 'processing' || s == 'running') {
       return VideoJobWireStatus.inProgress;
     }
     if (s.isEmpty) return VideoJobWireStatus.queued;
@@ -97,8 +92,7 @@ enum VideoJobWireStatus {
   }
 
   bool get isTerminal =>
-      this == VideoJobWireStatus.completed ||
-      this == VideoJobWireStatus.failed;
+      this == VideoJobWireStatus.completed || this == VideoJobWireStatus.failed;
 }
 
 /// 上游视频任务快照。
@@ -121,6 +115,7 @@ class VideoJob {
   final String? videoUrl;
   final String? remoteVideoUrl;
   final String? localPath;
+
   /// CDN / 任务返回的海报图 URL（若有）。
   final String? posterUrl;
   final String? errorMessage;
@@ -167,6 +162,8 @@ class VideoItem {
     required this.createdAt,
     required this.mode,
     required this.prompt,
+    String? finalPrompt,
+    this.appliedSkills = const [],
     this.model = '',
     this.providerId = '',
     this.providerName = '',
@@ -187,12 +184,14 @@ class VideoItem {
     this.errorMessage,
     this.needsResume = false,
     this.needsMaterialize = false,
-  });
+  }) : finalPrompt = finalPrompt ?? prompt;
 
   final String id;
   final int createdAt;
   final VideoGenMode mode;
   final String prompt;
+  final String finalPrompt;
+  final List<SkillSnapshot> appliedSkills;
   final String model;
   final String providerId;
   final String providerName;
@@ -206,15 +205,19 @@ class VideoItem {
   final String? videoUrl;
   final String? remoteVideoUrl;
   final String? localPath;
+
   /// 任务/CDN 返回的海报 URL（若有）。
   final String? posterUrl;
+
   /// 本机抽帧封面路径（`video_poster_cache` 或 memory key）。
   final String? posterLocalPath;
+
   /// 本回合用户提交的参考图资产引用（`VID-TURN-REF`）；旧数据可为空。
   final List<ImageRef> referenceImages;
   final String? refPreview;
   final String? errorMessage;
   final bool needsResume;
+
   /// 已生成但本地不可播；UI 应露出「重新加载」。
   final bool needsMaterialize;
 
@@ -223,6 +226,8 @@ class VideoItem {
     int? createdAt,
     VideoGenMode? mode,
     String? prompt,
+    String? finalPrompt,
+    List<SkillSnapshot>? appliedSkills,
     String? model,
     String? providerId,
     String? providerName,
@@ -262,6 +267,8 @@ class VideoItem {
       createdAt: createdAt ?? this.createdAt,
       mode: mode ?? this.mode,
       prompt: prompt ?? this.prompt,
+      finalPrompt: finalPrompt ?? this.finalPrompt,
+      appliedSkills: List.unmodifiable(appliedSkills ?? this.appliedSkills),
       model: model ?? this.model,
       providerId: providerId ?? this.providerId,
       providerName: providerName ?? this.providerName,
@@ -269,11 +276,9 @@ class VideoItem {
       jobId: clearJobId ? null : (jobId ?? this.jobId),
       progress: clearProgress ? null : (progress ?? this.progress),
       duration: clearDuration ? null : (duration ?? this.duration),
-      aspectRatio:
-          clearAspectRatio ? null : (aspectRatio ?? this.aspectRatio),
+      aspectRatio: clearAspectRatio ? null : (aspectRatio ?? this.aspectRatio),
       size: clearSize ? null : (size ?? this.size),
-      resolution:
-          clearResolution ? null : (resolution ?? this.resolution),
+      resolution: clearResolution ? null : (resolution ?? this.resolution),
       videoUrl: clearVideoUrl ? null : (videoUrl ?? this.videoUrl),
       remoteVideoUrl: clearRemoteVideoUrl
           ? null
@@ -284,8 +289,7 @@ class VideoItem {
           ? null
           : (posterLocalPath ?? this.posterLocalPath),
       referenceImages: referenceImages ?? this.referenceImages,
-      refPreview:
-          clearRefPreview ? null : (refPreview ?? this.refPreview),
+      refPreview: clearRefPreview ? null : (refPreview ?? this.refPreview),
       errorMessage: clearErrorMessage
           ? null
           : (errorMessage ?? this.errorMessage),
@@ -295,35 +299,37 @@ class VideoItem {
   }
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'createdAt': createdAt,
-        'mode': mode.wire,
-        'prompt': prompt,
-        'model': model,
-        'providerId': providerId,
-        'providerName': providerName,
-        'status': status.wire,
-        if (jobId != null && jobId!.isNotEmpty) 'jobId': jobId,
-        if (progress != null) 'progress': progress,
-        if (duration != null) 'duration': duration,
-        if (aspectRatio != null) 'aspectRatio': aspectRatio,
-        if (size != null) 'size': size,
-        if (resolution != null) 'resolution': resolution,
-        if (videoUrl != null && videoUrl!.isNotEmpty) 'videoUrl': videoUrl,
-        if (remoteVideoUrl != null && remoteVideoUrl!.isNotEmpty)
-          'remoteVideoUrl': remoteVideoUrl,
-        if (localPath != null && localPath!.isNotEmpty) 'localPath': localPath,
-        if (posterUrl != null && posterUrl!.isNotEmpty) 'posterUrl': posterUrl,
-        if (posterLocalPath != null && posterLocalPath!.isNotEmpty)
-          'posterLocalPath': posterLocalPath,
-        if (referenceImages.isNotEmpty)
-          'referenceImages':
-              referenceImages.map((e) => e.toJson()).toList(),
-        if (refPreview != null) 'refPreview': refPreview,
-        if (errorMessage != null) 'errorMessage': errorMessage,
-        'needsResume': needsResume,
-        'needsMaterialize': needsMaterialize,
-      };
+    'id': id,
+    'createdAt': createdAt,
+    'mode': mode.wire,
+    'prompt': prompt,
+    'finalPrompt': finalPrompt,
+    if (appliedSkills.isNotEmpty)
+      'appliedSkills': appliedSkills.map((s) => s.toJson()).toList(),
+    'model': model,
+    'providerId': providerId,
+    'providerName': providerName,
+    'status': status.wire,
+    if (jobId != null && jobId!.isNotEmpty) 'jobId': jobId,
+    if (progress != null) 'progress': progress,
+    if (duration != null) 'duration': duration,
+    if (aspectRatio != null) 'aspectRatio': aspectRatio,
+    if (size != null) 'size': size,
+    if (resolution != null) 'resolution': resolution,
+    if (videoUrl != null && videoUrl!.isNotEmpty) 'videoUrl': videoUrl,
+    if (remoteVideoUrl != null && remoteVideoUrl!.isNotEmpty)
+      'remoteVideoUrl': remoteVideoUrl,
+    if (localPath != null && localPath!.isNotEmpty) 'localPath': localPath,
+    if (posterUrl != null && posterUrl!.isNotEmpty) 'posterUrl': posterUrl,
+    if (posterLocalPath != null && posterLocalPath!.isNotEmpty)
+      'posterLocalPath': posterLocalPath,
+    if (referenceImages.isNotEmpty)
+      'referenceImages': referenceImages.map((e) => e.toJson()).toList(),
+    if (refPreview != null) 'refPreview': refPreview,
+    if (errorMessage != null) 'errorMessage': errorMessage,
+    'needsResume': needsResume,
+    'needsMaterialize': needsMaterialize,
+  };
 
   factory VideoItem.fromJson(Map<String, dynamic> json) {
     final refs = <ImageRef>[];
@@ -337,29 +343,37 @@ class VideoItem {
     }
     return VideoItem(
       id: json['id']?.toString() ?? '',
-      createdAt:
-          (json['createdAt'] is num) ? (json['createdAt'] as num).toInt() : 0,
-      mode: VideoGenMode.tryParse(json['mode']?.toString()) ??
-          VideoGenMode.text,
+      createdAt: (json['createdAt'] is num)
+          ? (json['createdAt'] as num).toInt()
+          : 0,
+      mode:
+          VideoGenMode.tryParse(json['mode']?.toString()) ?? VideoGenMode.text,
       prompt: json['prompt']?.toString() ?? '',
+      finalPrompt: json['finalPrompt'] is String
+          ? json['finalPrompt'] as String
+          : null,
+      appliedSkills: skillSnapshotsFromJson(json['appliedSkills']),
       model: json['model']?.toString() ?? '',
       providerId: json['providerId']?.toString() ?? '',
       providerName: json['providerName']?.toString() ?? '',
-      status: VideoItemStatus.tryParse(json['status']?.toString()) ??
+      status:
+          VideoItemStatus.tryParse(json['status']?.toString()) ??
           VideoItemStatus.success,
       jobId: json['jobId']?.toString(),
       progress: (json['progress'] is num)
           ? (json['progress'] as num).toDouble()
           : null,
-      duration:
-          (json['duration'] is num) ? (json['duration'] as num).toInt() : null,
+      duration: (json['duration'] is num)
+          ? (json['duration'] as num).toInt()
+          : null,
       aspectRatio: json['aspectRatio']?.toString(),
       size: json['size']?.toString(),
       resolution: json['resolution']?.toString(),
       videoUrl: json['videoUrl']?.toString(),
       remoteVideoUrl: json['remoteVideoUrl']?.toString(),
       localPath: json['localPath']?.toString(),
-      posterUrl: json['posterUrl']?.toString() ??
+      posterUrl:
+          json['posterUrl']?.toString() ??
           json['thumbnailUrl']?.toString() ??
           json['coverUrl']?.toString(),
       posterLocalPath: json['posterLocalPath']?.toString(),
@@ -404,12 +418,12 @@ class VideoSession {
   }
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'title': title,
-        'createdAt': createdAt,
-        'updatedAt': updatedAt,
-        'items': items.map((e) => e.toJson()).toList(),
-      };
+    'id': id,
+    'title': title,
+    'createdAt': createdAt,
+    'updatedAt': updatedAt,
+    'items': items.map((e) => e.toJson()).toList(),
+  };
 
   factory VideoSession.fromJson(Map<String, dynamic> json) {
     final items = <VideoItem>[];
@@ -424,10 +438,12 @@ class VideoSession {
     return VideoSession(
       id: json['id']?.toString() ?? '',
       title: json['title']?.toString() ?? '新视频',
-      createdAt:
-          (json['createdAt'] is num) ? (json['createdAt'] as num).toInt() : 0,
-      updatedAt:
-          (json['updatedAt'] is num) ? (json['updatedAt'] as num).toInt() : 0,
+      createdAt: (json['createdAt'] is num)
+          ? (json['createdAt'] as num).toInt()
+          : 0,
+      updatedAt: (json['updatedAt'] is num)
+          ? (json['updatedAt'] as num).toInt()
+          : 0,
       items: items,
     );
   }
@@ -435,10 +451,7 @@ class VideoSession {
 
 /// 持久化快照。
 class VideoStoreSnapshot {
-  const VideoStoreSnapshot({
-    required this.sessions,
-    required this.activeId,
-  });
+  const VideoStoreSnapshot({required this.sessions, required this.activeId});
 
   final List<VideoSession> sessions;
   final String activeId;

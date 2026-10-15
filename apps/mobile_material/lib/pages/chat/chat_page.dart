@@ -1,9 +1,12 @@
+import 'dart:async';
+
 import 'package:core/core.dart';
 import 'package:design_material/design_material.dart';
 import 'package:flutter/material.dart';
 
 import '../../widgets/empty_illustrations.dart';
 import '../../widgets/material_empty_states.dart';
+import '../../widgets/skill_summary.dart';
 import 'chat_controller.dart';
 import 'session_list_page.dart';
 import 'widgets/chat_model_picker_sheet.dart';
@@ -24,9 +27,11 @@ class ChatPage extends StatefulWidget {
     this.mcpServerRepository,
     this.mcpSessionFactory,
     this.onOpenProviders,
+    this.skillRepository,
   });
 
   final ProviderRepository providerRepository;
+  final SkillRepository? skillRepository;
   final ChatSessionRepository sessionRepository;
   final ChatDefaultsRepository chatDefaultsRepository;
   final GenerationRuntime generation;
@@ -42,12 +47,16 @@ class ChatPage extends StatefulWidget {
 
 class _ChatPageState extends State<ChatPage> {
   late final ChatController _controller;
+  late final SkillRepository _skills;
   String? _lastBanner;
 
   @override
   void initState() {
     super.initState();
+    _skills = widget.skillRepository ?? SkillRepository(storage: MemorySkillStorage());
+    if (!_skills.isLoaded) unawaited(_skills.load().catchError((Object _) {}));
     _controller = ChatController(
+      skillRepository: _skills,
       providerRepository: widget.providerRepository,
       sessionRepository: widget.sessionRepository,
       chatDefaultsRepository: widget.chatDefaultsRepository,
@@ -90,6 +99,7 @@ class _ChatPageState extends State<ChatPage> {
   void dispose() {
     _controller.removeListener(_onControllerChanged);
     _controller.dispose();
+    if (widget.skillRepository == null) _skills.dispose();
     super.dispose();
   }
 
@@ -272,6 +282,10 @@ class _ChatPageState extends State<ChatPage> {
                   onEmptySecondaryAction: _openSessions,
                   liveToolTraces: _controller.liveToolTraces,
                 ),
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                child: SkillSummary(repository: _skills, target: SkillTarget.chat, enabled: !widget.generation.busy),
               ),
               Composer(
                 enabled: _controller.canSend,

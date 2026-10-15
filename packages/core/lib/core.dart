@@ -23,6 +23,7 @@ export 'src/prompt/prompt_builder.dart';
 export 'src/prompt/prompt_dimensions.dart';
 export 'src/prompt/prompt_enhance.dart';
 export 'src/prompt/prompt_presets.dart';
+export 'src/prompt/custom_skills.dart';
 export 'src/logging/app_log_entry.dart';
 export 'src/logging/app_log_level.dart';
 export 'src/logging/app_log_repository.dart';

@@ -1,4 +1,5 @@
 import '../image/image_models.dart';
+import '../prompt/custom_skills.dart';
 import 'chat_attach.dart';
 
 /// 对话消息与会话模型。
@@ -61,20 +62,17 @@ class ChatToolCall {
 
   /// 发往 chat/completions 的 `tool_calls[]` 项。
   Map<String, dynamic> toApiJson() => {
-        'id': id,
-        'type': type,
-        'function': {
-          'name': name,
-          'arguments': arguments,
-        },
-      };
+    'id': id,
+    'type': type,
+    'function': {'name': name, 'arguments': arguments},
+  };
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        if (type != 'function') 'type': type,
-        'name': name,
-        'arguments': arguments,
-      };
+    'id': id,
+    if (type != 'function') 'type': type,
+    'name': name,
+    'arguments': arguments,
+  };
 
   factory ChatToolCall.fromJson(Map<String, dynamic> json) {
     var name = json['name']?.toString() ?? '';
@@ -124,10 +122,10 @@ class ChatOverrides {
     bool clearTemperature = false,
   }) {
     return ChatOverrides(
-      systemPrompt:
-          clearSystemPrompt ? null : (systemPrompt ?? this.systemPrompt),
-      temperature:
-          clearTemperature ? null : (temperature ?? this.temperature),
+      systemPrompt: clearSystemPrompt
+          ? null
+          : (systemPrompt ?? this.systemPrompt),
+      temperature: clearTemperature ? null : (temperature ?? this.temperature),
     );
   }
 
@@ -185,6 +183,7 @@ class ChatMessage {
     this.attachments = const [],
     this.toolCalls = const [],
     this.toolCallId,
+    this.appliedSkills = const [],
   });
 
   final String id;
@@ -212,6 +211,7 @@ class ChatMessage {
 
   /// role=tool 时对应的 `tool_call_id`；旧 JSON 无字段 → null。
   final String? toolCallId;
+  final List<SkillSnapshot> appliedSkills;
 
   bool get hasToolCalls => toolCalls.isNotEmpty;
 
@@ -233,6 +233,7 @@ class ChatMessage {
     List<ChatToolCall>? toolCalls,
     String? toolCallId,
     bool clearToolCallId = false,
+    List<SkillSnapshot>? appliedSkills,
   }) {
     return ChatMessage(
       id: id ?? this.id,
@@ -242,34 +243,37 @@ class ChatMessage {
       streaming: streaming ?? this.streaming,
       stopped: stopped ?? this.stopped,
       error: error ?? this.error,
-      errorMessage:
-          clearErrorMessage ? null : (errorMessage ?? this.errorMessage),
+      errorMessage: clearErrorMessage
+          ? null
+          : (errorMessage ?? this.errorMessage),
       model: clearModel ? null : (model ?? this.model),
       latencyMs: clearLatencyMs ? null : (latencyMs ?? this.latencyMs),
       attachments: attachments ?? this.attachments,
       toolCalls: toolCalls ?? this.toolCalls,
       toolCallId: clearToolCallId ? null : (toolCallId ?? this.toolCallId),
+      appliedSkills: List.unmodifiable(appliedSkills ?? this.appliedSkills),
     );
   }
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'createdAt': createdAt,
-        'role': role.wire,
-        'content': content,
-        if (streaming) 'streaming': streaming,
-        if (stopped) 'stopped': stopped,
-        if (error) 'error': error,
-        if (errorMessage != null) 'errorMessage': errorMessage,
-        if (model != null && model!.isNotEmpty) 'model': model,
-        if (latencyMs != null) 'latencyMs': latencyMs,
-        if (attachments.isNotEmpty)
-          'attachments': attachments.map((a) => a.toJson()).toList(),
-        if (toolCalls.isNotEmpty)
-          'toolCalls': toolCalls.map((t) => t.toJson()).toList(),
-        if (toolCallId != null && toolCallId!.isNotEmpty)
-          'toolCallId': toolCallId,
-      };
+    'id': id,
+    'createdAt': createdAt,
+    'role': role.wire,
+    'content': content,
+    if (appliedSkills.isNotEmpty)
+      'appliedSkills': appliedSkills.map((s) => s.toJson()).toList(),
+    if (streaming) 'streaming': streaming,
+    if (stopped) 'stopped': stopped,
+    if (error) 'error': error,
+    if (errorMessage != null) 'errorMessage': errorMessage,
+    if (model != null && model!.isNotEmpty) 'model': model,
+    if (latencyMs != null) 'latencyMs': latencyMs,
+    if (attachments.isNotEmpty)
+      'attachments': attachments.map((a) => a.toJson()).toList(),
+    if (toolCalls.isNotEmpty)
+      'toolCalls': toolCalls.map((t) => t.toJson()).toList(),
+    if (toolCallId != null && toolCallId!.isNotEmpty) 'toolCallId': toolCallId,
+  };
 
   factory ChatMessage.fromJson(Map<String, dynamic> json) {
     final role = ChatRole.tryParse(json['role']?.toString()) ?? ChatRole.user;
@@ -299,8 +303,8 @@ class ChatMessage {
         }
       }
     }
-    final tcid = json['toolCallId']?.toString() ??
-        json['tool_call_id']?.toString();
+    final tcid =
+        json['toolCallId']?.toString() ?? json['tool_call_id']?.toString();
     return ChatMessage(
       id: json['id']?.toString() ?? '',
       createdAt: (json['createdAt'] is num)
@@ -308,6 +312,7 @@ class ChatMessage {
           : 0,
       role: role,
       content: json['content']?.toString() ?? '',
+      appliedSkills: skillSnapshotsFromJson(json['appliedSkills']),
       streaming: json['streaming'] == true,
       stopped: json['stopped'] == true,
       error: json['error'] == true,
@@ -357,13 +362,13 @@ class ChatSession {
   }
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'title': title,
-        'createdAt': createdAt,
-        'updatedAt': updatedAt,
-        'messages': messages.map((m) => m.toJson()).toList(),
-        'overrides': overrides.toJson(),
-      };
+    'id': id,
+    'title': title,
+    'createdAt': createdAt,
+    'updatedAt': updatedAt,
+    'messages': messages.map((m) => m.toJson()).toList(),
+    'overrides': overrides.toJson(),
+  };
 
   factory ChatSession.fromJson(Map<String, dynamic> json) {
     final rawMsgs = json['messages'];
@@ -379,10 +384,12 @@ class ChatSession {
     return ChatSession(
       id: json['id']?.toString() ?? '',
       title: json['title']?.toString() ?? '新对话',
-      createdAt:
-          (json['createdAt'] is num) ? (json['createdAt'] as num).toInt() : 0,
-      updatedAt:
-          (json['updatedAt'] is num) ? (json['updatedAt'] as num).toInt() : 0,
+      createdAt: (json['createdAt'] is num)
+          ? (json['createdAt'] as num).toInt()
+          : 0,
+      updatedAt: (json['updatedAt'] is num)
+          ? (json['updatedAt'] as num).toInt()
+          : 0,
       messages: msgs,
       overrides: ChatOverrides.fromJson(
         ovRaw is Map ? Map<String, dynamic>.from(ovRaw) : null,
@@ -393,10 +400,7 @@ class ChatSession {
 
 /// 持久化快照。
 class ChatStoreSnapshot {
-  const ChatStoreSnapshot({
-    required this.sessions,
-    required this.activeId,
-  });
+  const ChatStoreSnapshot({required this.sessions, required this.activeId});
 
   final List<ChatSession> sessions;
   final String activeId;

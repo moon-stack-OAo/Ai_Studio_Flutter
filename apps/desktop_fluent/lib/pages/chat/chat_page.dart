@@ -5,6 +5,7 @@ import 'package:fluent_ui/fluent_ui.dart';
 import '../../widgets/empty_illustrations.dart';
 import '../../widgets/fluent_empty_states.dart';
 import '../../widgets/session_list_pane.dart';
+import '../../widgets/skill_summary.dart';
 import 'chat_controller.dart';
 import 'widgets/chat_model_combo.dart';
 import 'widgets/composer.dart';
@@ -24,6 +25,8 @@ class ChatPage extends StatefulWidget {
     this.mcpServerRepository,
     this.mcpSessionFactory,
     this.onOpenProviders,
+    this.skillRepository,
+    this.onManageSkills,
   });
 
   final ProviderRepository providerRepository;
@@ -35,6 +38,8 @@ class ChatPage extends StatefulWidget {
   final McpServerRepository? mcpServerRepository;
   final McpSessionFactory? mcpSessionFactory;
   final VoidCallback? onOpenProviders;
+  final SkillRepository? skillRepository;
+  final VoidCallback? onManageSkills;
 
   @override
   State<ChatPage> createState() => _ChatPageState();
@@ -42,11 +47,16 @@ class ChatPage extends StatefulWidget {
 
 class _ChatPageState extends State<ChatPage> {
   late final ChatController _controller;
+  late final SkillRepository _skills;
 
   @override
   void initState() {
     super.initState();
+    _skills =
+        widget.skillRepository ??
+        SkillRepository(storage: MemorySkillStorage());
     _controller = ChatController(
+      skillRepository: _skills,
       providerRepository: widget.providerRepository,
       sessionRepository: widget.sessionRepository,
       chatDefaultsRepository: widget.chatDefaultsRepository,
@@ -67,6 +77,7 @@ class _ChatPageState extends State<ChatPage> {
   @override
   void dispose() {
     _controller.dispose();
+    if (widget.skillRepository == null) _skills.dispose();
     super.dispose();
   }
 
@@ -207,24 +218,43 @@ class _ChatPageState extends State<ChatPage> {
                         builder: (context, _) {
                           final streamingHere =
                               _controller.isStreamingActiveSession;
-                          return Composer(
-                            enabled: _controller.canSend,
-                            streaming: streamingHere,
-                            onSend: _controller.send,
-                            onStop: _controller.stop,
-                            visionSupported:
-                                _controller.activeChatSupportsVision,
-                            draftAttachments: _controller.draftAttachments,
-                            onPickAttachments: streamingHere
-                                ? null
-                                : () => _controller.pickAttachments(),
-                            onDropAttachment: streamingHere
-                                ? null
-                                : _controller.dropAttachment,
-                            onRemoveDraftAttachment:
-                                _controller.removeDraftAttachmentAt,
-                            canSendWithDraft: (text) =>
-                                _controller.canSendWith(textDraft: text),
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              Padding(
+                                padding: const EdgeInsets.fromLTRB(
+                                  16,
+                                  4,
+                                  16,
+                                  0,
+                                ),
+                                child: SkillSummary(
+                                  repository: _skills,
+                                  target: SkillTarget.chat,
+                                  enabled: !widget.generation.busy,
+                                  onManage: widget.onManageSkills,
+                                ),
+                              ),
+                              Composer(
+                                enabled: _controller.canSend,
+                                streaming: streamingHere,
+                                onSend: _controller.send,
+                                onStop: _controller.stop,
+                                visionSupported:
+                                    _controller.activeChatSupportsVision,
+                                draftAttachments: _controller.draftAttachments,
+                                onPickAttachments: streamingHere
+                                    ? null
+                                    : () => _controller.pickAttachments(),
+                                onDropAttachment: streamingHere
+                                    ? null
+                                    : _controller.dropAttachment,
+                                onRemoveDraftAttachment:
+                                    _controller.removeDraftAttachmentAt,
+                                canSendWithDraft: (text) =>
+                                    _controller.canSendWith(textDraft: text),
+                              ),
+                            ],
                           );
                         },
                       ),
@@ -394,8 +424,9 @@ class _ChatHeaderHostState extends State<_ChatHeaderHost> {
       tokens: widget.tokens,
       controller: widget.controller,
       hasOverrides: hasOverrides,
-      onOpenOverrides:
-          session == null ? null : () => widget.onOpenOverrides(session),
+      onOpenOverrides: session == null
+          ? null
+          : () => widget.onOpenOverrides(session),
     );
   }
 }
@@ -472,9 +503,7 @@ class _ChatHeader extends StatelessWidget {
                         border: Border.all(
                           color: focused
                               ? tokens.primary.withValues(alpha: 0.55)
-                              : (hovered
-                                  ? tokens.border
-                                  : Colors.transparent),
+                              : (hovered ? tokens.border : Colors.transparent),
                         ),
                       ),
                       child: Row(
@@ -499,8 +528,7 @@ class _ChatHeader extends StatelessWidget {
                                 color: tokens.primary.withValues(alpha: 0.14),
                                 borderRadius: BorderRadius.circular(4),
                                 border: Border.all(
-                                  color:
-                                      tokens.primary.withValues(alpha: 0.35),
+                                  color: tokens.primary.withValues(alpha: 0.35),
                                 ),
                               ),
                               child: Text(

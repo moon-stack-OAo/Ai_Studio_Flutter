@@ -26,6 +26,8 @@ class VideoPage extends StatefulWidget {
     this.videoClient,
     this.videoPosterService,
     this.onOpenProviders,
+    this.skillRepository,
+    this.onManageSkills,
   });
 
   final ProviderRepository providerRepository;
@@ -37,6 +39,8 @@ class VideoPage extends StatefulWidget {
   final OpenAiCompatibleVideoClient? videoClient;
   final VideoPosterService? videoPosterService;
   final VoidCallback? onOpenProviders;
+  final SkillRepository? skillRepository;
+  final VoidCallback? onManageSkills;
 
   @override
   State<VideoPage> createState() => _VideoPageState();
@@ -44,11 +48,16 @@ class VideoPage extends StatefulWidget {
 
 class _VideoPageState extends State<VideoPage> {
   late final VideoController _controller;
+  late final SkillRepository _skills;
 
   @override
   void initState() {
     super.initState();
+    _skills =
+        widget.skillRepository ??
+        SkillRepository(storage: MemorySkillStorage());
     _controller = VideoController(
+      skillRepository: _skills,
       providerRepository: widget.providerRepository,
       sessionRepository: widget.sessionRepository,
       appLogRepository: widget.appLogRepository,
@@ -64,6 +73,7 @@ class _VideoPageState extends State<VideoPage> {
   @override
   void dispose() {
     _controller.dispose();
+    if (widget.skillRepository == null) _skills.dispose();
     super.dispose();
   }
 
@@ -78,8 +88,7 @@ class _VideoPageState extends State<VideoPage> {
       refs: item.referenceImages,
       initialIndex: index,
       source: ImageLightboxSource.reference,
-      loadBytes: () =>
-          widget.sessionRepository.readReferenceImageBytes(ref),
+      loadBytes: () => widget.sessionRepository.readReferenceImageBytes(ref),
       loadBytesFor: widget.sessionRepository.readReferenceImageBytes,
     );
   }
@@ -193,6 +202,7 @@ class _VideoPageState extends State<VideoPage> {
                               child: _QueuePanel(
                                 tokens: tokens,
                                 child: VideoQueue(
+                                  key: ValueKey(session?.id),
                                   items: items,
                                   selectedId: _controller.selectedItemId,
                                   posterService: widget.videoPosterService,
@@ -201,16 +211,15 @@ class _VideoPageState extends State<VideoPage> {
                                       .readReferenceImageBytes,
                                   onPreviewReference: _openReferenceLightbox,
                                   onPosterCached: (item, path) {
-                                    final sid =
-                                        widget.sessionRepository.activeId;
+                                    final sid = session?.id ?? '';
                                     if (sid.isEmpty) return;
                                     unawaited(
                                       widget.sessionRepository
                                           .setPosterLocalPath(
-                                        sid,
-                                        item.id,
-                                        path,
-                                      ),
+                                            sid,
+                                            item.id,
+                                            path,
+                                          ),
                                     );
                                   },
                                   onSelect: _controller.selectItem,
@@ -218,8 +227,9 @@ class _VideoPageState extends State<VideoPage> {
                                     _controller.selectItem(item);
                                   },
                                   onOpen: (item) async {
-                                    final ok =
-                                        await _controller.openVideo(item);
+                                    final ok = await _controller.openVideo(
+                                      item,
+                                    );
                                     if (ok && context.mounted) {
                                       displayInfoBar(
                                         context,
@@ -232,8 +242,9 @@ class _VideoPageState extends State<VideoPage> {
                                     }
                                   },
                                   onSave: (item) async {
-                                    final ok =
-                                        await _controller.saveVideoAs(item);
+                                    final ok = await _controller.saveVideoAs(
+                                      item,
+                                    );
                                     if (ok && context.mounted) {
                                       displayInfoBar(
                                         context,
@@ -301,6 +312,9 @@ class _VideoPageState extends State<VideoPage> {
                 ),
               ),
               VideoComposer(
+                skillRepository: _skills,
+                onManageSkills: widget.onManageSkills,
+                skillsEnabled: !widget.generation.busy,
                 prompt: _controller.promptDraft,
                 onPromptChanged: _controller.setPromptDraft,
                 duration: _controller.duration,
@@ -333,6 +347,7 @@ class _VideoPageState extends State<VideoPage> {
                 onProviderSwitched: _controller.syncParamsToActiveProvider,
                 onPromptAssist: () {
                   showFluentPromptAssist(
+                    skillRepository: _skills,
                     context,
                     domain: PromptDomain.video,
                     mode: _controller.promptAssistMode,
@@ -477,16 +492,10 @@ class _VideoHeader extends StatelessWidget {
           if (hasPending)
             Padding(
               padding: const EdgeInsets.only(right: 8),
-              child: Button(
-                onPressed: onResume,
-                child: const Text('恢复未完成'),
-              ),
+              child: Button(onPressed: onResume, child: const Text('恢复未完成')),
             ),
           if (onClear != null)
-            Button(
-              onPressed: onClear,
-              child: const Text('清空结果'),
-            ),
+            Button(onPressed: onClear, child: const Text('清空结果')),
         ],
       ),
     );

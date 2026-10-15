@@ -31,6 +31,7 @@ class AppShell extends StatefulWidget {
     this.videoPosterService,
     required this.generation,
     this.chatClient,
+    this.skillRepository,
     this.imageClient,
     this.videoClient,
     this.mcpServerRepository,
@@ -53,6 +54,7 @@ class AppShell extends StatefulWidget {
   final VideoPosterService? videoPosterService;
   final GenerationRuntime generation;
   final OpenAiCompatibleChatClient? chatClient;
+  final SkillRepository? skillRepository;
   final OpenAiCompatibleImageClient? imageClient;
   final OpenAiCompatibleVideoClient? videoClient;
   final McpServerRepository? mcpServerRepository;
@@ -73,13 +75,16 @@ class AppShell extends StatefulWidget {
 class _AppShellState extends State<AppShell> {
   AppSection _section = AppSection.chat;
   SettingsCategory _settingsCategory = SettingsCategory.providers;
-  late final AppearanceRepository _fallbackAppearance =
-      AppearanceRepository(storage: MemoryAppearanceStorage());
+  late final AppearanceRepository _fallbackAppearance = AppearanceRepository(
+    storage: MemoryAppearanceStorage(),
+  );
   late final List<Widget> _sectionPages;
   late final UpdatePrefs _updatePrefs;
   bool _startupCheckStarted = false;
   bool _updateDialogVisible = false;
   Timer? _startupCheckTimer;
+  late final SkillRepository _skills;
+  final _settingsKey = GlobalKey<SettingsShellState>();
 
   AppearanceRepository get _appearanceRepository =>
       widget.themeController.appearanceRepository ?? _fallbackAppearance;
@@ -87,6 +92,10 @@ class _AppShellState extends State<AppShell> {
   @override
   void initState() {
     super.initState();
+    _skills =
+        widget.skillRepository ??
+        SkillRepository(storage: MemorySkillStorage());
+    if (!_skills.isLoaded) unawaited(_loadSkills());
     final injected = widget.updatePrefs ?? widget.updateBannerPrefs;
     final controllerPrefs = widget.updateController?.prefs;
     if (injected != null) {
@@ -100,6 +109,8 @@ class _AppShellState extends State<AppShell> {
     _updatePrefs.addListener(_onUpdaterChanged);
     _sectionPages = [
       ChatPage(
+        skillRepository: _skills,
+        onManageSkills: _openSkills,
         providerRepository: widget.providerRepository,
         sessionRepository: widget.sessionRepository,
         chatDefaultsRepository: widget.chatDefaultsRepository,
@@ -111,6 +122,8 @@ class _AppShellState extends State<AppShell> {
         onOpenProviders: _openProviders,
       ),
       ImagePage(
+        skillRepository: _skills,
+        onManageSkills: _openSkills,
         providerRepository: widget.providerRepository,
         sessionRepository: widget.imageSessionRepository,
         chatDefaultsRepository: widget.chatDefaultsRepository,
@@ -121,6 +134,8 @@ class _AppShellState extends State<AppShell> {
         onOpenProviders: _openProviders,
       ),
       VideoPage(
+        skillRepository: _skills,
+        onManageSkills: _openSkills,
         providerRepository: widget.providerRepository,
         sessionRepository: widget.videoSessionRepository,
         chatDefaultsRepository: widget.chatDefaultsRepository,
@@ -133,6 +148,9 @@ class _AppShellState extends State<AppShell> {
       ),
     ];
     final coordinator = widget.closeCoordinator;
+    if (coordinator != null) {
+      coordinator.onConfirmQuit = _confirmLeaveSettings;
+    }
     if (coordinator != null && supportsCustomTitleBar) {
       coordinator.onOpenSettings = _openSettingsFromTray;
       coordinator.onCheckUpdate = _checkUpdateFromTray;
@@ -148,9 +166,11 @@ class _AppShellState extends State<AppShell> {
   @override
   void dispose() {
     _startupCheckTimer?.cancel();
+    if (widget.skillRepository == null) _skills.dispose();
     widget.updateController?.removeListener(_onUpdaterChanged);
     _updatePrefs.removeListener(_onUpdaterChanged);
     final coordinator = widget.closeCoordinator;
+    coordinator?.onConfirmQuit = null;
     if (coordinator != null && supportsCustomTitleBar) {
       unawaited(coordinator.detach());
     }
@@ -159,6 +179,14 @@ class _AppShellState extends State<AppShell> {
 
   void _onUpdaterChanged() {
     if (mounted) setState(() {});
+  }
+
+  Future<void> _loadSkills() async {
+    try {
+      await _skills.load();
+    } catch (_) {
+      // lastError 由技能仓库保存，设置页负责展示。
+    }
   }
 
   void _scheduleStartupUpdateCheck() {
@@ -204,8 +232,9 @@ class _AppShellState extends State<AppShell> {
     }
   }
 
-  void _openSettingsFromTray() {
+  Future<void> _openSettingsFromTray() async {
     if (!mounted) return;
+    if (!await _confirmLeaveSettings() || !mounted) return;
     setState(() {
       _section = AppSection.settings;
       _settingsCategory = SettingsCategory.about;
@@ -241,25 +270,22 @@ class _AppShellState extends State<AppShell> {
 
     final (String title, InfoBarSeverity severity) = switch (result.status) {
       UpdateCheckStatus.upToDate => (
-          '已是最新版本（${result.latestVersion ?? result.currentVersion}）',
-          InfoBarSeverity.success,
-        ),
+        '已是最新版本（${result.latestVersion ?? result.currentVersion}）',
+        InfoBarSeverity.success,
+      ),
       UpdateCheckStatus.available => (
-          '发现新版本 ${result.latestVersion}',
-          InfoBarSeverity.info,
-        ),
-      UpdateCheckStatus.notConfigured => (
-          '未配置更新源',
-          InfoBarSeverity.warning,
-        ),
+        '发现新版本 ${result.latestVersion}',
+        InfoBarSeverity.info,
+      ),
+      UpdateCheckStatus.notConfigured => ('未配置更新源', InfoBarSeverity.warning),
       UpdateCheckStatus.noPlatformAsset => (
-          result.errorMessage ?? '清单中无当前平台的安装包',
-          InfoBarSeverity.warning,
-        ),
+        result.errorMessage ?? '清单中无当前平台的安装包',
+        InfoBarSeverity.warning,
+      ),
       UpdateCheckStatus.failed => (
-          result.errorMessage ?? '检查更新失败',
-          InfoBarSeverity.error,
-        ),
+        result.errorMessage ?? '检查更新失败',
+        InfoBarSeverity.error,
+      ),
     };
 
     _showInfoBar(title, severity);
@@ -282,19 +308,13 @@ class _AppShellState extends State<AppShell> {
         case UpdatePromptAction.skip:
           await updater.skipUpdateVersion(result.latestVersion);
         case UpdatePromptAction.later:
-          _showInfoBar(
-            '可在 设置 → 关于与更新 中安装',
-            InfoBarSeverity.info,
-          );
+          _showInfoBar('可在 设置 → 关于与更新 中安装', InfoBarSeverity.info);
         case UpdatePromptAction.install:
           _showInfoBar('正在下载更新…', InfoBarSeverity.info);
           final ok = await updater.downloadAndInstall(result: result);
           if (!mounted) return;
           if (!ok) {
-            _showInfoBar(
-              updater.lastError ?? '下载或安装失败',
-              InfoBarSeverity.error,
-            );
+            _showInfoBar(updater.lastError ?? '下载或安装失败', InfoBarSeverity.error);
           }
       }
     } finally {
@@ -316,20 +336,36 @@ class _AppShellState extends State<AppShell> {
   }
 
   int get _selectedIndex => switch (_section) {
-        AppSection.chat => 0,
-        AppSection.image => 1,
-        AppSection.video => 2,
-        AppSection.settings => 3,
-      };
+    AppSection.chat => 0,
+    AppSection.image => 1,
+    AppSection.video => 2,
+    AppSection.settings => 3,
+  };
 
-  void _openProviders() {
+  Future<bool> _confirmLeaveSettings() async =>
+      _section != AppSection.settings ||
+      (await _settingsKey.currentState?.confirmLeave(
+            beforePrompt: widget.closeCoordinator?.prepareForInteraction,
+          ) ??
+          true);
+
+  Future<void> _openSkills() async {
+    if (!await _confirmLeaveSettings() || !mounted) return;
+    setState(() {
+      _section = AppSection.settings;
+      _settingsCategory = SettingsCategory.skills;
+    });
+  }
+
+  Future<void> _openProviders() async {
+    if (!await _confirmLeaveSettings() || !mounted) return;
     setState(() {
       _section = AppSection.settings;
       _settingsCategory = SettingsCategory.providers;
     });
   }
 
-  void _onPaneChanged(int index) {
+  Future<void> _onPaneChanged(int index) async {
     final next = switch (index) {
       0 => AppSection.chat,
       1 => AppSection.image,
@@ -337,6 +373,7 @@ class _AppShellState extends State<AppShell> {
       _ => AppSection.settings,
     };
     if (next == _section) return;
+    if (!await _confirmLeaveSettings() || !mounted) return;
     setState(() => _section = next);
   }
 
@@ -360,9 +397,7 @@ class _AppShellState extends State<AppShell> {
           endActions: [
             Padding(
               padding: const EdgeInsetsDirectional.only(end: 4),
-              child: TitleBarThemeButton(
-                controller: widget.themeController,
-              ),
+              child: TitleBarThemeButton(controller: widget.themeController),
             ),
           ],
         ),
@@ -387,7 +422,9 @@ class _AppShellState extends State<AppShell> {
                     ..._sectionPages,
                     // key 稳定：更新 badge 等 setState 时复用同一设置子树。
                     SettingsShell(
-                      key: const ValueKey('desktop_settings_shell'),
+                      key: _settingsKey,
+                      skillRepository: _skills,
+                      active: _section == AppSection.settings,
                       category: _settingsCategory,
                       onCategoryChanged: (value) {
                         setState(() => _settingsCategory = value);
@@ -421,12 +458,16 @@ class _AppShellState extends State<AppShell> {
                     body: const SizedBox.shrink(),
                   ),
                   PaneItem(
-                    icon: NavIcons.image(selected: _section == AppSection.image),
+                    icon: NavIcons.image(
+                      selected: _section == AppSection.image,
+                    ),
                     title: const Text('生图'),
                     body: const SizedBox.shrink(),
                   ),
                   PaneItem(
-                    icon: NavIcons.video(selected: _section == AppSection.video),
+                    icon: NavIcons.video(
+                      selected: _section == AppSection.video,
+                    ),
                     title: const Text('生视频'),
                     body: const SizedBox.shrink(),
                   ),

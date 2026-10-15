@@ -82,6 +82,13 @@ Future<void> main() async {
   );
   await chatDefaults.load();
 
+  final skills = SkillRepository(storage: PrefsSkillStorage());
+  try {
+    await skills.load();
+  } catch (_) {
+    // 仓库保留 lastError，设置页展示加载失败并允许用户重试保存。
+  }
+
   final appLogs = AppLogRepository(storage: PrefsAppLogStorage());
   await appLogs.load();
   await appLogs.append(
@@ -125,6 +132,7 @@ Future<void> main() async {
   );
 
   final dataBackup = DataBackupService(
+    skillRepository: skills,
     providers: providers,
     appearance: appearance,
     chatDefaults: chatDefaults,
@@ -142,6 +150,7 @@ Future<void> main() async {
   // release 下曾导致进程闪退；修复 PR #190344 进 stable 前先止血。
   // 代价：Narrator/NVDA 等读屏不可用；macOS 不受影响。
   Widget app = AiStudioApp(
+    skillRepository: skills,
     themeController: themeController,
     providerRepository: providers,
     sessionRepository: sessions,
@@ -182,6 +191,7 @@ class AiStudioApp extends StatelessWidget {
     this.videoPosterService,
     required this.generation,
     this.chatClient,
+    this.skillRepository,
     this.imageClient,
     this.videoClient,
     this.mcpServerRepository,
@@ -204,6 +214,7 @@ class AiStudioApp extends StatelessWidget {
   final VideoPosterService? videoPosterService;
   final GenerationRuntime generation;
   final OpenAiCompatibleChatClient? chatClient;
+  final SkillRepository? skillRepository;
   final OpenAiCompatibleImageClient? imageClient;
   final OpenAiCompatibleVideoClient? videoClient;
   final McpServerRepository? mcpServerRepository;
@@ -222,6 +233,7 @@ class AiStudioApp extends StatelessWidget {
         final scale = themeController.fontScale;
         final dens = themeController.density;
         final shell = AppShell(
+          skillRepository: skillRepository,
           themeController: themeController,
           providerRepository: providerRepository,
           sessionRepository: sessionRepository,

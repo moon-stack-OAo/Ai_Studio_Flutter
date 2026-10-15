@@ -9,6 +9,7 @@ import 'package:flutter/services.dart';
 import '../../../widgets/collapsible_prompt.dart';
 import '../../../widgets/empty_illustrations.dart';
 import '../../../widgets/fluent_empty_states.dart';
+import '../../../widgets/skill_summary.dart';
 
 /// F-VideoQueue：time-split + prompt-mini + 任务卡。
 class VideoQueue extends StatefulWidget {
@@ -41,6 +42,7 @@ class VideoQueue extends StatefulWidget {
   final void Function(VideoItem item) onAbandon;
   final void Function(VideoItem item)? onPlay;
   final void Function(VideoItem item)? onSelect;
+
   /// `VID-RERUN`：用此提示重跑（回填 Composer）。
   final void Function(VideoItem item)? onRerun;
   final bool rerunEnabled;
@@ -49,10 +51,11 @@ class VideoQueue extends StatefulWidget {
   final bool Function(VideoItem item)? isReloading;
   final VideoPosterService? posterService;
   final void Function(VideoItem item, String localPath)? onPosterCached;
+
   /// 读取本回合参考图像素（`VID-TURN-REF`）。
   final Future<Uint8List?> Function(ImageRef ref)? loadReferenceBytes;
   final void Function(VideoItem item, int index, ImageRef ref)?
-      onPreviewReference;
+  onPreviewReference;
   final String emptyHint;
   final String? emptySubtitle;
 
@@ -232,8 +235,8 @@ class _StatusFilterChip extends StatelessWidget {
                 color: focused
                     ? tokens.primary
                     : selected
-                        ? Color.lerp(tokens.primary, tokens.border, 0.5)!
-                        : tokens.border,
+                    ? Color.lerp(tokens.primary, tokens.border, 0.5)!
+                    : tokens.border,
                 width: focused ? 1.5 : 1,
               ),
             ),
@@ -371,7 +374,7 @@ class _TurnBlock extends StatelessWidget {
   final bool Function(VideoItem item)? isReloading;
   final Future<Uint8List?> Function(ImageRef ref)? loadReferenceBytes;
   final void Function(VideoItem item, int index, ImageRef ref)?
-      onPreviewReference;
+  onPreviewReference;
   final VideoPosterService? posterService;
   final void Function(VideoItem item, String localPath)? onPosterCached;
 
@@ -379,8 +382,7 @@ class _TurnBlock extends StatelessWidget {
     if (onPlay == null) return false;
     if (item.status != VideoItemStatus.success) return false;
     final path = item.localPath ?? item.videoUrl ?? item.remoteVideoUrl;
-    return isPlayableVideoPath(path) &&
-        !(path ?? '').startsWith('memory://');
+    return isPlayableVideoPath(path) && !(path ?? '').startsWith('memory://');
   }
 
   bool get _canReload {
@@ -388,8 +390,10 @@ class _TurnBlock extends StatelessWidget {
     if (isReloading?.call(item) == true) return false;
     if (item.needsMaterialize) return true;
     final remote = (item.remoteVideoUrl ?? '').trim();
-    final hasRemote =
-        RegExp(r'^https?://', caseSensitive: false).hasMatch(remote);
+    final hasRemote = RegExp(
+      r'^https?://',
+      caseSensitive: false,
+    ).hasMatch(remote);
     return item.status == VideoItemStatus.error &&
         (hasRemote || (item.jobId?.isNotEmpty == true));
   }
@@ -428,13 +432,12 @@ class _TurnBlock extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final progress =
-        ((item.progress ?? 0).clamp(0, 100) / 100.0).toDouble();
+    final progress = ((item.progress ?? 0).clamp(0, 100) / 100.0).toDouble();
     final title = item.prompt.trim().isEmpty
         ? '视频任务'
         : (item.prompt.trim().length <= 28
-            ? item.prompt.trim()
-            : '${item.prompt.trim().substring(0, 28)}…');
+              ? item.prompt.trim()
+              : '${item.prompt.trim().substring(0, 28)}…');
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 4),
@@ -454,6 +457,14 @@ class _TurnBlock extends StatelessWidget {
                 ? null
                 : (index, ref) => onPreviewReference!(item, index, ref),
           ),
+          if (item.appliedSkills.isNotEmpty || item.finalPrompt != item.prompt)
+            Align(
+              alignment: Alignment.centerLeft,
+              child: SkillHistoryButton(
+                skills: item.appliedSkills,
+                finalPrompt: item.finalPrompt,
+              ),
+            ),
           const SizedBox(height: 8),
           Opacity(
             opacity: item.status == VideoItemStatus.abandoned ? 0.72 : 1,
@@ -477,8 +488,8 @@ class _TurnBlock extends StatelessWidget {
                       color: selected
                           ? Color.lerp(tokens.primary, tokens.border, 0.55)!
                           : item.status == VideoItemStatus.loading
-                              ? Color.lerp(tokens.primary, tokens.border, 0.55)!
-                              : tokens.border,
+                          ? Color.lerp(tokens.primary, tokens.border, 0.55)!
+                          : tokens.border,
                     ),
                     boxShadow: item.status == VideoItemStatus.loading
                         ? [
@@ -578,7 +589,8 @@ class _TurnBlock extends StatelessWidget {
                             item.errorMessage!,
                             style: TextStyle(
                               fontSize: 12,
-                              color: item.status == VideoItemStatus.error ||
+                              color:
+                                  item.status == VideoItemStatus.error ||
                                       item.needsMaterialize
                                   ? tokens.danger
                                   : tokens.inkSecondary,
@@ -587,11 +599,7 @@ class _TurnBlock extends StatelessWidget {
                           ),
                         ],
                       const SizedBox(height: 8),
-                      Wrap(
-                        spacing: 6,
-                        runSpacing: 4,
-                        children: _actions(),
-                      ),
+                      Wrap(spacing: 6, runSpacing: 4, children: _actions()),
                     ],
                   ),
                 ),
@@ -623,17 +631,13 @@ class _TurnBlock extends StatelessWidget {
   String _metaLine() {
     switch (item.status) {
       case VideoItemStatus.loading:
-        return item.jobId?.isNotEmpty == true
-            ? '轮询中 · ${item.jobId}'
-            : '提交中…';
+        return item.jobId?.isNotEmpty == true ? '轮询中 · ${item.jobId}' : '提交中…';
       case VideoItemStatus.pendingResume:
         return '可恢复轮询';
       case VideoItemStatus.success:
         return item.needsMaterialize ? '需重新加载' : '完成 · 可播放 / 另存';
       case VideoItemStatus.error:
-        return item.needsMaterialize
-            ? '已生成 · 可重新加载'
-            : '失败 · 可重试参数或检查配置';
+        return item.needsMaterialize ? '已生成 · 可重新加载' : '失败 · 可重试参数或检查配置';
       case VideoItemStatus.abandoned:
         return '已放弃';
     }
@@ -654,9 +658,7 @@ class _TurnBlock extends StatelessWidget {
     final reloadBtn = _canReload
         ? Button(
             onPressed: () => onReload!(item),
-            child: Text(
-              isReloading?.call(item) == true ? '加载中…' : '重新加载',
-            ),
+            child: Text(isReloading?.call(item) == true ? '加载中…' : '重新加载'),
           )
         : null;
     final rerunBtn = _rerunBtn();
@@ -666,52 +668,29 @@ class _TurnBlock extends StatelessWidget {
         return const [];
       case VideoItemStatus.pendingResume:
         return [
-          Button(
-            onPressed: () => onResume(item),
-            child: const Text('恢复'),
-          ),
-          Button(
-            onPressed: () => onAbandon(item),
-            child: const Text('放弃'),
-          ),
+          Button(onPressed: () => onResume(item), child: const Text('恢复')),
+          Button(onPressed: () => onAbandon(item), child: const Text('放弃')),
           ?rerunBtn,
         ];
       case VideoItemStatus.success:
         return [
           ?reloadBtn,
           if (_canPlay)
-            Button(
-              onPressed: () => onPlay!(item),
-              child: const Text('在右侧播放'),
-            ),
-          Button(
-            onPressed: () => onOpen(item),
-            child: const Text('系统打开'),
-          ),
-          Button(
-            onPressed: () => onSave(item),
-            child: const Text('另存为'),
-          ),
+            Button(onPressed: () => onPlay!(item), child: const Text('在右侧播放')),
+          Button(onPressed: () => onOpen(item), child: const Text('系统打开')),
+          Button(onPressed: () => onSave(item), child: const Text('另存为')),
           ?rerunBtn,
         ];
       case VideoItemStatus.error:
         return [
           ?reloadBtn,
           if (!item.needsMaterialize && item.jobId?.isNotEmpty == true)
-            Button(
-              onPressed: () => onResume(item),
-              child: const Text('恢复'),
-            ),
-          Button(
-            onPressed: () => onAbandon(item),
-            child: const Text('放弃'),
-          ),
+            Button(onPressed: () => onResume(item), child: const Text('恢复')),
+          Button(onPressed: () => onAbandon(item), child: const Text('放弃')),
           ?rerunBtn,
         ];
       case VideoItemStatus.abandoned:
-        return [
-          ?rerunBtn,
-        ];
+        return [?rerunBtn];
     }
   }
 }
@@ -866,11 +845,7 @@ class _QueuePosterThumbState extends State<_QueuePosterThumb> {
   Widget _placeholder(FluentTokens tokens) {
     return ColoredBox(
       color: tokens.surfaceMuted,
-      child: Icon(
-        FluentIcons.video,
-        size: 16,
-        color: tokens.inkMuted,
-      ),
+      child: Icon(FluentIcons.video, size: 16, color: tokens.inkMuted),
     );
   }
 }
@@ -1014,10 +989,7 @@ class _UserPromptBubbleState extends State<_UserPromptBubble> {
                     ignoring: !_hovered,
                     child: Padding(
                       padding: const EdgeInsets.only(top: 6),
-                      child: _PromptCopyChip(
-                        onPressed: _copy,
-                        tokens: tokens,
-                      ),
+                      child: _PromptCopyChip(onPressed: _copy, tokens: tokens),
                     ),
                   ),
                 ),
@@ -1182,10 +1154,7 @@ class _TurnRefThumbState extends State<_TurnRefThumb> {
 }
 
 class _PromptCopyChip extends StatelessWidget {
-  const _PromptCopyChip({
-    required this.onPressed,
-    required this.tokens,
-  });
+  const _PromptCopyChip({required this.onPressed, required this.tokens});
 
   final VoidCallback onPressed;
   final FluentTokens tokens;

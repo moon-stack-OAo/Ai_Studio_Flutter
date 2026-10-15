@@ -1,3 +1,5 @@
+import '../prompt/custom_skills.dart';
+
 /// 生图会话与条目模型。
 
 enum ImageGenMode {
@@ -64,11 +66,7 @@ enum ImageRefType {
 
 /// 单张图引用：b64 / url / 本地文件路径。
 class ImageRef {
-  const ImageRef({
-    required this.type,
-    required this.src,
-    this.revisedPrompt,
-  });
+  const ImageRef({required this.type, required this.src, this.revisedPrompt});
 
   final ImageRefType type;
 
@@ -92,11 +90,11 @@ class ImageRef {
   }
 
   Map<String, dynamic> toJson() => {
-        'type': type.wire,
-        'src': src,
-        if (revisedPrompt != null && revisedPrompt!.isNotEmpty)
-          'revisedPrompt': revisedPrompt,
-      };
+    'type': type.wire,
+    'src': src,
+    if (revisedPrompt != null && revisedPrompt!.isNotEmpty)
+      'revisedPrompt': revisedPrompt,
+  };
 
   factory ImageRef.fromJson(Map<String, dynamic> json) {
     return ImageRef(
@@ -116,6 +114,8 @@ class ImageItem {
     required this.createdAt,
     required this.mode,
     required this.prompt,
+    String? finalPrompt,
+    this.appliedSkills = const [],
     this.model = '',
     this.providerName = '',
     this.images = const [],
@@ -127,15 +127,18 @@ class ImageItem {
     this.quality,
     this.status = ImageItemStatus.done,
     this.errorMessage,
-  });
+  }) : finalPrompt = finalPrompt ?? prompt;
 
   final String id;
   final int createdAt;
   final ImageGenMode mode;
   final String prompt;
+  final String finalPrompt;
+  final List<SkillSnapshot> appliedSkills;
   final String model;
   final String providerName;
   final List<ImageRef> images;
+
   /// 本回合用户提交的参考图资产引用（`IMG-TURN-REF`）；旧数据可为空。
   final List<ImageRef> referenceImages;
   final String? refPreview;
@@ -151,6 +154,8 @@ class ImageItem {
     int? createdAt,
     ImageGenMode? mode,
     String? prompt,
+    String? finalPrompt,
+    List<SkillSnapshot>? appliedSkills,
     String? model,
     String? providerName,
     List<ImageRef>? images,
@@ -173,16 +178,16 @@ class ImageItem {
       createdAt: createdAt ?? this.createdAt,
       mode: mode ?? this.mode,
       prompt: prompt ?? this.prompt,
+      finalPrompt: finalPrompt ?? this.finalPrompt,
+      appliedSkills: List.unmodifiable(appliedSkills ?? this.appliedSkills),
       model: model ?? this.model,
       providerName: providerName ?? this.providerName,
       images: images ?? this.images,
       referenceImages: referenceImages ?? this.referenceImages,
-      refPreview:
-          clearRefPreview ? null : (refPreview ?? this.refPreview),
+      refPreview: clearRefPreview ? null : (refPreview ?? this.refPreview),
       n: n ?? this.n,
       size: clearSize ? null : (size ?? this.size),
-      aspectRatio:
-          clearAspectRatio ? null : (aspectRatio ?? this.aspectRatio),
+      aspectRatio: clearAspectRatio ? null : (aspectRatio ?? this.aspectRatio),
       quality: clearQuality ? null : (quality ?? this.quality),
       status: status ?? this.status,
       errorMessage: clearErrorMessage
@@ -192,24 +197,26 @@ class ImageItem {
   }
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'createdAt': createdAt,
-        'mode': mode.wire,
-        'prompt': prompt,
-        'model': model,
-        'providerName': providerName,
-        'images': images.map((e) => e.toJson()).toList(),
-        if (referenceImages.isNotEmpty)
-          'referenceImages':
-              referenceImages.map((e) => e.toJson()).toList(),
-        if (refPreview != null) 'refPreview': refPreview,
-        'n': n,
-        if (size != null) 'size': size,
-        if (aspectRatio != null) 'aspectRatio': aspectRatio,
-        if (quality != null) 'quality': quality,
-        'status': status.wire,
-        if (errorMessage != null) 'errorMessage': errorMessage,
-      };
+    'id': id,
+    'createdAt': createdAt,
+    'mode': mode.wire,
+    'prompt': prompt,
+    'finalPrompt': finalPrompt,
+    if (appliedSkills.isNotEmpty)
+      'appliedSkills': appliedSkills.map((s) => s.toJson()).toList(),
+    'model': model,
+    'providerName': providerName,
+    'images': images.map((e) => e.toJson()).toList(),
+    if (referenceImages.isNotEmpty)
+      'referenceImages': referenceImages.map((e) => e.toJson()).toList(),
+    if (refPreview != null) 'refPreview': refPreview,
+    'n': n,
+    if (size != null) 'size': size,
+    if (aspectRatio != null) 'aspectRatio': aspectRatio,
+    if (quality != null) 'quality': quality,
+    'status': status.wire,
+    if (errorMessage != null) 'errorMessage': errorMessage,
+  };
 
   factory ImageItem.fromJson(Map<String, dynamic> json) {
     final imgs = <ImageRef>[];
@@ -232,11 +239,16 @@ class ImageItem {
     }
     return ImageItem(
       id: json['id']?.toString() ?? '',
-      createdAt:
-          (json['createdAt'] is num) ? (json['createdAt'] as num).toInt() : 0,
-      mode: ImageGenMode.tryParse(json['mode']?.toString()) ??
-          ImageGenMode.text,
+      createdAt: (json['createdAt'] is num)
+          ? (json['createdAt'] as num).toInt()
+          : 0,
+      mode:
+          ImageGenMode.tryParse(json['mode']?.toString()) ?? ImageGenMode.text,
       prompt: json['prompt']?.toString() ?? '',
+      finalPrompt: json['finalPrompt'] is String
+          ? json['finalPrompt'] as String
+          : null,
+      appliedSkills: skillSnapshotsFromJson(json['appliedSkills']),
       model: json['model']?.toString() ?? '',
       providerName: json['providerName']?.toString() ?? '',
       images: imgs,
@@ -246,7 +258,8 @@ class ImageItem {
       size: json['size']?.toString(),
       aspectRatio: json['aspectRatio']?.toString(),
       quality: json['quality']?.toString(),
-      status: ImageItemStatus.tryParse(json['status']?.toString()) ??
+      status:
+          ImageItemStatus.tryParse(json['status']?.toString()) ??
           ImageItemStatus.done,
       errorMessage: json['errorMessage']?.toString(),
     );
@@ -285,12 +298,12 @@ class ImageSession {
   }
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'title': title,
-        'createdAt': createdAt,
-        'updatedAt': updatedAt,
-        'items': items.map((e) => e.toJson()).toList(),
-      };
+    'id': id,
+    'title': title,
+    'createdAt': createdAt,
+    'updatedAt': updatedAt,
+    'items': items.map((e) => e.toJson()).toList(),
+  };
 
   factory ImageSession.fromJson(Map<String, dynamic> json) {
     final items = <ImageItem>[];
@@ -305,10 +318,12 @@ class ImageSession {
     return ImageSession(
       id: json['id']?.toString() ?? '',
       title: json['title']?.toString() ?? '新生图',
-      createdAt:
-          (json['createdAt'] is num) ? (json['createdAt'] as num).toInt() : 0,
-      updatedAt:
-          (json['updatedAt'] is num) ? (json['updatedAt'] as num).toInt() : 0,
+      createdAt: (json['createdAt'] is num)
+          ? (json['createdAt'] as num).toInt()
+          : 0,
+      updatedAt: (json['updatedAt'] is num)
+          ? (json['updatedAt'] as num).toInt()
+          : 0,
       items: items,
     );
   }
@@ -316,10 +331,7 @@ class ImageSession {
 
 /// 持久化快照。
 class ImageStoreSnapshot {
-  const ImageStoreSnapshot({
-    required this.sessions,
-    required this.activeId,
-  });
+  const ImageStoreSnapshot({required this.sessions, required this.activeId});
 
   final List<ImageSession> sessions;
   final String activeId;

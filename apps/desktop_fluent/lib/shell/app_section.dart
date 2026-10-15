@@ -5,17 +5,18 @@ enum AppSection {
   settings;
 
   String get label => switch (this) {
-        AppSection.chat => '对话',
-        AppSection.image => '生图',
-        AppSection.video => '生视频',
-        AppSection.settings => '设置',
-      };
+    AppSection.chat => '对话',
+    AppSection.image => '生图',
+    AppSection.video => '生视频',
+    AppSection.settings => '设置',
+  };
 }
 
 enum SettingsCategory {
   providers,
   mcp,
   chatDefaults,
+  skills,
   appearance,
   logs,
   about,
@@ -26,28 +27,31 @@ enum SettingsCategory {
     providers,
     mcp,
     chatDefaults,
+    skills,
     appearance,
     logs,
     about,
   ];
 
   String get label => switch (this) {
-        SettingsCategory.providers => '提供商',
-        SettingsCategory.mcp => '业务 MCP',
-        SettingsCategory.chatDefaults => '对话默认',
-        SettingsCategory.appearance => '外观',
-        SettingsCategory.logs => '日志',
-        SettingsCategory.about => '关于与更新',
-        SettingsCategory.lab => '实验室',
-      };
+    SettingsCategory.providers => '提供商',
+    SettingsCategory.mcp => '业务 MCP',
+    SettingsCategory.chatDefaults => '对话默认',
+    SettingsCategory.skills => '自定义技能',
+    SettingsCategory.appearance => '外观',
+    SettingsCategory.logs => '日志',
+    SettingsCategory.about => '关于与更新',
+    SettingsCategory.lab => '实验室',
+  };
 
   String get description => switch (this) {
-        SettingsCategory.providers => '密钥 · 连接 · 模型',
-        SettingsCategory.mcp => 'Server · 工具 · 授权',
-        SettingsCategory.chatDefaults => '温度 · Tokens · 裁剪',
-        SettingsCategory.appearance => '主题 · 字号 · 密度',
-        SettingsCategory.logs => '筛选 · 复制 · 清空',
-        SettingsCategory.about => '版本 · 关闭 · 更新',
-        SettingsCategory.lab => '实验功能',
-      };
+    SettingsCategory.providers => '密钥 · 连接 · 模型',
+    SettingsCategory.mcp => 'Server · 工具 · 授权',
+    SettingsCategory.chatDefaults => '温度 · Tokens · 裁剪',
+    SettingsCategory.skills => '提示词 · 规则 · 应用类型',
+    SettingsCategory.appearance => '主题 · 字号 · 密度',
+    SettingsCategory.logs => '筛选 · 复制 · 清空',
+    SettingsCategory.about => '版本 · 关闭 · 更新',
+    SettingsCategory.lab => '实验功能',
+  };
 }

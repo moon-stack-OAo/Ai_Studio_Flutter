@@ -1,5 +1,7 @@
 import 'package:flutter/foundation.dart';
 
+import '../prompt/custom_skills.dart';
+
 import '../util/id.dart';
 import 'image_asset_store.dart';
 import 'image_models.dart';
@@ -10,8 +12,8 @@ class ImageSessionRepository extends ChangeNotifier {
   ImageSessionRepository({
     required ImageSessionStorage storage,
     ImageAssetStore? assetStore,
-  })  : _storage = storage,
-        _assetStore = assetStore ?? MemoryImageAssetStore();
+  }) : _storage = storage,
+       _assetStore = assetStore ?? MemoryImageAssetStore();
 
   final ImageSessionStorage _storage;
   final ImageAssetStore _assetStore;
@@ -125,10 +127,7 @@ class ImageSessionRepository extends ChangeNotifier {
     final index = _indexOf(id);
     if (index < 0) return;
     final t = title.trim().isEmpty ? '新生图' : title.trim();
-    _replace(
-      index,
-      _sessions[index].copyWith(title: t, updatedAt: _now()),
-    );
+    _replace(index, _sessions[index].copyWith(title: t, updatedAt: _now()));
     await _persist();
     notifyListeners();
   }
@@ -164,9 +163,7 @@ class ImageSessionRepository extends ChangeNotifier {
 
   /// 用快照整体替换（导入备份用）；不迁移媒体二进制。
   Future<void> replaceAll(ImageStoreSnapshot snapshot) async {
-    await _deleteItemAssets(
-      _sessions.expand((s) => s.items).toList(),
-    );
+    await _deleteItemAssets(_sessions.expand((s) => s.items).toList());
     var sessions = List<ImageSession>.from(snapshot.sessions);
     var activeId = snapshot.activeId;
     if (sessions.isEmpty) {
@@ -185,9 +182,7 @@ class ImageSessionRepository extends ChangeNotifier {
 
   /// 清除全部生图会话与关联本地媒体文件。幂等。
   Future<void> clearAllSessions({bool clearMediaCache = true}) async {
-    await _deleteItemAssets(
-      _sessions.expand((s) => s.items).toList(),
-    );
+    await _deleteItemAssets(_sessions.expand((s) => s.items).toList());
     if (clearMediaCache) {
       try {
         await _assetStore.clearAll();
@@ -208,6 +203,8 @@ class ImageSessionRepository extends ChangeNotifier {
     String sessionId, {
     required ImageGenMode mode,
     required String prompt,
+    String? finalPrompt,
+    List<SkillSnapshot> appliedSkills = const [],
     String model = '',
     String providerName = '',
     int n = 1,
@@ -230,6 +227,8 @@ class ImageSessionRepository extends ChangeNotifier {
       createdAt: createdAt ?? _now(),
       mode: mode,
       prompt: prompt,
+      finalPrompt: finalPrompt,
+      appliedSkills: List.unmodifiable(appliedSkills),
       model: model,
       providerName: providerName,
       n: n,
@@ -278,8 +277,8 @@ class ImageSessionRepository extends ChangeNotifier {
     final cappedRefs = referenceImages == null
         ? null
         : (referenceImages.length > maxTurnReferenceImages
-            ? referenceImages.sublist(0, maxTurnReferenceImages)
-            : referenceImages);
+              ? referenceImages.sublist(0, maxTurnReferenceImages)
+              : referenceImages);
     items[itemIndex] = items[itemIndex].copyWith(
       images: images,
       referenceImages: cappedRefs,
@@ -289,10 +288,7 @@ class ImageSessionRepository extends ChangeNotifier {
       refPreview: refPreview,
       clearRefPreview: clearRefPreview,
     );
-    _replace(
-      index,
-      session.copyWith(items: items, updatedAt: _now()),
-    );
+    _replace(index, session.copyWith(items: items, updatedAt: _now()));
     await _persist();
     notifyListeners();
   }
@@ -336,10 +332,7 @@ class ImageSessionRepository extends ChangeNotifier {
       if (img.type == ImageRefType.b64) {
         final bytes = decodeImageB64(img.src);
         if (bytes != null && bytes.isNotEmpty) {
-          final path = await _assetStore.savePng(
-            bytes,
-            '${itemId}_$i',
-          );
+          final path = await _assetStore.savePng(bytes, '${itemId}_$i');
           out.add(
             ImageRef(
               type: ImageRefType.file,

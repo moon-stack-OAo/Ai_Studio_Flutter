@@ -10,6 +10,7 @@ import '../chat/generation_runtime.dart';
 import '../logging/app_log_entry.dart';
 import '../logging/app_log_level.dart';
 import '../logging/app_log_repository.dart';
+import '../prompt/custom_skills.dart';
 import '../provider/agnes_profile.dart';
 import '../provider/provider_config.dart';
 import '../provider/provider_connection.dart';
@@ -34,24 +35,26 @@ class VideoJobFacade {
     required VideoSessionRepository sessions,
     required this.generation,
     AppLogRepository? appLogs,
+    SkillRepository? skillRepository,
     OpenAiCompatibleVideoClient? videoClient,
     http.Client Function()? createHttpClient,
     VoidCallback? onModelsChanged,
-  })  : _providers = providers,
-        _sessions = sessions,
-        _appLogs = appLogs,
-        _ownsClient = videoClient == null,
-        _videoClient = videoClient ??
-            OpenAiCompatibleVideoClient(logs: appLogs),
-        _createHttpClient = createHttpClient ?? createSafeHttpClient,
-        modelsCache = ProviderModelsCache(
-          providers: providers,
-          onChanged: onModelsChanged,
-        );
+  }) : _providers = providers,
+       _sessions = sessions,
+       _appLogs = appLogs,
+       _skillRepository = skillRepository,
+       _ownsClient = videoClient == null,
+       _videoClient = videoClient ?? OpenAiCompatibleVideoClient(logs: appLogs),
+       _createHttpClient = createHttpClient ?? createSafeHttpClient,
+       modelsCache = ProviderModelsCache(
+         providers: providers,
+         onChanged: onModelsChanged,
+       );
 
   final ProviderRepository _providers;
   final VideoSessionRepository _sessions;
   final AppLogRepository? _appLogs;
+  final SkillRepository? _skillRepository;
   final GenerationRuntime generation;
   final OpenAiCompatibleVideoClient _videoClient;
   final bool _ownsClient;
@@ -79,11 +82,7 @@ class VideoJobFacade {
     '1024x1024',
   ];
 
-  static const defaultAspectOptions = <String>[
-    '16:9',
-    '9:16',
-    '1:1',
-  ];
+  static const defaultAspectOptions = <String>['16:9', '9:16', '1:1'];
 
   static const resolutionOptions = <String>['480p', '720p', '1080p'];
 
@@ -113,12 +112,12 @@ class VideoJobFacade {
   bool isReloading(String itemId) => _reloadingIds.contains(itemId);
 
   bool get canGenerate => canGenerateVideo(
-        generation: generation,
-        activeSessionId: _sessions.activeId,
-        hasConfiguredVideoProvider: _providers.hasConfiguredVideoProvider,
-        promptDraft: _promptDraft,
-        hasReferenceImage: _hasReferenceImage,
-      );
+    generation: generation,
+    activeSessionId: _sessions.activeId,
+    hasConfiguredVideoProvider: _providers.hasConfiguredVideoProvider,
+    promptDraft: _promptDraft,
+    hasReferenceImage: _hasReferenceImage,
+  );
 
   ActiveVideoCredentials? get _videoCreds => _providers.activeVideoCredentials;
 
@@ -174,8 +173,7 @@ class VideoJobFacade {
   List<String> get activeAspectOptions =>
       isAgnesActive ? agnesVideoRatios : defaultAspectOptions;
 
-  String get promptAssistMode =>
-      _hasReferenceImage ? 'img2video' : 'txt2video';
+  String get promptAssistMode => _hasReferenceImage ? 'img2video' : 'txt2video';
 
   void setDuration(int value, {VoidCallback? onNotify}) {
     if (value == _duration) return;
@@ -229,8 +227,8 @@ class VideoJobFacade {
       _duration = isAgnesActive
           ? agnesVideoDurationDefaultFor(_videoCreds?.videoModel)
           : durations.contains(10)
-              ? 10
-              : durations.first;
+          ? 10
+          : durations.first;
       changed = true;
     }
     final sizes = activeSizeOptions;
@@ -284,11 +282,7 @@ class VideoJobFacade {
     if (generation.busy) return;
     onInfo?.call('正在恢复未完成的视频任务…');
     if (_disposed) return;
-    await _runResumeAll(
-      onNotify: onNotify,
-      onBanner: onBanner,
-      onInfo: onInfo,
-    );
+    await _runResumeAll(onNotify: onNotify, onBanner: onBanner, onInfo: onInfo);
   }
 
   Future<void> resumePending({
@@ -306,11 +300,7 @@ class VideoJobFacade {
     }
     onBanner?.call(null);
     onInfo?.call('正在恢复未完成的视频任务…');
-    await _runResumeAll(
-      onNotify: onNotify,
-      onBanner: onBanner,
-      onInfo: onInfo,
-    );
+    await _runResumeAll(onNotify: onNotify, onBanner: onBanner, onInfo: onInfo);
   }
 
   Future<void> resumeItem(
@@ -324,8 +314,9 @@ class VideoJobFacade {
       onBanner?.call('当前有任务进行中，请稍后再试');
       return;
     }
-    final session =
-        _sessions.sessions.where((s) => s.id == sessionId).firstOrNull;
+    final session = _sessions.sessions
+        .where((s) => s.id == sessionId)
+        .firstOrNull;
     final item = session?.items.where((i) => i.id == itemId).firstOrNull;
     if (item == null || (item.jobId?.trim().isEmpty ?? true)) {
       onBanner?.call('无法恢复：缺少任务 ID');
@@ -339,11 +330,7 @@ class VideoJobFacade {
       errorMessage: '正在恢复轮询…',
     );
     onBanner?.call(null);
-    await _runResumeAll(
-      onNotify: onNotify,
-      onBanner: onBanner,
-      onInfo: onInfo,
-    );
+    await _runResumeAll(onNotify: onNotify, onBanner: onBanner, onInfo: onInfo);
   }
 
   Future<void> abandonItem(
@@ -409,7 +396,8 @@ class VideoJobFacade {
     final remote = (item.remoteVideoUrl ?? item.videoUrl ?? '').trim();
     final jobId = item.jobId?.trim() ?? '';
     final provider = _resolveProviderForItem(item);
-    final canAuthFetch = provider != null &&
+    final canAuthFetch =
+        provider != null &&
         provider.baseUrl.trim().isNotEmpty &&
         (jobId.isNotEmpty || isVideoContentPath(remote));
 
@@ -479,8 +467,8 @@ class VideoJobFacade {
           item.id,
           videoUrl: playable,
           remoteVideoUrl: nextRemote.isEmpty ? null : nextRemote,
-          localPath: out.localPath ??
-              (playable.startsWith('http') ? null : playable),
+          localPath:
+              out.localPath ?? (playable.startsWith('http') ? null : playable),
           posterUrl: (poster != null && poster.isNotEmpty) ? poster : null,
           posterLocalPath: item.posterLocalPath,
           needsMaterialize: false,
@@ -490,8 +478,7 @@ class VideoJobFacade {
         final err = (out.errorMessage?.trim().isNotEmpty == true)
             ? out.errorMessage!
             : '重新加载失败，请重新生成';
-        final nextJobId =
-            (out.jobId.isNotEmpty ? out.jobId : jobId).trim();
+        final nextJobId = (out.jobId.isNotEmpty ? out.jobId : jobId).trim();
         await _sessions.markNeedsMaterialize(
           sessionId,
           item.id,
@@ -556,6 +543,13 @@ class VideoJobFacade {
   }) async {
     if (_disposed) return;
     final text = (prompt ?? _promptDraft).trim();
+    final appliedSkills =
+        _skillRepository?.snapshotFor(SkillTarget.video) ??
+        const <SkillSnapshot>[];
+    final finalPrompt = composeSkillPrompt(
+      prompt: text,
+      skills: appliedSkills,
+    ).trim();
     final useDuration = duration ?? _duration;
     final useSize = size ?? _size;
     final useAspect = aspectRatio ?? _aspectRatio;
@@ -571,10 +565,10 @@ class VideoJobFacade {
       return;
     }
 
-    final refBytes =
-        (imageBytes != null && imageBytes.isNotEmpty) ? imageBytes : null;
-    final mode =
-        refBytes != null ? VideoGenMode.image : VideoGenMode.text;
+    final refBytes = (imageBytes != null && imageBytes.isNotEmpty)
+        ? imageBytes
+        : null;
+    final mode = refBytes != null ? VideoGenMode.image : VideoGenMode.text;
     if (mode == VideoGenMode.text && text.isEmpty) {
       onBanner?.call('请输入提示词');
       return;
@@ -618,13 +612,14 @@ class VideoJobFacade {
     final persistedRefs = refBytes != null
         ? await _sessions.persistReferenceImages(pendingId, [refBytes])
         : const <ImageRef>[];
-    final refPreview =
-        refBytes != null ? 'ref:${refBytes.length}' : null;
+    final refPreview = refBytes != null ? 'ref:${refBytes.length}' : null;
     final pending = await _sessions.appendLoadingItem(
       sessionId,
       id: pendingId,
       mode: mode,
       prompt: text,
+      finalPrompt: finalPrompt,
+      appliedSkills: appliedSkills,
       model: creds.videoModel,
       providerId: creds.providerId,
       providerName: creds.providerName,
@@ -653,7 +648,7 @@ class VideoJobFacade {
         baseUrl: creds.baseUrl,
         apiKey: creds.apiKey,
         model: creds.videoModel,
-        prompt: text,
+        prompt: finalPrompt,
         providerType: creds.type,
         mode: mode,
         imageBytes: refBytes,
@@ -674,7 +669,8 @@ class VideoJobFacade {
               .where((i) => i.id == pending.id)
               .firstOrNull;
           final earlyUrl = early.isEmpty ? null : early;
-          final remote = early.isNotEmpty &&
+          final remote =
+              early.isNotEmpty &&
                   RegExp(r'^https?://', caseSensitive: false).hasMatch(early)
               ? early
               : j.remoteVideoUrl;
@@ -688,10 +684,9 @@ class VideoJobFacade {
               videoUrl: earlyUrl != null && earlyUrl != live?.videoUrl
                   ? earlyUrl
                   : null,
-              remoteVideoUrl:
-                  remote != null && remote != live?.remoteVideoUrl
-                      ? remote
-                      : null,
+              remoteVideoUrl: remote != null && remote != live?.remoteVideoUrl
+                  ? remote
+                  : null,
               persist: j.jobId.isNotEmpty || early.isNotEmpty,
             ),
           );
@@ -770,7 +765,8 @@ class VideoJobFacade {
       onInfo?.call(null);
       return;
     }
-    final bindSessionId = pending
+    final bindSessionId =
+        pending
             .where((e) => e.sessionId == _sessions.activeId)
             .map((e) => e.sessionId)
             .firstOrNull ??

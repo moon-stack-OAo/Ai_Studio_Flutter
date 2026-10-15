@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 import '../../../widgets/collapsible_prompt.dart';
 import '../../../widgets/empty_illustrations.dart';
 import '../../../widgets/fluent_empty_states.dart';
+import '../../../widgets/skill_summary.dart';
 
 /// F-ImageTimeline：time-split + prompt bubble + 自适应结果网格。
 class ImageTimeline extends StatefulWidget {
@@ -30,10 +31,12 @@ class ImageTimeline extends StatefulWidget {
   final void Function(ImageItem item, int index, ImageRef ref) onPreview;
   final void Function(ImageItem item, int index, ImageRef ref) onSave;
   final void Function(ImageItem item, int index, ImageRef ref)?
-      onUseAsReference;
+  onUseAsReference;
+
   /// 预览本回合参考图（`IMG-TURN-REF`）；与结果图分轨。
   final void Function(ImageItem item, int index, ImageRef ref)?
-      onPreviewReference;
+  onPreviewReference;
+
   /// `IMG-RERUN`：重新填写（回填 Composer）。
   final void Function(ImageItem item)? onRerun;
   final bool rerunEnabled;
@@ -193,9 +196,9 @@ class _TurnCard extends StatelessWidget {
   final void Function(ImageItem item, int index, ImageRef ref) onPreview;
   final void Function(ImageItem item, int index, ImageRef ref) onSave;
   final void Function(ImageItem item, int index, ImageRef ref)?
-      onUseAsReference;
+  onUseAsReference;
   final void Function(ImageItem item, int index, ImageRef ref)?
-      onPreviewReference;
+  onPreviewReference;
   final void Function(ImageItem item)? onRerun;
   final bool rerunEnabled;
 
@@ -238,9 +241,16 @@ class _TurnCard extends StatelessWidget {
             loadBytes: loadBytes,
             onPreviewReference: onPreviewReference == null
                 ? null
-                : (index, ref) =>
-                    onPreviewReference!(item, index, ref),
+                : (index, ref) => onPreviewReference!(item, index, ref),
           ),
+          if (item.appliedSkills.isNotEmpty || item.finalPrompt != item.prompt)
+            Align(
+              alignment: Alignment.centerLeft,
+              child: SkillHistoryButton(
+                skills: item.appliedSkills,
+                finalPrompt: item.finalPrompt,
+              ),
+            ),
           const SizedBox(height: 12),
           if (isError)
             Container(
@@ -332,14 +342,14 @@ class _AdaptiveGrid extends StatelessWidget {
       builder: (context, constraints) {
         final width = constraints.maxWidth;
         final cols = (width / (_minCell + _gap)).floor().clamp(1, 4);
-        final cell =
-            ((width - _gap * (cols - 1)) / cols).clamp(_minCell, 400.0);
+        final cell = ((width - _gap * (cols - 1)) / cols).clamp(
+          _minCell,
+          400.0,
+        );
         return Wrap(
           spacing: _gap,
           runSpacing: _gap,
-          children: [
-            for (var i = 0; i < count; i++) builder(i, cell),
-          ],
+          children: [for (var i = 0; i < count; i++) builder(i, cell)],
         );
       },
     );
@@ -833,10 +843,7 @@ class _UserPromptBubbleState extends State<_UserPromptBubble> {
                     ignoring: !_hovered,
                     child: Padding(
                       padding: const EdgeInsets.only(top: 6),
-                      child: _PromptCopyChip(
-                        onPressed: _copy,
-                        tokens: tokens,
-                      ),
+                      child: _PromptCopyChip(onPressed: _copy, tokens: tokens),
                     ),
                   ),
                 ),
@@ -897,10 +904,7 @@ class _TurnRefThumbs extends StatelessWidget {
                           border: Border.all(color: tokens.border),
                           borderRadius: BorderRadius.circular(8),
                         ),
-                        child: _TurnRefThumb(
-                          ref: ref,
-                          loadBytes: loadBytes,
-                        ),
+                        child: _TurnRefThumb(ref: ref, loadBytes: loadBytes),
                       ),
                     ),
                   ),
@@ -995,9 +999,8 @@ class _TurnRefThumbState extends State<_TurnRefThumb> {
       return Image.network(
         widget.ref.src,
         fit: BoxFit.cover,
-        errorBuilder: (_, _, _) => const Center(
-          child: Icon(FluentIcons.photo, size: 18),
-        ),
+        errorBuilder: (_, _, _) =>
+            const Center(child: Icon(FluentIcons.photo, size: 18)),
       );
     }
     return const Center(child: Icon(FluentIcons.photo, size: 18));
@@ -1005,10 +1008,7 @@ class _TurnRefThumbState extends State<_TurnRefThumb> {
 }
 
 class _PromptCopyChip extends StatelessWidget {
-  const _PromptCopyChip({
-    required this.onPressed,
-    required this.tokens,
-  });
+  const _PromptCopyChip({required this.onPressed, required this.tokens});
 
   final VoidCallback onPressed;
   final FluentTokens tokens;

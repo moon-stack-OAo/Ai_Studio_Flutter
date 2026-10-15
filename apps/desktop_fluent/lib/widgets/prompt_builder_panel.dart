@@ -2,6 +2,7 @@ import 'package:core/core.dart';
 import 'package:design_fluent/design_fluent.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:http/http.dart' as http;
+import 'skill_enhance_tracker.dart';
 
 /// 工具行按钮统一高度（对齐 AI 润色，罩住 fontSize12 + padding + emoji）。
 const double kPromptToolRowBtnHeight = 32;
@@ -23,6 +24,7 @@ class PromptBuilderPanel extends StatefulWidget {
     this.providerRepository,
     this.chatDefaultsRepository,
     this.chatClient,
+    this.skillRepository,
   });
 
   final PromptDomain domain;
@@ -33,6 +35,7 @@ class PromptBuilderPanel extends StatefulWidget {
   final ProviderRepository? providerRepository;
   final ChatDefaultsRepository? chatDefaultsRepository;
   final OpenAiCompatibleChatClient? chatClient;
+  final SkillRepository? skillRepository;
 
   @override
   State<PromptBuilderPanel> createState() => _PromptBuilderPanelState();
@@ -44,19 +47,23 @@ class _PromptBuilderPanelState extends State<PromptBuilderPanel> {
   String? _enhanceError;
   String? _enhancedPreview;
   http.Client? _enhanceHttp;
+
   /// 上区预览局部切换：0=草稿，1=润色。
   int _previewTab = 0;
   String _enhanceSkillId = defaultPromptEnhanceSkill.id;
+  late final SkillEnhanceTracker _skillTracker;
 
   @override
   void initState() {
     super.initState();
     _state = PromptBuilderState(widget.domain);
+    _skillTracker = SkillEnhanceTracker(widget.skillRepository, widget.domain);
   }
 
   @override
   void didUpdateWidget(covariant PromptBuilderPanel oldWidget) {
     super.didUpdateWidget(oldWidget);
+    _skillTracker.update(widget.skillRepository, widget.domain);
     if (oldWidget.domain != widget.domain) {
       _state = PromptBuilderState(widget.domain);
       _enhanceError = null;
@@ -68,6 +75,7 @@ class _PromptBuilderPanelState extends State<PromptBuilderPanel> {
   @override
   void dispose() {
     _enhanceHttp?.close();
+    _skillTracker.dispose();
     super.dispose();
   }
 
@@ -78,6 +86,7 @@ class _PromptBuilderPanelState extends State<PromptBuilderPanel> {
   bool get _showingPolish => _previewTab == 1;
 
   void _clearEnhanceAndShowDraft() {
+    _skillTracker.clear();
     _enhanceError = null;
     _enhancedPreview = null;
     _previewTab = 0;
@@ -119,6 +128,7 @@ class _PromptBuilderPanelState extends State<PromptBuilderPanel> {
   Future<void> _cancelEnhance() async {
     _enhanceHttp?.close();
     _enhanceHttp = null;
+    _skillTracker.clear();
     setState(() {
       _enhancing = false;
       _enhancedPreview = null;
@@ -162,6 +172,8 @@ class _PromptBuilderPanelState extends State<PromptBuilderPanel> {
     final ownedHttp = createSafeHttpClient();
     _enhanceHttp = ownedHttp;
 
+    final customSkills = _skillTracker.capture();
+
     setState(() {
       _enhancing = true;
       _enhanceError = null;
@@ -171,6 +183,7 @@ class _PromptBuilderPanelState extends State<PromptBuilderPanel> {
 
     try {
       final result = await enhancePrompt(
+        customSkills: customSkills,
         text: sourceText,
         domain: widget.domain,
         mode: widget.mode,
@@ -180,11 +193,11 @@ class _PromptBuilderPanelState extends State<PromptBuilderPanel> {
         timeout: defaults.apiTimeout,
         client: ownedHttp,
         onDelta: (delta, full) {
-          if (!mounted || !_enhancing) return;
+          if (!mounted || !_enhancing || _enhanceHttp != ownedHttp) return;
           setState(() => _enhancedPreview = full);
         },
       );
-      if (!mounted) return;
+      if (!mounted || _enhanceHttp != ownedHttp) return;
       setState(() {
         _enhancedPreview = result;
         _enhancing = false;
@@ -192,14 +205,14 @@ class _PromptBuilderPanelState extends State<PromptBuilderPanel> {
         _previewTab = 1;
       });
     } on ChatAbortException {
-      if (!mounted) return;
+      if (!mounted || _enhanceHttp != ownedHttp) return;
       setState(() {
         _enhancing = false;
         _enhancedPreview = null;
         _enhanceError = '已取消';
       });
     } catch (e) {
-      if (!mounted) return;
+      if (!mounted || _enhanceHttp != ownedHttp) return;
       if (isAbortLike(e)) {
         setState(() {
           _enhancing = false;
@@ -251,6 +264,8 @@ class _PromptBuilderPanelState extends State<PromptBuilderPanel> {
     final ownedHttp = createSafeHttpClient();
     _enhanceHttp = ownedHttp;
 
+    final customSkills = _skillTracker.capture();
+
     setState(() {
       _enhancing = true;
       _enhanceError = null;
@@ -260,6 +275,7 @@ class _PromptBuilderPanelState extends State<PromptBuilderPanel> {
 
     try {
       final result = await refineEnhancedPrompt(
+        customSkills: customSkills,
         previous: previous,
         instruction: instruction,
         domain: widget.domain,
@@ -270,11 +286,11 @@ class _PromptBuilderPanelState extends State<PromptBuilderPanel> {
         timeout: defaults.apiTimeout,
         client: ownedHttp,
         onDelta: (delta, full) {
-          if (!mounted || !_enhancing) return;
+          if (!mounted || !_enhancing || _enhanceHttp != ownedHttp) return;
           setState(() => _enhancedPreview = full);
         },
       );
-      if (!mounted) return;
+      if (!mounted || _enhanceHttp != ownedHttp) return;
       setState(() {
         _enhancedPreview = result;
         _enhancing = false;
@@ -282,14 +298,14 @@ class _PromptBuilderPanelState extends State<PromptBuilderPanel> {
         _previewTab = 1;
       });
     } on ChatAbortException {
-      if (!mounted) return;
+      if (!mounted || _enhanceHttp != ownedHttp) return;
       setState(() {
         _enhancing = false;
         _enhancedPreview = null;
         _enhanceError = '已取消';
       });
     } catch (e) {
-      if (!mounted) return;
+      if (!mounted || _enhanceHttp != ownedHttp) return;
       if (isAbortLike(e)) {
         setState(() {
           _enhancing = false;
@@ -376,8 +392,8 @@ class _PromptBuilderPanelState extends State<PromptBuilderPanel> {
           _EnhanceButton(
             tokens: tokens,
             enhancing: _enhancing,
-            enabled: !widget.disabled &&
-                (_hasPreview || hasEnhanced || _enhancing),
+            enabled:
+                !widget.disabled && (_hasPreview || hasEnhanced || _enhancing),
             emptyHint: !_hasPreview && !hasEnhanced && !_enhancing,
             onPressed: _runEnhance,
           ),
@@ -385,8 +401,9 @@ class _PromptBuilderPanelState extends State<PromptBuilderPanel> {
           const SizedBox(width: 8),
           promptToolRowHeight(
             FilledButton(
-              onPressed:
-                  widget.disabled || polishEmpty ? null : _onApplyEnhanced,
+              onPressed: widget.disabled || polishEmpty
+                  ? null
+                  : _onApplyEnhanced,
               child: Text(
                 '应用润色',
                 style: TextStyle(fontSize: 12, fontFamily: tokens.fontFamily),
@@ -402,8 +419,8 @@ class _PromptBuilderPanelState extends State<PromptBuilderPanel> {
     final polishEmpty = _enhancedPreview == null;
     final previewBody = _showingPolish
         ? (polishEmpty
-            ? (_enhancing ? '正在润色…' : '暂无润色结果，可先在「草稿」点 AI 润色')
-            : _enhancedPreview!)
+              ? (_enhancing ? '正在润色…' : '暂无润色结果，可先在「草稿」点 AI 润色')
+              : _enhancedPreview!)
         : (_hasPreview ? _state.preview : '选择下方标签生成草稿');
     final previewEmpty = _showingPolish ? polishEmpty : !_hasPreview;
 
@@ -466,6 +483,7 @@ class _PromptBuilderPanelState extends State<PromptBuilderPanel> {
                 : InfoBarSeverity.error,
           ),
         ],
+        SkillEnhanceNotice(tracker: _skillTracker),
       ],
     );
   }
@@ -651,11 +669,7 @@ class _DraftPolishToggleItem extends StatelessWidget {
 }
 
 /// 快捷迭代指令（B2）；勿称 skill。
-const List<String> kPromptRefineInstructions = [
-  '再短一点',
-  '更电影感',
-  '少加点戏',
-];
+const List<String> kPromptRefineInstructions = ['再短一点', '更电影感', '少加点戏'];
 
 /// 有润色结果且非润色中时显示的快捷迭代 Chip。
 class PromptRefineChips extends StatelessWidget {
@@ -876,18 +890,12 @@ class _EnhanceButton extends StatelessWidget {
         ),
         child: Text(
           enhancing ? '取消' : '✨ AI 润色',
-          style: TextStyle(
-            fontSize: 12,
-            fontFamily: tokens.fontFamily,
-          ),
+          style: TextStyle(fontSize: 12, fontFamily: tokens.fontFamily),
         ),
       ),
     );
     if (!emptyHint) return button;
-    return Tooltip(
-      message: '请先选择标签生成草稿',
-      child: button,
-    );
+    return Tooltip(message: '请先选择标签生成草稿', child: button);
   }
 }
 

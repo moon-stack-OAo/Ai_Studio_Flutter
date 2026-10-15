@@ -7,6 +7,7 @@ import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter/services.dart';
 
 import '../../image/widgets/image_lightbox.dart';
+import '../../../widgets/skill_summary.dart';
 import 'markdown_host.dart';
 import 'tool_call_trace_card.dart';
 
@@ -150,16 +151,15 @@ class _MessageBubbleState extends State<MessageBubble> {
     final roleColor = isUser
         ? tokens.primaryPressed
         : (isTool ? tokens.inkMuted : tokens.inkMuted);
-    final showActions =
-        (_hovered || _focused) && !message.streaming && !isTool;
+    final showActions = (_hovered || _focused) && !message.streaming && !isTool;
     final canRecall = widget.recallEnabled && widget.onRecall != null;
     final attachments = isUser ? message.attachments : const <ImageRef>[];
     final hasAttachments = attachments.isNotEmpty;
     final bodyText = message.content.isEmpty && message.streaming
         ? ''
         : (message.content.isEmpty && message.error
-            ? (message.errorMessage ?? '出错了')
-            : message.content);
+              ? (message.errorMessage ?? '出错了')
+              : message.content);
     final showUserText = isUser && bodyText.isNotEmpty;
     final roleLabel = isUser ? '你' : (isTool ? '工具' : '助手');
 
@@ -178,8 +178,9 @@ class _MessageBubbleState extends State<MessageBubble> {
               padding: const EdgeInsets.symmetric(vertical: 9),
               // 短消息随内容宽度；外层 Align 左右分侧 + 固定 maxWidth 约束长内容
               child: Column(
-                crossAxisAlignment:
-                    isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+                crossAxisAlignment: isUser
+                    ? CrossAxisAlignment.end
+                    : CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Padding(
@@ -268,13 +269,15 @@ class _MessageBubbleState extends State<MessageBubble> {
                             ],
                           )
                         : isTool
-                            ? ToolResultBubbleBody(message: message)
-                            : _AssistantBody(
-                                message: message,
-                                tokens: tokens,
-                                hideToolCallsStrip: widget.hideToolCallsStrip,
-                              ),
+                        ? ToolResultBubbleBody(message: message)
+                        : _AssistantBody(
+                            message: message,
+                            tokens: tokens,
+                            hideToolCallsStrip: widget.hideToolCallsStrip,
+                          ),
                   ),
+                  if (message.appliedSkills.isNotEmpty)
+                    SkillHistoryButton(skills: message.appliedSkills),
                   if (message.stopped)
                     Padding(
                       padding: EdgeInsets.only(
@@ -518,14 +521,13 @@ class _AssistantBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final emptyStreaming = message.content.isEmpty &&
-        message.streaming &&
-        !message.hasToolCalls;
+    final emptyStreaming =
+        message.content.isEmpty && message.streaming && !message.hasToolCalls;
     final data = emptyStreaming
         ? ''
         : (message.content.isEmpty && message.error
-            ? (message.errorMessage ?? '出错了')
-            : message.content);
+              ? (message.errorMessage ?? '出错了')
+              : message.content);
 
     if (emptyStreaming) {
       return const _StreamCursor();

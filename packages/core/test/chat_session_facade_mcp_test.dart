@@ -21,8 +21,7 @@ class _FakeMcpSession implements McpSession {
   Future<List<McpToolDescriptor>> listTools({
     Duration? timeout,
     bool forceRefresh = false,
-  }) async =>
-      server.toolsCache;
+  }) async => server.toolsCache;
 
   @override
   Future<McpToolCallResult> callTool(
@@ -113,11 +112,33 @@ void main() {
   });
 
   test('有 tool_calls 时串行 call 并回灌再生成', () async {
+    final skills = SkillRepository(
+      storage: MemorySkillStorage([
+        const CustomSkill(
+          id: 'chat-skill',
+          name: '对话约束',
+          rules: '旧规则',
+          targets: {SkillTarget.chat},
+        ),
+      ]),
+    );
+    await skills.load();
+    await chatDefaults.update(systemPrompt: '全局规则');
+    await sessions.setSessionOverrides(
+      sessions.activeId,
+      const ChatOverrides(systemPrompt: '会话规则'),
+    );
     var round = 0;
     final client = MockClient.streaming((request, bodyStream) async {
       final body = jsonDecode(await bodyStream.bytesToString()) as Map;
       round++;
+      final system = (body['messages'] as List).first['content'] as String;
+      expect(system, startsWith('会话规则'));
+      expect(system, contains('旧规则'));
+      expect(system, isNot(contains('全局规则')));
+      expect(system, isNot(contains('新规则')));
       if (round == 1) {
+        await skills.saveSkill(skills.skills.single.copyWith(rules: '新规则'));
         expect(body['tools'], isA<List>());
         return http.StreamedResponse(
           Stream.value(
@@ -170,6 +191,7 @@ void main() {
       createHttpClient: () => createSafeHttpClient(inner: client),
       mcpServers: mcpRepo,
       mcpSessionFactory: _FakeFactory(fakeSessions),
+      skillRepository: skills,
       toolAuthPrompter: allowAllToolAuthPrompter,
     );
 
@@ -178,6 +200,7 @@ void main() {
     // user + assistant(tool_calls) + tool + assistant(final)
     expect(msgs.length, greaterThanOrEqualTo(4));
     expect(msgs[0].role, ChatRole.user);
+    expect(msgs[0].appliedSkills.single.rules, '旧规则');
     expect(msgs[1].role, ChatRole.assistant);
     expect(msgs[1].hasToolCalls, isTrue);
     expect(msgs[2].role, ChatRole.tool);

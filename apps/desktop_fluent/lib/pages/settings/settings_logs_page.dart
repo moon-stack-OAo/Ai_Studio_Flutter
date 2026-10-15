@@ -4,6 +4,7 @@ import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter/services.dart';
 
 import '../../widgets/back_to_top_host.dart';
+import 'widgets/settings_typography.dart';
 
 class SettingsLogsPage extends StatefulWidget {
   const SettingsLogsPage({super.key, required this.repository});
@@ -28,11 +29,8 @@ class _SettingsLogsPageState extends State<SettingsLogsPage> {
     super.dispose();
   }
 
-  List<AppLogEntry> get _visible => _repo.query(
-        exactLevel: _exactLevel,
-        source: _source,
-        search: _search,
-      );
+  List<AppLogEntry> get _visible =>
+      _repo.query(exactLevel: _exactLevel, source: _source, search: _search);
 
   void _showInfoBar(String message, InfoBarSeverity severity) {
     displayInfoBar(
@@ -99,7 +97,7 @@ class _SettingsLogsPageState extends State<SettingsLogsPage> {
       builder: (context, _) {
         final visible = _visible;
         final total = _repo.totalCount;
-        return ColoredBox(
+        return SettingsTypography(
           color: tokens.canvas,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -109,23 +107,11 @@ class _SettingsLogsPageState extends State<SettingsLogsPage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      '运行日志',
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w600,
-                        color: tokens.ink,
-                        fontFamily: tokens.fontFamily,
-                      ),
-                    ),
+                    Text('运行日志', style: context.settingsText.pageTitle),
                     const SizedBox(height: 6),
                     Text(
                       '采集本机关键事件；对话 / 生图 / 生视频错误，以及生视频每轮轮询结果会写入。日志不得含密钥明文。',
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: tokens.inkMuted,
-                        fontFamily: tokens.fontFamily,
-                      ),
+                      style: context.settingsText.caption,
                     ),
                     const SizedBox(height: 16),
                     _Toolbar(
@@ -142,11 +128,7 @@ class _SettingsLogsPageState extends State<SettingsLogsPage> {
                     const SizedBox(height: 10),
                     Text(
                       '共 $total 条 · 可见 ${visible.length} · 最新在上',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: tokens.inkMuted,
-                        fontFamily: tokens.fontFamily,
-                      ),
+                      style: context.settingsText.caption,
                     ),
                     const SizedBox(height: 10),
                   ],
@@ -165,10 +147,8 @@ class _SettingsLogsPageState extends State<SettingsLogsPage> {
                         ? Center(
                             child: Text(
                               '暂无日志',
-                              style: TextStyle(
-                                fontSize: 14,
+                              style: context.settingsText.body.copyWith(
                                 color: tokens.inkMuted,
-                                fontFamily: tokens.fontFamily,
                               ),
                             ),
                           )
@@ -183,8 +163,7 @@ class _SettingsLogsPageState extends State<SettingsLogsPage> {
                               separatorBuilder: (context, index) => Divider(
                                 style: DividerThemeData(
                                   decoration: BoxDecoration(
-                                    color:
-                                        tokens.border.withValues(alpha: 0.6),
+                                    color: tokens.border.withValues(alpha: 0.6),
                                   ),
                                 ),
                               ),
@@ -192,21 +171,20 @@ class _SettingsLogsPageState extends State<SettingsLogsPage> {
                                 final e = visible[index];
                                 final lvColor = _levelColor(tokens, e.level);
                                 return Padding(
-                                  padding:
-                                      const EdgeInsets.symmetric(vertical: 6),
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 6,
+                                  ),
                                   child: SelectableText.rich(
                                     TextSpan(
-                                      style: TextStyle(
-                                        fontSize: 12.5,
+                                      style: context.settingsText.code.copyWith(
                                         height: 1.45,
-                                        color: tokens.ink,
-                                      ).withMonoFont(tokens),
+                                      ),
                                       children: [
                                         TextSpan(
                                           text:
                                               AppLogRepository.formatTimestamp(
-                                            e.at,
-                                          ),
+                                                e.at,
+                                              ),
                                           style: TextStyle(
                                             color: tokens.inkMuted,
                                           ).withMonoFont(tokens),
@@ -221,12 +199,11 @@ class _SettingsLogsPageState extends State<SettingsLogsPage> {
                                           text: e.level.label,
                                           style: TextStyle(
                                             color: lvColor,
-                                            fontWeight: FontWeight.w700,
+                                            fontWeight: FontWeight.w600,
                                           ).withMonoFont(tokens),
                                         ),
                                         TextSpan(
-                                          text:
-                                              ' · ${e.source} · ${e.message}',
+                                          text: ' · ${e.source} · ${e.message}',
                                           style: TextStyle(
                                             color: tokens.ink,
                                           ).withMonoFont(tokens),
@@ -294,10 +271,7 @@ class _Toolbar extends StatelessWidget {
                 child: Text('全部级别'),
               ),
               for (final lv in AppLogLevel.values)
-                ComboBoxItem<Object>(
-                  value: lv,
-                  child: Text(lv.label),
-                ),
+                ComboBoxItem<Object>(value: lv, child: Text(lv.label)),
             ],
             onChanged: (v) {
               if (v == null || identical(v, _allLevels)) {
@@ -345,19 +319,13 @@ class _Toolbar extends StatelessWidget {
             ),
           ),
         ),
-        Button(
-          onPressed: onCopy,
-          child: const Text('复制可见'),
-        ),
+        Button(onPressed: onCopy, child: const Text('复制可见')),
         Tooltip(
           message: '清空全部日志',
           child: Semantics(
             button: true,
             label: '清空全部日志',
-            child: Button(
-              onPressed: onClear,
-              child: const Text('清空…'),
-            ),
+            child: Button(onPressed: onClear, child: const Text('清空…')),
           ),
         ),
       ],

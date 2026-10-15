@@ -14,12 +14,14 @@ import '../../update/update_prompt_dialog.dart';
 import '../../widgets/back_to_top_host.dart';
 import '../chat/widgets/markdown_host.dart';
 import 'widgets/changelog_section.dart';
+import 'widgets/settings_typography.dart';
 
 class SettingsAboutPage extends StatefulWidget {
   const SettingsAboutPage({
     super.key,
     required this.appearanceRepository,
     required this.dataBackupService,
+    this.skillRepository,
     this.themeController,
     this.generation,
     this.updateController,
@@ -29,6 +31,7 @@ class SettingsAboutPage extends StatefulWidget {
 
   final AppearanceRepository appearanceRepository;
   final DataBackupService dataBackupService;
+  final SkillRepository? skillRepository;
   final ThemeController? themeController;
   final GenerationRuntime? generation;
   final UpdateController? updateController;
@@ -48,6 +51,7 @@ class _SettingsAboutPageState extends State<SettingsAboutPage> {
   bool _infoLoading = true;
   StorageUsageEstimate? _usage;
   bool _usageLoading = true;
+  int _usageRequest = 0;
   bool _busy = false;
   String _bundledChangelog = kBundledChangelogMarkdown;
   bool _changelogLoading = true;
@@ -84,6 +88,7 @@ class _SettingsAboutPageState extends State<SettingsAboutPage> {
     super.initState();
     _repo.addListener(_onRepoChanged);
     _updater?.addListener(_onUpdaterChanged);
+    widget.skillRepository?.addListener(_onSkillsChanged);
     _loadPackageInfo();
     _loadUsage();
     _loadChangelog();
@@ -97,12 +102,21 @@ class _SettingsAboutPageState extends State<SettingsAboutPage> {
       oldWidget.updateController?.removeListener(_onUpdaterChanged);
       widget.updateController?.addListener(_onUpdaterChanged);
     }
+    if (oldWidget.skillRepository != widget.skillRepository) {
+      oldWidget.skillRepository?.removeListener(_onSkillsChanged);
+      widget.skillRepository?.addListener(_onSkillsChanged);
+    }
+    if (oldWidget.skillRepository != widget.skillRepository ||
+        oldWidget.dataBackupService != widget.dataBackupService) {
+      unawaited(_loadUsage());
+    }
   }
 
   @override
   void dispose() {
     _repo.removeListener(_onRepoChanged);
     _updater?.removeListener(_onUpdaterChanged);
+    widget.skillRepository?.removeListener(_onSkillsChanged);
     super.dispose();
   }
 
@@ -112,6 +126,10 @@ class _SettingsAboutPageState extends State<SettingsAboutPage> {
 
   void _onUpdaterChanged() {
     if (mounted) setState(() {});
+  }
+
+  void _onSkillsChanged() {
+    if (mounted) unawaited(_loadUsage());
   }
 
   Future<void> _loadPackageInfo() async {
@@ -139,16 +157,17 @@ class _SettingsAboutPageState extends State<SettingsAboutPage> {
   }
 
   Future<void> _loadUsage() async {
+    final request = ++_usageRequest;
     setState(() => _usageLoading = true);
     try {
       final usage = await _backup.estimateStorageUsage();
-      if (!mounted) return;
+      if (!mounted || request != _usageRequest) return;
       setState(() {
         _usage = usage;
         _usageLoading = false;
       });
     } catch (_) {
-      if (!mounted) return;
+      if (!mounted || request != _usageRequest) return;
       setState(() {
         _usage = null;
         _usageLoading = false;
@@ -364,21 +383,15 @@ class _SettingsAboutPageState extends State<SettingsAboutPage> {
               children: [
                 Text(
                   ThirdPartyLicenses.playbackSectionTitle,
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
+                  style: dialogCtx.settingsText.sectionTitle.copyWith(
                     color: tokens.ink,
-                    fontFamily: tokens.fontFamily,
                   ),
                 ),
                 const SizedBox(height: 6),
                 Text(
                   ThirdPartyLicenses.playbackLead,
-                  style: TextStyle(
-                    fontSize: 12,
+                  style: dialogCtx.settingsText.caption.copyWith(
                     color: tokens.inkSecondary,
-                    fontFamily: tokens.fontFamily,
-                    height: 1.45,
                   ),
                 ),
                 const SizedBox(height: 12),
@@ -423,6 +436,7 @@ class _SettingsAboutPageState extends State<SettingsAboutPage> {
   Future<void> _onExport() async {
     if (_busy) return;
     var includeSecrets = false;
+    var includeSkills = true;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogCtx) {
@@ -440,6 +454,12 @@ class _SettingsAboutPageState extends State<SettingsAboutPage> {
                   ),
                   const SizedBox(height: 14),
                   Checkbox(
+                    checked: includeSkills,
+                    onChanged: (v) => setLocal(() => includeSkills = v == true),
+                    content: const Text('包含自定义技能'),
+                  ),
+                  const SizedBox(height: 14),
+                  Checkbox(
                     checked: includeSecrets,
                     onChanged: (v) {
                       setLocal(() => includeSecrets = v == true);
@@ -451,8 +471,7 @@ class _SettingsAboutPageState extends State<SettingsAboutPage> {
                     Text(
                       '警告：备份将含提供商 API Key 与 MCP Bearer 明文，等同密钥副本。'
                       '请勿分享、云同步或截图；用完建议立即删除。',
-                      style: TextStyle(
-                        fontSize: 12,
+                      style: ctx.settingsText.caption.copyWith(
                         color: fluentTokensOf(ctx).danger,
                       ),
                     ),
@@ -488,7 +507,10 @@ class _SettingsAboutPageState extends State<SettingsAboutPage> {
     setState(() => _busy = true);
     try {
       final json = await _backup.exportBackupJson(
-        DataBackupExportOptions(includeSecrets: includeSecrets),
+        DataBackupExportOptions(
+          includeSecrets: includeSecrets,
+          includeSkills: includeSkills,
+        ),
       );
       await File(location.path).writeAsString(json, flush: true);
       if (!mounted) return;
@@ -554,6 +576,7 @@ class _SettingsAboutPageState extends State<SettingsAboutPage> {
                 children: [
                   Text(
                     '将合并提供商、业务 MCP 与外观设置，并用备份中的会话替换本地会话。'
+                    '${payload.skills == null ? '' : '\n将合并 ${payload.skills!.length} 个自定义技能；同 ID 更新，新 ID 追加。'}'
                     '\n导入的本地 stdio 配置将禁用，须在 MCP 设置确认命令后启用。'
                     '${widget.generation?.busy == true ? '\n\n检测到进行中的生成，导入前将尝试停止。' : ''}',
                   ),
@@ -570,8 +593,7 @@ class _SettingsAboutPageState extends State<SettingsAboutPage> {
                       const SizedBox(height: 8),
                       Text(
                         '将用备份中的密钥覆盖本机对应提供商 API Key 与 MCP Token。请确认备份来源可信。',
-                        style: TextStyle(
-                          fontSize: 12,
+                        style: ctx.settingsText.caption.copyWith(
                           color: fluentTokensOf(ctx).danger,
                         ),
                       ),
@@ -580,12 +602,7 @@ class _SettingsAboutPageState extends State<SettingsAboutPage> {
                     const SizedBox(height: 10),
                     Text(
                       '此备份不含密钥，导入后本地 API Key / MCP Token 保持不变。',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: FluentTheme.of(
-                          ctx,
-                        ).resources.textFillColorSecondary,
-                      ),
+                      style: ctx.settingsText.caption,
                     ),
                   ],
                 ],
@@ -623,6 +640,8 @@ class _SettingsAboutPageState extends State<SettingsAboutPage> {
         if (result.appearanceImported) '外观',
         if (result.chatDefaultsImported) '对话默认',
         if (result.sessionsImported) '会话',
+        if (result.skillsImported)
+          '技能 +${result.skillsAdded}/更新 ${result.skillsMerged}',
         if (result.secretsApplied) '密钥已应用',
       ];
       _showInfoBar(
@@ -686,7 +705,9 @@ class _SettingsAboutPageState extends State<SettingsAboutPage> {
                     const SizedBox(height: 12),
                     Text(
                       '将清除会话、媒体缓存、外观与对话默认、提供商与业务 MCP、日志以及全部 API Key / MCP Token。',
-                      style: TextStyle(fontSize: 12, color: tokens.danger),
+                      style: ctx.settingsText.caption.copyWith(
+                        color: tokens.danger,
+                      ),
                     ),
                   ],
                 ],
@@ -749,7 +770,7 @@ class _SettingsAboutPageState extends State<SettingsAboutPage> {
     return '约 ${_formatBytes(u.totalApproxBytes)} · '
         '会话 $sessions · 消息 ${u.chatMessageCount} · '
         '媒体 ${_formatBytes(u.mediaCacheBytes)} · '
-        '提供商 ${u.providerCount}';
+        '提供商 ${u.providerCount} · 技能 ${u.skillCount}';
   }
 
   Widget? _updateStatusPill(FluentTokens tokens, UpdateController? updater) {
@@ -771,12 +792,7 @@ class _SettingsAboutPageState extends State<SettingsAboutPage> {
       ),
       child: Text(
         hasUpdate ? '有更新' : '最新',
-        style: TextStyle(
-          fontSize: 11,
-          fontWeight: FontWeight.w600,
-          color: fg,
-          fontFamily: tokens.fontFamily,
-        ),
+        style: context.settingsText.badge.copyWith(color: fg),
       ),
     );
   }
@@ -796,31 +812,16 @@ class _SettingsAboutPageState extends State<SettingsAboutPage> {
     final statusPill = _updateStatusPill(tokens, updater);
     final changelogEntries = _changelogEntries;
 
-    return ColoredBox(
+    return SettingsTypography(
       color: tokens.canvas,
       child: BackToTopHost(
         builder: (context, scroll) => ListView(
           controller: scroll,
           padding: const EdgeInsets.fromLTRB(28, 16, 28, 16),
           children: [
-            Text(
-              '关于与更新',
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.w600,
-                color: tokens.ink,
-                fontFamily: tokens.fontFamily,
-              ),
-            ),
+            Text('关于与更新', style: context.settingsText.pageTitle),
             const SizedBox(height: 4),
-            Text(
-              '版本信息、直链更新与桌面关闭行为。',
-              style: TextStyle(
-                fontSize: 13,
-                color: tokens.inkMuted,
-                fontFamily: tokens.fontFamily,
-              ),
-            ),
+            Text('版本信息、直链更新与桌面关闭行为。', style: context.settingsText.caption),
             const SizedBox(height: 12),
             _SectionCard(
               title: '更新',
@@ -833,10 +834,8 @@ class _SettingsAboutPageState extends State<SettingsAboutPage> {
                     onTap: _onVersionPortalTap,
                     child: Text(
                       '版本 $_versionLabel · ${updateInstallPlatformLabel()}',
-                      style: TextStyle(
-                        fontSize: 13,
+                      style: context.settingsText.body.copyWith(
                         color: tokens.inkSecondary,
-                        fontFamily: tokens.fontFamily,
                       ),
                     ),
                   ),
@@ -845,11 +844,7 @@ class _SettingsAboutPageState extends State<SettingsAboutPage> {
                     !configured
                         ? '更新通道：未配置更新源 · 不上架'
                         : '更新通道：AppDock（完整性校验）· 不上架',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: tokens.inkMuted,
-                      fontFamily: tokens.fontFamily,
-                    ),
+                    style: context.settingsText.caption,
                   ),
                   const SizedBox(height: 12),
                   Row(
@@ -861,11 +856,7 @@ class _SettingsAboutPageState extends State<SettingsAboutPage> {
                             : (v) => unawaited(_onToggleAutoCheck(v)),
                         content: Text(
                           '启动时自动检查更新',
-                          style: TextStyle(
-                            fontSize: 13,
-                            color: tokens.ink,
-                            fontFamily: tokens.fontFamily,
-                          ),
+                          style: context.settingsText.body,
                         ),
                       ),
                       const Spacer(),
@@ -961,11 +952,7 @@ class _SettingsAboutPageState extends State<SettingsAboutPage> {
                   const SizedBox(height: 8),
                   Text(
                     '已生效：点击标题栏关闭或系统关闭时按此偏好执行；可随时改回「每次询问」。',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: tokens.inkMuted,
-                      fontFamily: tokens.fontFamily,
-                    ),
+                    style: context.settingsText.caption,
                   ),
                 ],
               ),
@@ -978,10 +965,8 @@ class _SettingsAboutPageState extends State<SettingsAboutPage> {
                 children: [
                   Text(
                     _usageSummary(),
-                    style: TextStyle(
-                      fontSize: 12,
+                    style: context.settingsText.caption.copyWith(
                       color: tokens.inkSecondary,
-                      fontFamily: tokens.fontFamily,
                     ),
                   ),
                   const SizedBox(height: 8),
@@ -1013,11 +998,7 @@ class _SettingsAboutPageState extends State<SettingsAboutPage> {
                   const SizedBox(height: 8),
                   Text(
                     '默认导出不含 API Key / MCP Token。含密钥导出、导入密钥与全部清除均需确认。',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: tokens.inkMuted,
-                      fontFamily: tokens.fontFamily,
-                    ),
+                    style: context.settingsText.caption,
                   ),
                 ],
               ),
@@ -1083,22 +1064,13 @@ class _UpdateAvailableCard extends StatelessWidget {
         children: [
           Text(
             '发现新版本 v${result.latestVersion}',
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-              color: tokens.ink,
-              fontFamily: tokens.fontFamily,
-            ),
+            style: context.settingsText.sectionTitle,
           ),
           const SizedBox(height: 4),
           Text(
             '当前 v${result.currentVersion}'
             '${result.matchedPlatformKey != null ? ' · ${result.matchedPlatformKey}' : ''}',
-            style: TextStyle(
-              fontSize: 12,
-              color: tokens.inkMuted,
-              fontFamily: tokens.fontFamily,
-            ),
+            style: context.settingsText.caption,
           ),
           Builder(
             builder: (context) {
@@ -1192,13 +1164,10 @@ class _DownloadActionProgress extends StatelessWidget {
                           detail == null ? status : '$status · $detail',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
+                          style: context.settingsText.badge.copyWith(
                             color: pct != null && pct > 45
                                 ? tokens.onPrimary
                                 : tokens.ink,
-                            fontFamily: tokens.fontFamily,
                           ),
                         ),
                       ),
@@ -1252,32 +1221,17 @@ class _LicenseEntryBlock extends StatelessWidget {
         children: [
           Text(
             entry.name,
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-              color: tokens.ink,
-              fontFamily: tokens.fontFamily,
-            ),
+            style: context.settingsText.label.copyWith(color: tokens.ink),
           ),
           const SizedBox(height: 2),
           Text(
             '许可：${entry.license}',
-            style: TextStyle(
-              fontSize: 12,
+            style: context.settingsText.caption.copyWith(
               color: tokens.inkSecondary,
-              fontFamily: tokens.fontFamily,
             ),
           ),
           const SizedBox(height: 4),
-          Text(
-            entry.note,
-            style: TextStyle(
-              fontSize: 12,
-              color: tokens.inkMuted,
-              fontFamily: tokens.fontFamily,
-              height: 1.4,
-            ),
-          ),
+          Text(entry.note, style: context.settingsText.caption),
           if (url != null && url.isNotEmpty) ...[
             const SizedBox(height: 6),
             Row(
@@ -1285,10 +1239,8 @@ class _LicenseEntryBlock extends StatelessWidget {
                 Expanded(
                   child: SelectableText(
                     url,
-                    style: TextStyle(
-                      fontSize: 11,
+                    style: context.settingsText.caption.copyWith(
                       color: tokens.primaryPressed,
-                      fontFamily: tokens.fontFamily,
                     ),
                   ),
                 ),
@@ -1341,15 +1293,7 @@ class _SectionCard extends StatelessWidget {
           Row(
             children: [
               Expanded(
-                child: Text(
-                  title,
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: tokens.inkSecondary,
-                    fontFamily: tokens.fontFamily,
-                  ),
-                ),
+                child: Text(title, style: context.settingsText.sectionTitle),
               ),
               ?trailing,
             ],
@@ -1401,22 +1345,13 @@ class _CloseBehaviorTile extends StatelessWidget {
             children: [
               Text(
                 title,
-                style: TextStyle(
-                  fontSize: 13,
+                style: context.settingsText.body.copyWith(
                   fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
                   color: fg,
-                  fontFamily: tokens.fontFamily,
                 ),
               ),
               const SizedBox(height: 2),
-              Text(
-                subtitle,
-                style: TextStyle(
-                  fontSize: 11,
-                  color: tokens.inkMuted,
-                  fontFamily: tokens.fontFamily,
-                ),
-              ),
+              Text(subtitle, style: context.settingsText.caption),
             ],
           ),
         ),

@@ -11,9 +11,11 @@ import '../../platform/gallery_saver.dart';
 import '../../platform/share_helper.dart';
 import '../../shell/back_host.dart';
 import '../../widgets/empty_illustrations.dart';
+import '../../widgets/history_scroll_controller.dart';
 import '../../widgets/material_empty_states.dart';
 import '../../widgets/media_model_picker_sheet.dart';
 import '../../widgets/prompt_assist_sheet.dart';
+import '../../widgets/skill_summary.dart';
 import 'image_controller.dart';
 import 'widgets/image_composer.dart';
 import 'widgets/image_lightbox.dart';
@@ -30,9 +32,11 @@ class ImagePage extends StatefulWidget {
     this.chatClient,
     this.imageClient,
     this.onOpenProviders,
+    this.skillRepository,
   });
 
   final ProviderRepository providerRepository;
+  final SkillRepository? skillRepository;
   final ImageSessionRepository sessionRepository;
   final GenerationRuntime generation;
   final ChatDefaultsRepository? chatDefaultsRepository;
@@ -47,16 +51,23 @@ class ImagePage extends StatefulWidget {
 
 class _ImagePageState extends State<ImagePage> {
   late final ImageController _controller;
-  final ScrollController _scroll = ScrollController();
+  late final SkillRepository _skills;
+  final HistoryScrollController _scroll = HistoryScrollController();
   final FocusNode _promptFocus = FocusNode();
   String? _lastBanner;
   int _lastItemCount = 0;
   String _lastTail = '';
+  String? _lastSessionId;
 
   @override
   void initState() {
     super.initState();
+    _skills =
+        widget.skillRepository ??
+        SkillRepository(storage: MemorySkillStorage());
+    if (!_skills.isLoaded) unawaited(_skills.load().catchError((Object _) {}));
     _controller = ImageController(
+      skillRepository: _skills,
       providerRepository: widget.providerRepository,
       sessionRepository: widget.sessionRepository,
       appLogRepository: widget.appLogRepository,
@@ -69,6 +80,7 @@ class _ImagePageState extends State<ImagePage> {
   }
 
   void _focusPrompt() {
+    _scroll.cancelPendingScroll();
     if (!_scroll.hasClients) {
       _promptFocus.requestFocus();
       return;
@@ -86,6 +98,7 @@ class _ImagePageState extends State<ImagePage> {
   void _onSessionChanged() => _maybeScrollToBottom();
 
   void _maybeScrollToBottom() {
+    if (!mounted) return;
     final session = widget.sessionRepository.activeSession;
     final items = session?.items ?? const <ImageItem>[];
     final count = items.length;
@@ -97,17 +110,27 @@ class _ImagePageState extends State<ImagePage> {
             );
             return '${last.id}:${last.status.name}:${last.images.length}';
           }();
-    if (count == _lastItemCount && tail == _lastTail) return;
+    final sessionId = session?.id;
+    if (sessionId == _lastSessionId &&
+        count == _lastItemCount &&
+        tail == _lastTail) {
+      return;
+    }
+    _lastSessionId = sessionId;
     _lastItemCount = count;
     _lastTail = tail;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!_scroll.hasClients) return;
-      _scroll.animateTo(
-        _scroll.position.maxScrollExtent,
-        duration: MaterialMotion.micro,
-        curve: MaterialMotion.standard,
-      );
-    });
+    if (items.isEmpty) {
+      _scroll.cancelPendingScroll();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted &&
+            _scroll.hasClients &&
+            widget.sessionRepository.activeSession?.id == sessionId) {
+          _scroll.jumpTo(0);
+        }
+      });
+    } else {
+      _scroll.scrollToBottom();
+    }
   }
 
   String? _lastInfo;
@@ -115,9 +138,7 @@ class _ImagePageState extends State<ImagePage> {
   void _onControllerChanged() {
     if (!mounted) return;
     final banner = _controller.bannerError;
-    if (banner != null &&
-        banner.isNotEmpty &&
-        banner != _lastBanner) {
+    if (banner != null && banner.isNotEmpty && banner != _lastBanner) {
       _lastBanner = banner;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -153,6 +174,7 @@ class _ImagePageState extends State<ImagePage> {
     widget.sessionRepository.removeListener(_onSessionChanged);
     _controller.removeListener(_onControllerChanged);
     _controller.dispose();
+    if (widget.skillRepository == null) _skills.dispose();
     _scroll.dispose();
     _promptFocus.dispose();
     super.dispose();
@@ -240,8 +262,7 @@ class _ImagePageState extends State<ImagePage> {
   }
 
   Future<void> _pickImageModel() async {
-    final ready =
-        widget.providerRepository.providersReadyFor(ModelKind.image);
+    final ready = widget.providerRepository.providersReadyFor(ModelKind.image);
     if (ready.isEmpty) return;
     await showMediaModelPickerSheet(
       context: context,
@@ -276,9 +297,7 @@ class _ImagePageState extends State<ImagePage> {
     final path = await _resolveLocalImagePath(ref);
     if (!mounted) return;
     if (path == null || path.isEmpty) {
-      messenger.showSnackBar(
-        const SnackBar(content: Text('没有可分享的本地文件')),
-      );
+      messenger.showSnackBar(const SnackBar(content: Text('没有可分享的本地文件')));
       return;
     }
 
@@ -393,7 +412,8 @@ class _ImagePageState extends State<ImagePage> {
             ? ''
             : '${creds.providerName} · ${creds.imageModel}';
         final generating = _controller.isGeneratingActiveSession;
-        final modelPickerEnabled = !generating &&
+        final modelPickerEnabled =
+            !generating &&
             widget.providerRepository
                 .providersReadyFor(ModelKind.image)
                 .isNotEmpty;
@@ -403,11 +423,7 @@ class _ImagePageState extends State<ImagePage> {
           backgroundColor: tokens.canvas,
           resizeToAvoidBottomInset: true,
           appBar: AppBar(
-            title: Text(
-              title,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
+            title: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis),
             leading: IconButton(
               tooltip: '会话列表',
               icon: const Icon(Icons.menu),
@@ -461,74 +477,85 @@ class _ImagePageState extends State<ImagePage> {
                   ),
                 ),
               Expanded(
-                child: CustomScrollView(
-                  controller: _scroll,
-                  slivers: [
-                    SliverPadding(
-                      padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
-                      sliver: SliverToBoxAdapter(
-                        child: ImageComposer(
-                          prompt: _controller.promptDraft,
-                          promptFocusNode: _promptFocus,
-                          onPromptChanged: _controller.setPromptDraft,
-                          n: _controller.n,
-                          onNChanged: _controller.setN,
-                          size: _controller.size,
-                          onSizeChanged: _controller.setSize,
-                          aspectRatio: _controller.aspectRatio,
-                          onAspectRatioChanged: _controller.setAspectRatio,
-                          useAspectRatio: _controller.useAspectRatio,
-                          showSize: _controller.showSize,
-                          sizeOptions: _controller.activeSizeOptions,
-                          aspectOptions: _controller.activeAspectOptions,
-                          quality: _controller.quality,
-                          onQualityChanged: _controller.setQuality,
-                          supportsQuality: _controller.supportsQuality,
-                          qualityOptions: ImageController.qualityOptions,
-                          modelLabel: modelLabel,
-                          enabled: _controller.canGenerate,
-                          generating: generating,
-                          onGenerate: _controller.generate,
-                          onStop: _controller.stop,
-                          refBytes: _controller.refBytes,
-                          onPickRef: _controller.pickRefImage,
-                          onClearRef: _controller.clearRefImage,
-                          onPickModel: _pickImageModel,
-                          modelPickerEnabled: modelPickerEnabled,
-                          onPromptAssist: () {
-                            showMaterialPromptAssist(
-                              context,
-                              domain: PromptDomain.image,
-                              mode: _controller.promptAssistMode,
-                              draftPrompt: _controller.promptDraft,
-                              providerRepository: widget.providerRepository,
-                              chatDefaultsRepository:
-                                  widget.chatDefaultsRepository,
-                              chatClient: widget.chatClient,
-                              onApply: _controller.applyPromptPreset,
-                            );
-                          },
+                child: NotificationListener<ScrollStartNotification>(
+                  onNotification: _scroll.handleScrollStart,
+                  child: CustomScrollView(
+                    key: ValueKey(session?.id),
+                    controller: _scroll,
+                    slivers: [
+                      SliverPadding(
+                        padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+                        sliver: SliverToBoxAdapter(
+                          child: ImageComposer(
+                            skillSummary: SkillSummary(
+                              repository: _skills,
+                              target: SkillTarget.image,
+                              prompt: _controller.promptDraft,
+                              enabled: !widget.generation.busy,
+                            ),
+                            prompt: _controller.promptDraft,
+                            promptFocusNode: _promptFocus,
+                            onPromptChanged: _controller.setPromptDraft,
+                            n: _controller.n,
+                            onNChanged: _controller.setN,
+                            size: _controller.size,
+                            onSizeChanged: _controller.setSize,
+                            aspectRatio: _controller.aspectRatio,
+                            onAspectRatioChanged: _controller.setAspectRatio,
+                            useAspectRatio: _controller.useAspectRatio,
+                            showSize: _controller.showSize,
+                            sizeOptions: _controller.activeSizeOptions,
+                            aspectOptions: _controller.activeAspectOptions,
+                            quality: _controller.quality,
+                            onQualityChanged: _controller.setQuality,
+                            supportsQuality: _controller.supportsQuality,
+                            qualityOptions: ImageController.qualityOptions,
+                            modelLabel: modelLabel,
+                            enabled: _controller.canGenerate,
+                            generating: generating,
+                            onGenerate: _controller.generate,
+                            onStop: _controller.stop,
+                            refBytes: _controller.refBytes,
+                            onPickRef: _controller.pickRefImage,
+                            onClearRef: _controller.clearRefImage,
+                            onPickModel: _pickImageModel,
+                            modelPickerEnabled: modelPickerEnabled,
+                            onPromptAssist: () {
+                              showMaterialPromptAssist(
+                                context,
+                                domain: PromptDomain.image,
+                                skillRepository: _skills,
+                                mode: _controller.promptAssistMode,
+                                draftPrompt: _controller.promptDraft,
+                                providerRepository: widget.providerRepository,
+                                chatDefaultsRepository:
+                                    widget.chatDefaultsRepository,
+                                chatClient: widget.chatClient,
+                                onApply: _controller.applyPromptPreset,
+                              );
+                            },
+                          ),
                         ),
                       ),
-                    ),
-                    SliverPadding(
-                      padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
-                      sliver: _TimelineSliver(
-                        items: items,
-                        loadBytes: widget.sessionRepository.readImageBytes,
-                        onPreview: _openLightbox,
-                        onPreviewReference: _openReferenceLightbox,
-                        onSaveAlbum: _onSaveAlbum,
-                        onShare: _onShare,
-                        onUseAsReference: _onUseAsReference,
-                        onRerun: (item) {
-                          unawaited(_controller.rerunFromItem(item));
-                        },
-                        rerunEnabled: !widget.generation.busy,
-                        onFocusPrompt: _focusPrompt,
+                      SliverPadding(
+                        padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
+                        sliver: _TimelineSliver(
+                          items: items,
+                          loadBytes: widget.sessionRepository.readImageBytes,
+                          onPreview: _openLightbox,
+                          onPreviewReference: _openReferenceLightbox,
+                          onSaveAlbum: _onSaveAlbum,
+                          onShare: _onShare,
+                          onUseAsReference: _onUseAsReference,
+                          onRerun: (item) {
+                            unawaited(_controller.rerunFromItem(item));
+                          },
+                          rerunEnabled: !widget.generation.busy,
+                          onFocusPrompt: _focusPrompt,
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ],
@@ -559,9 +586,9 @@ class _TimelineSliver extends StatelessWidget {
   final void Function(ImageItem item, int index, ImageRef ref) onSaveAlbum;
   final void Function(ImageItem item, int index, ImageRef ref)? onShare;
   final void Function(ImageItem item, int index, ImageRef ref)?
-      onUseAsReference;
+  onUseAsReference;
   final void Function(ImageItem item, int index, ImageRef ref)?
-      onPreviewReference;
+  onPreviewReference;
   final void Function(ImageItem item)? onRerun;
   final bool rerunEnabled;
   final VoidCallback? onFocusPrompt;
@@ -584,26 +611,23 @@ class _TimelineSliver extends StatelessWidget {
       ..sort((a, b) => a.createdAt.compareTo(b.createdAt));
 
     return SliverList(
-      delegate: SliverChildBuilderDelegate(
-        (context, index) {
-          return Padding(
-            padding: const EdgeInsets.only(bottom: 12),
-            child: ImageTimelineTurn(
-              item: sorted[index],
-              turnIndex: index + 1,
-              loadBytes: loadBytes,
-              onPreview: onPreview,
-              onSaveAlbum: onSaveAlbum,
-              onShare: onShare,
-              onUseAsReference: onUseAsReference,
-              onPreviewReference: onPreviewReference,
-              onRerun: onRerun,
-              rerunEnabled: rerunEnabled,
-            ),
-          );
-        },
-        childCount: sorted.length,
-      ),
+      delegate: SliverChildBuilderDelegate((context, index) {
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 12),
+          child: ImageTimelineTurn(
+            item: sorted[index],
+            turnIndex: index + 1,
+            loadBytes: loadBytes,
+            onPreview: onPreview,
+            onSaveAlbum: onSaveAlbum,
+            onShare: onShare,
+            onUseAsReference: onUseAsReference,
+            onPreviewReference: onPreviewReference,
+            onRerun: onRerun,
+            rerunEnabled: rerunEnabled,
+          ),
+        );
+      }, childCount: sorted.length),
     );
   }
 }
@@ -670,10 +694,8 @@ class _ImageSessionListPage extends StatelessWidget {
               )
             : ListView.separated(
                 itemCount: sessions.length,
-                separatorBuilder: (_, _) => Divider(
-                  height: 1,
-                  color: tokens.border,
-                ),
+                separatorBuilder: (_, _) =>
+                    Divider(height: 1, color: tokens.border),
                 itemBuilder: (context, index) {
                   final s = sessions[index];
                   final active = s.id == activeId;

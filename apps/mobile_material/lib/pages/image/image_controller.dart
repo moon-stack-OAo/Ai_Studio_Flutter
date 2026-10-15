@@ -9,12 +9,14 @@ class ImageController extends ChangeNotifier {
     required ImageSessionRepository sessionRepository,
     required this.generation,
     AppLogRepository? appLogRepository,
+    SkillRepository? skillRepository,
     OpenAiCompatibleImageClient? imageClient,
     ImagePicker? imagePicker,
   })  : _providers = providerRepository,
         _sessions = sessionRepository,
         _picker = imagePicker ?? ImagePicker() {
     _facade = ImageSessionFacade(
+      skillRepository: skillRepository,
       providers: providerRepository,
       sessions: sessionRepository,
       generation: generation,

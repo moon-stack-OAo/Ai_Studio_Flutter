@@ -4,6 +4,7 @@ import 'package:fluent_ui/fluent_ui.dart';
 import 'package:http/http.dart' as http;
 
 import 'prompt_builder_panel.dart';
+import 'skill_enhance_tracker.dart';
 
 /// F-PromptAssist：模板选句 + 结构化拼装，均可 AI 润色后填入。
 Future<void> showFluentPromptAssist(
@@ -15,6 +16,7 @@ Future<void> showFluentPromptAssist(
   ProviderRepository? providerRepository,
   ChatDefaultsRepository? chatDefaultsRepository,
   OpenAiCompatibleChatClient? chatClient,
+  SkillRepository? skillRepository,
 }) {
   return showDialog<void>(
     context: context,
@@ -46,6 +48,7 @@ Future<void> showFluentPromptAssist(
           providerRepository: providerRepository,
           chatDefaultsRepository: chatDefaultsRepository,
           chatClient: chatClient,
+          skillRepository: skillRepository,
           onApply: (text) {
             onApply(text);
             Navigator.of(ctx).pop();
@@ -66,6 +69,7 @@ class PromptAssistPanel extends StatefulWidget {
     this.providerRepository,
     this.chatDefaultsRepository,
     this.chatClient,
+    this.skillRepository,
   });
 
   final PromptDomain domain;
@@ -75,6 +79,7 @@ class PromptAssistPanel extends StatefulWidget {
   final ProviderRepository? providerRepository;
   final ChatDefaultsRepository? chatDefaultsRepository;
   final OpenAiCompatibleChatClient? chatClient;
+  final SkillRepository? skillRepository;
 
   @override
   State<PromptAssistPanel> createState() => _PromptAssistPanelState();
@@ -89,9 +94,11 @@ class _PromptAssistPanelState extends State<PromptAssistPanel> {
   late String _workingPrompt;
   late final TextEditingController _draftCtrl;
   String? _selectedPresetId;
+
   /// 模板上区预览局部切换：0=草稿，1=润色。
   int _previewTab = 0;
   String _enhanceSkillId = defaultPromptEnhanceSkill.id;
+  late final SkillEnhanceTracker _skillTracker;
 
   static const _draftPlaceholder = '在此编辑草稿，或从模板 / 结构化拼出…';
 
@@ -100,16 +107,25 @@ class _PromptAssistPanelState extends State<PromptAssistPanel> {
     super.initState();
     _workingPrompt = widget.draftPrompt;
     _draftCtrl = TextEditingController(text: widget.draftPrompt);
+    _skillTracker = SkillEnhanceTracker(widget.skillRepository, widget.domain);
+  }
+
+  @override
+  void didUpdateWidget(covariant PromptAssistPanel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _skillTracker.update(widget.skillRepository, widget.domain);
   }
 
   @override
   void dispose() {
     _enhanceHttp?.close();
     _draftCtrl.dispose();
+    _skillTracker.dispose();
     super.dispose();
   }
 
   void _clearEnhanceAndShowDraft() {
+    _skillTracker.clear();
     _enhanceError = null;
     _enhancedPreview = null;
     _previewTab = 0;
@@ -129,6 +145,7 @@ class _PromptAssistPanelState extends State<PromptAssistPanel> {
   }
 
   void _onDraftEdited(String value) {
+    _skillTracker.clear();
     setState(() {
       _workingPrompt = value;
       _selectedPresetId = null;
@@ -140,6 +157,7 @@ class _PromptAssistPanelState extends State<PromptAssistPanel> {
   Future<void> _cancelEnhance() async {
     _enhanceHttp?.close();
     _enhanceHttp = null;
+    _skillTracker.clear();
     setState(() {
       _enhancing = false;
       _enhancedPreview = null;
@@ -183,6 +201,8 @@ class _PromptAssistPanelState extends State<PromptAssistPanel> {
     final ownedHttp = createSafeHttpClient();
     _enhanceHttp = ownedHttp;
 
+    final customSkills = _skillTracker.capture();
+
     setState(() {
       _enhancing = true;
       _enhanceError = null;
@@ -192,6 +212,7 @@ class _PromptAssistPanelState extends State<PromptAssistPanel> {
 
     try {
       final result = await enhancePrompt(
+        customSkills: customSkills,
         text: sourceText,
         domain: widget.domain,
         mode: widget.mode,
@@ -201,11 +222,11 @@ class _PromptAssistPanelState extends State<PromptAssistPanel> {
         timeout: defaults.apiTimeout,
         client: ownedHttp,
         onDelta: (delta, full) {
-          if (!mounted || !_enhancing) return;
+          if (!mounted || !_enhancing || _enhanceHttp != ownedHttp) return;
           setState(() => _enhancedPreview = full);
         },
       );
-      if (!mounted) return;
+      if (!mounted || _enhanceHttp != ownedHttp) return;
       setState(() {
         _enhancedPreview = result;
         _enhancing = false;
@@ -213,14 +234,14 @@ class _PromptAssistPanelState extends State<PromptAssistPanel> {
         _previewTab = 1;
       });
     } on ChatAbortException {
-      if (!mounted) return;
+      if (!mounted || _enhanceHttp != ownedHttp) return;
       setState(() {
         _enhancing = false;
         _enhancedPreview = null;
         _enhanceError = '已取消';
       });
     } catch (e) {
-      if (!mounted) return;
+      if (!mounted || _enhanceHttp != ownedHttp) return;
       if (isAbortLike(e)) {
         setState(() {
           _enhancing = false;
@@ -272,6 +293,8 @@ class _PromptAssistPanelState extends State<PromptAssistPanel> {
     final ownedHttp = createSafeHttpClient();
     _enhanceHttp = ownedHttp;
 
+    final customSkills = _skillTracker.capture();
+
     setState(() {
       _enhancing = true;
       _enhanceError = null;
@@ -281,6 +304,7 @@ class _PromptAssistPanelState extends State<PromptAssistPanel> {
 
     try {
       final result = await refineEnhancedPrompt(
+        customSkills: customSkills,
         previous: previous,
         instruction: instruction,
         domain: widget.domain,
@@ -291,11 +315,11 @@ class _PromptAssistPanelState extends State<PromptAssistPanel> {
         timeout: defaults.apiTimeout,
         client: ownedHttp,
         onDelta: (delta, full) {
-          if (!mounted || !_enhancing) return;
+          if (!mounted || !_enhancing || _enhanceHttp != ownedHttp) return;
           setState(() => _enhancedPreview = full);
         },
       );
-      if (!mounted) return;
+      if (!mounted || _enhanceHttp != ownedHttp) return;
       setState(() {
         _enhancedPreview = result;
         _enhancing = false;
@@ -303,14 +327,14 @@ class _PromptAssistPanelState extends State<PromptAssistPanel> {
         _previewTab = 1;
       });
     } on ChatAbortException {
-      if (!mounted) return;
+      if (!mounted || _enhanceHttp != ownedHttp) return;
       setState(() {
         _enhancing = false;
         _enhancedPreview = null;
         _enhanceError = '已取消';
       });
     } catch (e) {
-      if (!mounted) return;
+      if (!mounted || _enhanceHttp != ownedHttp) return;
       if (isAbortLike(e)) {
         setState(() {
           _enhancing = false;
@@ -504,8 +528,9 @@ class _PromptAssistPanelState extends State<PromptAssistPanel> {
               style: _enhancing
                   ? ButtonStyle(
                       backgroundColor: WidgetStatePropertyAll(tokens.danger),
-                      foregroundColor:
-                          const WidgetStatePropertyAll(Color(0xFFFFFFFF)),
+                      foregroundColor: const WidgetStatePropertyAll(
+                        Color(0xFFFFFFFF),
+                      ),
                     )
                   : _enhanceBtnStyle(tokens),
               child: Text(
@@ -604,6 +629,7 @@ class _PromptAssistPanelState extends State<PromptAssistPanel> {
                 : InfoBarSeverity.error,
           ),
         ],
+        SkillEnhanceNotice(tracker: _skillTracker),
         const SizedBox(height: 8),
         Expanded(
           child: ListView.separated(
@@ -625,8 +651,8 @@ class _PromptAssistPanelState extends State<PromptAssistPanel> {
                       color: selected
                           ? tokens.primary.withValues(alpha: 0.08)
                           : hovered
-                              ? tokens.primary.withValues(alpha: 0.05)
-                              : tokens.surfaceMuted,
+                          ? tokens.primary.withValues(alpha: 0.05)
+                          : tokens.surfaceMuted,
                       borderRadius: BorderRadius.circular(8),
                       border: Border.all(
                         color: selected ? tokens.primary : tokens.border,
@@ -704,6 +730,7 @@ class _PromptAssistPanelState extends State<PromptAssistPanel> {
       providerRepository: widget.providerRepository,
       chatDefaultsRepository: widget.chatDefaultsRepository,
       chatClient: widget.chatClient,
+      skillRepository: widget.skillRepository,
       compact: true,
     );
   }
@@ -730,9 +757,11 @@ class _PromptAssistPanelState extends State<PromptAssistPanel> {
           _buildSegmentedTab(tokens),
           const SizedBox(height: 10),
           Expanded(
-            child: _tabIndex == 0
-                ? _buildTemplateTab(tokens)
-                : _buildStructuredTab(),
+            child: IndexedStack(
+              index: _tabIndex,
+              sizing: StackFit.expand,
+              children: [_buildTemplateTab(tokens), _buildStructuredTab()],
+            ),
           ),
         ],
       ),

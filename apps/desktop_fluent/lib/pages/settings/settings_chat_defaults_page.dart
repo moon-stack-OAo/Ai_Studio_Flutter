@@ -3,12 +3,10 @@ import 'package:design_fluent/design_fluent.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 
 import '../../widgets/back_to_top_host.dart';
+import 'widgets/settings_typography.dart';
 
 class SettingsChatDefaultsPage extends StatefulWidget {
-  const SettingsChatDefaultsPage({
-    super.key,
-    required this.repository,
-  });
+  const SettingsChatDefaultsPage({super.key, required this.repository});
 
   final ChatDefaultsRepository repository;
 
@@ -163,7 +161,7 @@ class _SettingsChatDefaultsPageState extends State<SettingsChatDefaultsPage> {
   @override
   Widget build(BuildContext context) {
     final tokens = fluentTokensOf(context);
-    return ColoredBox(
+    return SettingsTypography(
       color: tokens.canvas,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -174,156 +172,138 @@ class _SettingsChatDefaultsPageState extends State<SettingsChatDefaultsPage> {
                 controller: scroll,
                 padding: const EdgeInsets.fromLTRB(28, 20, 28, 16),
                 children: [
-          Text(
-            '对话默认',
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.w600,
-              color: tokens.ink,
-              fontFamily: tokens.fontFamily,
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            '全局默认参数。单会话覆盖优先于本页；空系统提示不传 system。',
-            style: TextStyle(
-              fontSize: 13,
-              color: tokens.inkMuted,
-              fontFamily: tokens.fontFamily,
-            ),
-          ),
-          const SizedBox(height: 18),
-          _Section(
-            title: '生成参数',
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _LabeledField(
-                  label: '系统提示',
-                  hint: '留空则不向 API 传 system 消息',
-                  child: TextBox(
-                    controller: _systemCtrl,
-                    maxLines: 5,
-                    placeholder: '你是有用的本地助手。',
-                    onChanged: (_) => _markDirty(),
+                  Text('对话默认', style: context.settingsText.pageTitle),
+                  const SizedBox(height: 6),
+                  Text(
+                    '全局默认参数。单会话覆盖优先于本页；空系统提示不传 system。',
+                    style: context.settingsText.caption,
                   ),
-                ),
-                const SizedBox(height: 14),
-                _LabeledField(
-                  label: '温度 ${_temperature.toStringAsFixed(2)}',
-                  hint: '0 = 更确定 · 2 = 更随机',
-                  child: Slider(
-                    value: _temperature,
-                    min: 0,
-                    max: 2,
-                    divisions: 40,
-                    label: _temperature.toStringAsFixed(2),
-                    onChanged: (v) {
-                      setState(() {
-                        _temperature = double.parse(v.toStringAsFixed(2));
-                        _dirty = true;
-                      });
-                    },
-                  ),
-                ),
-                const SizedBox(height: 14),
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      child: _LabeledField(
-                        label: 'Max Tokens',
-                        hint: '0 = 不传 max_tokens',
-                        child: TextBox(
-                          controller: _maxTokensCtrl,
-                          placeholder: '0',
-                          onChanged: (_) => _markDirty(),
+                  const SizedBox(height: 18),
+                  _Section(
+                    title: '生成参数',
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _LabeledField(
+                          label: '系统提示',
+                          hint: '留空则不向 API 传 system 消息',
+                          child: TextBox(
+                            controller: _systemCtrl,
+                            maxLines: 5,
+                            placeholder: '你是有用的本地助手。',
+                            onChanged: (_) => _markDirty(),
+                          ),
                         ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: _LabeledField(
-                        label: '超时（秒）',
-                        hint: '默认 180 秒',
-                        child: TextBox(
-                          controller: _timeoutSecCtrl,
-                          placeholder: '180',
-                          onChanged: (_) => _markDirty(),
+                        const SizedBox(height: 14),
+                        _LabeledField(
+                          label: '温度 ${_temperature.toStringAsFixed(2)}',
+                          hint: '0 = 更确定 · 2 = 更随机',
+                          child: Slider(
+                            value: _temperature,
+                            min: 0,
+                            max: 2,
+                            divisions: 40,
+                            label: _temperature.toStringAsFixed(2),
+                            onChanged: (v) {
+                              setState(() {
+                                _temperature = double.parse(
+                                  v.toStringAsFixed(2),
+                                );
+                                _dirty = true;
+                              });
+                            },
+                          ),
                         ),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 14),
-          _Section(
-            title: '上下文裁剪',
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                ToggleSwitch(
-                  checked: _trimEnabled,
-                  onChanged: (v) {
-                    setState(() {
-                      _trimEnabled = v;
-                      _dirty = true;
-                    });
-                  },
-                  content: Text(
-                    '按轮数裁剪上下文',
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: tokens.ink,
-                      fontFamily: tokens.fontFamily,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                _LabeledField(
-                  label: '最大轮数',
-                  hint: '以 user 消息条数为轮；推荐 20',
-                  child: TextBox(
-                    controller: _maxTurnsCtrl,
-                    placeholder: '20',
-                    enabled: _trimEnabled,
-                    onChanged: (_) => _markDirty(),
-                  ),
-                ),
-                const SizedBox(height: 14),
-                ToggleSwitch(
-                  checked: _maxCharsEnabled,
-                  onChanged: (v) {
-                    setState(() {
-                      _maxCharsEnabled = v;
-                      _dirty = true;
-                    });
-                  },
-                  content: Text(
-                    '启用字符预算',
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: tokens.ink,
-                      fontFamily: tokens.fontFamily,
+                        const SizedBox(height: 14),
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
+                              child: _LabeledField(
+                                label: 'Max Tokens',
+                                hint: '0 = 不传 max_tokens',
+                                child: TextBox(
+                                  controller: _maxTokensCtrl,
+                                  placeholder: '0',
+                                  onChanged: (_) => _markDirty(),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: _LabeledField(
+                                label: '超时（秒）',
+                                hint: '默认 180 秒',
+                                child: TextBox(
+                                  controller: _timeoutSecCtrl,
+                                  placeholder: '180',
+                                  onChanged: (_) => _markDirty(),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
                     ),
                   ),
-                ),
-                const SizedBox(height: 12),
-                _LabeledField(
-                  label: '最大字符数',
-                  hint: '粗估字符（非 Token）；推荐 32000',
-                  child: TextBox(
-                    controller: _maxCharsCtrl,
-                    placeholder: '32000',
-                    enabled: _maxCharsEnabled,
-                    onChanged: (_) => _markDirty(),
+                  const SizedBox(height: 14),
+                  _Section(
+                    title: '上下文裁剪',
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        ToggleSwitch(
+                          checked: _trimEnabled,
+                          onChanged: (v) {
+                            setState(() {
+                              _trimEnabled = v;
+                              _dirty = true;
+                            });
+                          },
+                          content: Text(
+                            '按轮数裁剪上下文',
+                            style: context.settingsText.body,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        _LabeledField(
+                          label: '最大轮数',
+                          hint: '以 user 消息条数为轮；推荐 20',
+                          child: TextBox(
+                            controller: _maxTurnsCtrl,
+                            placeholder: '20',
+                            enabled: _trimEnabled,
+                            onChanged: (_) => _markDirty(),
+                          ),
+                        ),
+                        const SizedBox(height: 14),
+                        ToggleSwitch(
+                          checked: _maxCharsEnabled,
+                          onChanged: (v) {
+                            setState(() {
+                              _maxCharsEnabled = v;
+                              _dirty = true;
+                            });
+                          },
+                          content: Text(
+                            '启用字符预算',
+                            style: context.settingsText.body,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        _LabeledField(
+                          label: '最大字符数',
+                          hint: '粗估字符（非 Token）；推荐 32000',
+                          child: TextBox(
+                            controller: _maxCharsCtrl,
+                            placeholder: '32000',
+                            enabled: _maxCharsEnabled,
+                            onChanged: (_) => _markDirty(),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-              ],
-            ),
-          ),
                 ],
               ),
             ),
@@ -379,15 +359,7 @@ class _Section extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            title,
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-              color: tokens.inkSecondary,
-              fontFamily: tokens.fontFamily,
-            ),
-          ),
+          Text(title, style: context.settingsText.sectionTitle),
           const SizedBox(height: 12),
           child,
         ],
@@ -397,11 +369,7 @@ class _Section extends StatelessWidget {
 }
 
 class _LabeledField extends StatelessWidget {
-  const _LabeledField({
-    required this.label,
-    required this.child,
-    this.hint,
-  });
+  const _LabeledField({required this.label, required this.child, this.hint});
 
   final String label;
   final Widget child;
@@ -409,31 +377,15 @@ class _LabeledField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = fluentTokensOf(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.w600,
-            color: tokens.inkSecondary,
-            fontFamily: tokens.fontFamily,
-          ),
-        ),
+        Text(label, style: context.settingsText.label),
         const SizedBox(height: 6),
         child,
         if (hint != null) ...[
           const SizedBox(height: 6),
-          Text(
-            hint!,
-            style: TextStyle(
-              fontSize: 12,
-              color: tokens.inkMuted,
-              fontFamily: tokens.fontFamily,
-            ),
-          ),
+          Text(hint!, style: context.settingsText.caption),
         ],
       ],
     );

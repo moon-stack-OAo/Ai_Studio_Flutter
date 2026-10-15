@@ -36,6 +36,7 @@ class ImageComposer extends StatefulWidget {
     this.onPickModel,
     this.modelPickerEnabled = true,
     this.promptFocusNode,
+    this.skillSummary,
   });
 
   final String prompt;
@@ -66,6 +67,7 @@ class ImageComposer extends StatefulWidget {
   final VoidCallback? onPickModel;
   final bool modelPickerEnabled;
   final FocusNode? promptFocusNode;
+  final Widget? skillSummary;
 
   @override
   State<ImageComposer> createState() => _ImageComposerState();
@@ -338,6 +340,7 @@ class _ImageComposerState extends State<ImageComposer> {
                     ),
                   ),
                   const SizedBox(height: 8),
+                  if (widget.skillSummary != null) widget.skillSummary!,
                   _fieldLabel(tokens, '参考图'),
                   const SizedBox(height: 4),
                   if (hasRef)

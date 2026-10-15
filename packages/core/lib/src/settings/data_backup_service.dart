@@ -8,6 +8,7 @@ import '../image/image_session_repository.dart';
 import '../logging/app_log_repository.dart';
 import '../mcp/mcp_models.dart';
 import '../mcp/mcp_server_repository.dart';
+import '../prompt/custom_skills.dart';
 import '../provider/provider_config.dart';
 import '../provider/provider_repository.dart';
 import '../provider/provider_storage.dart';
@@ -40,18 +41,20 @@ class DataBackupService {
     VideoAssetStore? videoAssetStore,
     this._videoPosterStore,
     McpServerRepository? mcpServers,
-  })  : _providers = providers,
-        _appearance = appearance,
-        _chatDefaults = chatDefaults,
-        _chatSessions = chatSessions,
-        _imageSessions = imageSessions,
-        _videoSessions = videoSessions,
-        _logs = logs,
-        _imageAssetStore = imageAssetStore ?? imageSessions.assetStore,
-        _chatAttachmentStore =
-            chatAttachmentStore ?? chatSessions.attachmentStore,
-        _videoAssetStore = videoAssetStore ?? videoSessions.assetStore,
-        _mcpServers = mcpServers;
+    SkillRepository? skillRepository,
+  }) : _providers = providers,
+       _appearance = appearance,
+       _chatDefaults = chatDefaults,
+       _chatSessions = chatSessions,
+       _imageSessions = imageSessions,
+       _videoSessions = videoSessions,
+       _logs = logs,
+       _imageAssetStore = imageAssetStore ?? imageSessions.assetStore,
+       _chatAttachmentStore =
+           chatAttachmentStore ?? chatSessions.attachmentStore,
+       _videoAssetStore = videoAssetStore ?? videoSessions.assetStore,
+       _mcpServers = mcpServers,
+       _skillRepository = skillRepository;
 
   final ProviderRepository _providers;
   final AppearanceRepository _appearance;
@@ -65,6 +68,7 @@ class DataBackupService {
   final VideoAssetStore _videoAssetStore;
   final VideoPosterStore? _videoPosterStore;
   final McpServerRepository? _mcpServers;
+  final SkillRepository? _skillRepository;
 
   /// 导出备份为 [DataBackupPayload]（再 [DataBackupPayload.encodeJson]）。
   Future<DataBackupPayload> exportBackup([
@@ -116,6 +120,7 @@ class DataBackupService {
       videoSessions: video,
       videoActiveId: videoActive,
       mcpServers: mcp,
+      skills: options.includeSkills ? _skillRepository?.skills : null,
     );
   }
 
@@ -240,6 +245,21 @@ class DataBackupService {
       mcpImported = true;
     }
 
+    var skillsImported = false;
+    var skillsMerged = 0;
+    var skillsAdded = 0;
+    final skillRepo = _skillRepository;
+    final incomingSkills = payload.skills;
+    if (options.importSkills && skillRepo != null && incomingSkills != null) {
+      final localIds = skillRepo.skills.map((s) => s.id).toSet();
+      skillsMerged = incomingSkills
+          .where((s) => localIds.contains(s.id))
+          .length;
+      skillsAdded = incomingSkills.length - skillsMerged;
+      await skillRepo.merge(incomingSkills);
+      skillsImported = true;
+    }
+
     return DataBackupImportResult(
       schemaVersion: payload.schemaVersion,
       providersMerged: updated,
@@ -252,6 +272,9 @@ class DataBackupService {
       mcpServersAdded: mcpAdded,
       mcpImported: mcpImported,
       mcpServersSkipped: mcpSkipped,
+      skillsImported: skillsImported,
+      skillsMerged: skillsMerged,
+      skillsAdded: skillsAdded,
     );
   }
 
@@ -313,6 +336,7 @@ class DataBackupService {
     if (flags.settings) {
       await _appearance.resetToRecommended();
       await _chatDefaults.resetToRecommended();
+      await _skillRepository?.clear();
       clearedSettings = true;
     }
 
@@ -373,39 +397,53 @@ class DataBackupService {
 
     var approxJson = 0;
     try {
-      approxJson +=
-          utf8.encode(jsonEncode(_appearance.settings.toJson())).length;
-      approxJson +=
-          utf8.encode(jsonEncode(_chatDefaults.defaults.toJson())).length;
+      approxJson += utf8
+          .encode(jsonEncode(_appearance.settings.toJson()))
+          .length;
+      approxJson += utf8
+          .encode(jsonEncode(_chatDefaults.defaults.toJson()))
+          .length;
+      final skillRepo = _skillRepository;
+      if (skillRepo != null) {
+        approxJson += utf8
+            .encode(
+              jsonEncode(skillRepo.skills.map((s) => s.toJson()).toList()),
+            )
+            .length;
+      }
       approxJson += utf8
           .encode(
             jsonEncode({
-              'providers':
-                  _providers.providers.map((p) => p.toJsonMeta()).toList(),
+              'providers': _providers.providers
+                  .map((p) => p.toJsonMeta())
+                  .toList(),
             }),
           )
           .length;
       approxJson += utf8
           .encode(
             jsonEncode({
-              'sessions':
-                  _chatSessions.sessions.map((s) => s.toJson()).toList(),
+              'sessions': _chatSessions.sessions
+                  .map((s) => s.toJson())
+                  .toList(),
             }),
           )
           .length;
       approxJson += utf8
           .encode(
             jsonEncode({
-              'sessions':
-                  _imageSessions.sessions.map((s) => s.toJson()).toList(),
+              'sessions': _imageSessions.sessions
+                  .map((s) => s.toJson())
+                  .toList(),
             }),
           )
           .length;
       approxJson += utf8
           .encode(
             jsonEncode({
-              'sessions':
-                  _videoSessions.sessions.map((s) => s.toJson()).toList(),
+              'sessions': _videoSessions.sessions
+                  .map((s) => s.toJson())
+                  .toList(),
             }),
           )
           .length;
@@ -431,6 +469,7 @@ class DataBackupService {
       imageCacheBytes: imageBytes + chatAttBytes,
       videoCacheBytes: videoBytes + posterBytes,
       approxJsonBytes: approxJson,
+      skillCount: _skillRepository?.skills.length ?? 0,
     );
   }
 
@@ -441,6 +480,8 @@ class DataBackupService {
     if (!_chatSessions.isLoaded) await _chatSessions.load();
     if (!_imageSessions.isLoaded) await _imageSessions.load();
     if (!_videoSessions.isLoaded) await _videoSessions.load();
+    final skillRepo = _skillRepository;
+    if (skillRepo != null && !skillRepo.isLoaded) await skillRepo.load();
     final mcp = _mcpServers;
     if (mcp != null && !mcp.isLoaded) await mcp.load();
     final logs = _logs;

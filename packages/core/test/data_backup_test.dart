@@ -17,6 +17,7 @@ void main() {
   late MemorySecretStore mcpSecrets;
   late McpServerRepository mcpServers;
   late DataBackupService service;
+  late SkillRepository skills;
 
   setUp(() async {
     providers = ProviderRepository(
@@ -51,6 +52,8 @@ void main() {
     await videoSessions.load();
     await logs.load();
     await mcpServers.load();
+    skills = SkillRepository(storage: MemorySkillStorage());
+    await skills.load();
 
     service = DataBackupService(
       providers: providers,
@@ -63,6 +66,7 @@ void main() {
       imageAssetStore: imageStore,
       videoAssetStore: videoStore,
       mcpServers: mcpServers,
+      skillRepository: skills,
     );
   });
 
@@ -110,6 +114,125 @@ void main() {
 
     await logs.append(level: AppLogLevel.info, source: 'test', message: 'seed');
   }
+
+  test('技能 backup roundtrip、原位合并、新 ID 按顺序追加、用量估算', () async {
+    const a = CustomSkill(
+      id: 'a',
+      name: 'A',
+      prompt: '技能A',
+      targets: {SkillTarget.image},
+    );
+    const b = CustomSkill(
+      id: 'b',
+      name: 'B',
+      rules: '技能B',
+      targets: {SkillTarget.video},
+    );
+    await skills.replaceAll([a, b]);
+    final usage = await service.estimateStorageUsage();
+    expect(usage.skillCount, 2);
+    final json = await service.exportBackupJson();
+    final parsed = DataBackupPayload.parse(json);
+    expect(parsed.skills!.map((s) => s.toJson()).toList(), [
+      a.toJson(),
+      b.toJson(),
+    ]);
+    await service.clearLocalData(ClearLocalDataFlags.all);
+    expect(skills.skills, isEmpty);
+    final result = await service.importBackup(json);
+    expect(result.skillsImported, isTrue);
+    expect(result.skillsAdded, 2);
+    expect(skills.skills.map((s) => s.id), ['a', 'b']);
+    await skills.replaceAll([
+      b.copyWith(name: '本地B'),
+      a,
+      a.copyWith(id: 'local'),
+    ]);
+    final imported = await service.importBackup(json);
+    expect(imported.skillsMerged, 2);
+    expect(skills.skills.map((s) => s.id), ['b', 'a', 'local']);
+    expect(skills.skills.first.name, 'B');
+    final incoming = parsed.toJson();
+    incoming['skills'] = [
+      a.toJson(),
+      a.copyWith(id: 'new2').toJson(),
+      a.copyWith(id: 'new1').toJson(),
+    ];
+    final appended = await service.importBackup(incoming);
+    expect(appended.skillsAdded, 2);
+    expect(skills.skills.map((s) => s.id), ['b', 'a', 'local', 'new2', 'new1']);
+    await skills.clear();
+    final without = await service.estimateStorageUsage();
+    expect(usage.approxJsonBytes, greaterThan(without.approxJsonBytes));
+  });
+
+  test('旧备份与导入导出开关保留本地技能，空技能段按合并语义处理', () async {
+    const local = CustomSkill(
+      id: 'local',
+      name: '本地',
+      rules: '限制',
+      targets: {SkillTarget.chat},
+    );
+    await skills.saveSkill(local);
+    final omitted = await service.exportBackup(
+      const DataBackupExportOptions(includeSkills: false),
+    );
+    expect(omitted.skills, isNull);
+    expect(omitted.toJson().containsKey('skills'), isFalse);
+    final oldResult = await service.importBackup(omitted.encodeJson());
+    expect(oldResult.skillsImported, isFalse);
+    expect(skills.skills.single.id, 'local');
+    final included = (await service.exportBackup()).toJson();
+    included['skills'] = [local.copyWith(id: 'incoming').toJson()];
+    final disabledResult = await service.importBackup(
+      included,
+      options: const DataBackupImportOptions(importSkills: false),
+    );
+    expect(disabledResult.skillsImported, isFalse);
+    expect(skills.skills.single.id, 'local');
+    included['skills'] = [];
+    await service.importBackup(included);
+    expect(skills.skills.single.id, 'local');
+  });
+
+  test('仅清 settings/all 清技能，providers/sessions/media 保留技能', () async {
+    const skill = CustomSkill(
+      id: 'a',
+      name: 'A',
+      rules: '限制',
+      targets: {SkillTarget.image},
+    );
+    await skills.saveSkill(skill);
+    for (final flags in [
+      const ClearLocalDataFlags(providers: true),
+      ClearLocalDataFlags.sessionsOnly,
+      ClearLocalDataFlags.mediaOnly,
+    ]) {
+      await service.clearLocalData(flags);
+      expect(skills.skills.single.id, 'a');
+    }
+    await service.clearLocalData(const ClearLocalDataFlags(settings: true));
+    expect(skills.skills, isEmpty);
+  });
+
+  test('技能损坏备份在修改本地数据前拒绝', () async {
+    const local = CustomSkill(
+      id: 'local',
+      name: '本地',
+      rules: '限制',
+      targets: {SkillTarget.chat},
+    );
+    await skills.saveSkill(local);
+    final payload = (await service.exportBackup()).toJson();
+    payload['skills'] = [
+      {'id': 'broken'},
+    ];
+    await expectLater(
+      service.importBackup(payload),
+      throwsA(isA<DataBackupFormatException>()),
+    );
+    expect(skills.skills.single.id, 'local');
+  });
 
   test(
     'export → import roundtrip preserves appearance / providers / chat',

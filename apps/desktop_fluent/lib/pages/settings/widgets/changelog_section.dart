@@ -4,6 +4,7 @@ import 'package:fluent_ui/fluent_ui.dart';
 
 import '../../../widgets/back_to_top_host.dart';
 import '../../chat/widgets/markdown_host.dart';
+import 'settings_typography.dart';
 
 /// SET-ABOUT · FB-UPDATE：多版本折叠更新日志（页内摘要 + 完整 ContentDialog）。
 class ChangelogSection extends StatelessWidget {
@@ -40,26 +41,15 @@ class ChangelogSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = fluentTokensOf(context);
     if (entries.isEmpty) {
-      return Text(
-        '暂无更新日志',
-        style: TextStyle(
-          fontSize: 12,
-          color: tokens.inkMuted,
-          fontFamily: tokens.fontFamily,
-        ),
-      );
+      return Text('暂无更新日志', style: context.settingsText.caption);
     }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         // 页内跟关于页 ListView 同滚，避免嵌套滚动条。
-        ChangelogEntryList(
-          entries: _summaryEntries,
-          scrollable: false,
-        ),
+        ChangelogEntryList(entries: _summaryEntries, scrollable: false),
         const SizedBox(height: 4),
         HyperlinkButton(
           onPressed: () => openFullHistory(context),
@@ -102,7 +92,8 @@ class _ChangelogHistoryDialogState extends State<_ChangelogHistoryDialog> {
   }
 
   void _onScroll() {
-    final show = _scroll.hasClients &&
+    final show =
+        _scroll.hasClients &&
         _scroll.position.maxScrollExtent > 0 &&
         _scroll.offset > 80;
     if (show != _showBackToTop) {
@@ -133,12 +124,7 @@ class _ChangelogHistoryDialogState extends State<_ChangelogHistoryDialog> {
           children: [
             Text(
               '完整历史 · Keep a Changelog · 已安装 ${widget.currentVersionLabel}',
-              style: TextStyle(
-                fontSize: 12,
-                color: tokens.inkMuted,
-                fontFamily: tokens.fontFamily,
-                height: 1.45,
-              ),
+              style: context.settingsText.caption,
             ),
             const SizedBox(height: 12),
             Expanded(
@@ -312,8 +298,10 @@ class _ChangelogRowState extends State<_ChangelogRow> {
               final hovered = states.isHovered || states.isPressed;
               return Container(
                 constraints: const BoxConstraints(minHeight: 40),
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 10,
+                ),
                 color: hovered
                     ? Color.lerp(tokens.primary, tokens.surfaceMuted, 0.92)
                     : null,
@@ -324,10 +312,8 @@ class _ChangelogRowState extends State<_ChangelogRow> {
                       duration: const Duration(milliseconds: 150),
                       child: Text(
                         '›',
-                        style: TextStyle(
-                          fontSize: 14,
+                        style: context.settingsText.body.copyWith(
                           color: tokens.inkMuted,
-                          fontFamily: tokens.fontFamily,
                           height: 1,
                         ),
                       ),
@@ -335,12 +321,8 @@ class _ChangelogRowState extends State<_ChangelogRow> {
                     const SizedBox(width: 10),
                     Text(
                       entry.versionLabel,
-                      style: TextStyle(
-                        fontSize: 13,
+                      style: context.settingsText.code.copyWith(
                         fontWeight: FontWeight.w600,
-                        color: tokens.ink,
-                        fontFamily: tokens.monoFontFamily,
-                        fontFamilyFallback: kFluentMonoFontFamilyFallback,
                       ),
                     ),
                     const SizedBox(width: 10),
@@ -349,11 +331,7 @@ class _ChangelogRowState extends State<_ChangelogRow> {
                         entry.dateLabel,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: tokens.inkMuted,
-                          fontFamily: tokens.fontFamily,
-                        ),
+                        style: context.settingsText.caption,
                       ),
                     ),
                     if (pill != null) ...[
@@ -373,14 +351,7 @@ class _ChangelogRowState extends State<_ChangelogRow> {
             Padding(
               padding: const EdgeInsets.fromLTRB(36, 10, 12, 12),
               child: empty
-                  ? Text(
-                      '暂无说明',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: tokens.inkMuted,
-                        fontFamily: tokens.fontFamily,
-                      ),
-                    )
+                  ? Text('暂无说明', style: context.settingsText.caption)
                   : Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -394,21 +365,11 @@ class _ChangelogRowState extends State<_ChangelogRow> {
                             onPressed: () {
                               setState(() => _detailsOpen = !_detailsOpen);
                             },
-                            child: Text(
-                              _detailsOpen ? '收起详细变更' : '显示详细变更',
-                            ),
+                            child: Text(_detailsOpen ? '收起详细变更' : '显示详细变更'),
                           ),
                           if (_detailsOpen) ...[
                             const SizedBox(height: 4),
-                            Text(
-                              '详细变更',
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                                color: tokens.inkMuted,
-                                fontFamily: tokens.fontFamily,
-                              ),
-                            ),
+                            Text('详细变更', style: context.settingsText.label),
                             const SizedBox(height: 6),
                             MarkdownHost(data: body, compact: true),
                           ],
@@ -446,15 +407,7 @@ class _StatusPill extends StatelessWidget {
         borderRadius: BorderRadius.circular(999),
         border: Border.all(color: border),
       ),
-      child: Text(
-        label,
-        style: TextStyle(
-          fontSize: 10,
-          fontWeight: FontWeight.w600,
-          color: fg,
-          fontFamily: tokens.fontFamily,
-        ),
-      ),
+      child: Text(label, style: context.settingsText.badge.copyWith(color: fg)),
     );
   }
 }
