@@ -542,7 +542,8 @@ void main() {
         final prompt = find
             .descendant(of: composer, matching: find.byType(TextBox))
             .first;
-        await tester.enterText(prompt, List.filled(80, '很长的原始提示词').join(' '));
+        final draftPrompt = List.filled(80, '很长的原始提示词').join(' ');
+        await tester.enterText(prompt, draftPrompt);
         await tester.pumpAndSettle();
         final scrollable = find
             .descendant(of: composer, matching: find.byType(Scrollable))
@@ -554,9 +555,38 @@ void main() {
         await tester.scrollUntilVisible(summary, 200, scrollable: scrollable);
         await tester.pumpAndSettle();
         expect(tester.getSize(summary).width, lessThanOrEqualTo(272));
-        await tester.ensureVisible(find.text('最终提示词预览'));
-        await tester.tap(find.text('最终提示词预览'));
+        expect(find.text('最终提示词预览'), findsNothing);
+        expect(find.text('最终提示词'), findsNothing);
+        await tester.tap(
+          find.descendant(of: summary, matching: find.byType(Button)),
+        );
         await tester.pumpAndSettle();
+        expect(find.byType(ContentDialog), findsOneWidget);
+        expect(find.text(_skill.prompt), findsNWidgets(8));
+        expect(find.text(_skill.rules), findsNWidgets(8));
+        final finalPrompt = find.text(
+          composeSkillPrompt(
+            prompt: draftPrompt,
+            skills: fixture.skills.snapshotFor(
+              video ? SkillTarget.video : SkillTarget.image,
+            ),
+          ),
+        );
+        await tester.ensureVisible(finalPrompt);
+        await tester.pumpAndSettle();
+        expect(finalPrompt, findsOneWidget);
+        // 长正文高于视口时中心点可能在屏外，确认滚动后正文与弹窗相交。
+        expect(
+          tester
+              .getRect(finalPrompt)
+              .overlaps(tester.getRect(find.byType(ContentDialog))),
+          isTrue,
+        );
+        expect(tester.takeException(), isNull);
+        await tester.tap(find.text('关闭'));
+        await tester.pumpAndSettle();
+        expect(find.text('最终提示词'), findsNothing);
+        expect(finalPrompt, findsNothing);
         expect(find.text(video ? '创建任务' : '生成').hitTestable(), findsOneWidget);
         expect(tester.takeException(), isNull);
       }

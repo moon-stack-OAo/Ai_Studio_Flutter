@@ -111,6 +111,7 @@ class _RecordingChatClient extends OpenAiCompatibleChatClient {
     ActiveChatCredentials credentials, {
     required List<Map<String, dynamic>> messages,
     void Function(String delta, String fullText)? onDelta,
+    void Function(String delta)? onContentDelta,
     double temperature = defaultChatTemperature,
     int? maxTokens,
     List<Map<String, dynamic>>? tools,
@@ -120,6 +121,7 @@ class _RecordingChatClient extends OpenAiCompatibleChatClient {
   }) {
     requests.add(messages);
     onDelta?.call('保留润色结果', '保留润色结果');
+    onContentDelta?.call('保留润色结果');
     return requests.length == 1
         ? firstResult.future
         : Future.value(const ChatStreamResult(content: '下一版润色结果'));
@@ -429,7 +431,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('技能摘要实时刷新，最终提示词使用 core 组合，无技能仍可管理', (tester) async {
+  testWidgets('技能摘要实时刷新，详情内预览使用 core 组合，关闭后隐藏正文，无技能仍可管理', (tester) async {
     final repo = await _repository();
     addTearDown(repo.dispose);
     await _pump(
@@ -440,8 +442,13 @@ void main() {
     await repo.saveSkill(_imageSkill);
     await tester.pumpAndSettle();
     expect(find.text('生效技能：图像技能'), findsOneWidget);
-    await tester.tap(find.text('最终提示词预览'));
+    expect(find.text('最终提示词预览'), findsNothing);
+    expect(find.byType(SelectableText), findsNothing);
+    await tester.tap(find.text('生效技能：图像技能'));
     await tester.pumpAndSettle();
+    expect(find.text(_imageSkill.prompt), findsOneWidget);
+    expect(find.text(_imageSkill.rules), findsOneWidget);
+    expect(find.text('最终提示词'), findsOneWidget);
     expect(
       find.text(
         composeSkillPrompt(
@@ -451,13 +458,18 @@ void main() {
       ),
       findsOneWidget,
     );
+    Navigator.of(tester.element(find.text('当前生效技能'))).pop();
+    await tester.pumpAndSettle();
+    expect(find.byType(SelectableText), findsNothing);
+    expect(find.text('最终提示词'), findsNothing);
     await repo.setEnabled(_imageSkill.id, false);
     await tester.pumpAndSettle();
     expect(find.text('自定义技能 · 未启用 · 管理'), findsOneWidget);
-    expect(find.text('原始需求'), findsOneWidget);
+    expect(find.text('原始需求'), findsNothing);
     await tester.tap(find.text('自定义技能 · 未启用 · 管理'));
     await tester.pumpAndSettle();
     expect(find.text('没有生效的自定义技能'), findsOneWidget);
+    expect(find.text('原始需求'), findsOneWidget);
     await repo.setEnabled(_imageSkill.id, true);
     await tester.pumpAndSettle();
     expect(find.text('IMAGE_RULE'), findsOneWidget);
@@ -465,6 +477,57 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byType(SettingsSkillsTab), findsOneWidget);
   });
+
+  for (final prompt in <String?>[null, '']) {
+    testWidgets('摘要禁用时不可打开，${prompt == null ? '对话仅显示技能详情' : '空输入仍可查看最终提示词'}', (
+      tester,
+    ) async {
+      final repo = await _repository([
+        _imageSkill.copyWith(targets: SkillTarget.values.toSet()),
+      ]);
+      addTearDown(repo.dispose);
+      final target = prompt == null ? SkillTarget.chat : SkillTarget.image;
+      Widget summary(bool enabled) => SkillSummary(
+        repository: repo,
+        target: target,
+        prompt: prompt,
+        enabled: enabled,
+      );
+      await _pump(tester, summary(false));
+      expect(
+        tester.widget<TextButton>(find.byType(TextButton)).onPressed,
+        isNull,
+      );
+      await tester.tap(find.text('生效技能：图像技能'));
+      await tester.pumpAndSettle();
+      expect(find.byType(BottomSheet), findsNothing);
+      await _pump(tester, summary(true));
+      expect(find.text('最终提示词预览'), findsNothing);
+      expect(find.byType(SelectableText), findsNothing);
+      await tester.tap(find.text('生效技能：图像技能'));
+      await tester.pumpAndSettle();
+      expect(find.text(_imageSkill.prompt), findsOneWidget);
+      expect(find.text(_imageSkill.rules), findsOneWidget);
+      expect(
+        find.text('最终提示词'),
+        prompt == null ? findsNothing : findsOneWidget,
+      );
+      if (prompt != null) {
+        expect(
+          find.text(
+            composeSkillPrompt(
+              prompt: prompt,
+              skills: repo.snapshotFor(target),
+            ),
+          ),
+          findsOneWidget,
+        );
+      }
+      Navigator.of(tester.element(find.text('当前生效技能'))).pop();
+      await tester.pumpAndSettle();
+      expect(find.byType(SelectableText), findsNothing);
+    });
+  }
 
   testWidgets('历史快照独立显示保存内容，旧消息隐藏入口', (tester) async {
     const snapshot = SkillSnapshot(

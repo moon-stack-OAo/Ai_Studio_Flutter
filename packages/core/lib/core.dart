@@ -11,6 +11,7 @@ export 'src/chat/chat_session_storage.dart';
 export 'src/chat/chat_tool_history.dart';
 export 'src/chat/generation_gates.dart';
 export 'src/chat/generation_runtime.dart';
+export 'src/chat/streaming_text_chunks.dart';
 export 'src/image/file_image_asset_store.dart';
 export 'src/image/image_asset_store.dart';
 export 'src/image/image_client.dart';

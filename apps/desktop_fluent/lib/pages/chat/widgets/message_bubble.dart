@@ -9,6 +9,7 @@ import 'package:flutter/services.dart';
 import '../../image/widgets/image_lightbox.dart';
 import '../../../widgets/skill_summary.dart';
 import 'markdown_host.dart';
+import 'streaming_text_body.dart';
 import 'tool_call_trace_card.dart';
 
 class MessageBubble extends StatefulWidget {
@@ -542,8 +543,8 @@ class _AssistantBody extends StatelessWidget {
         if (message.hasToolCalls && !hideToolCallsStrip)
           ToolCallsInvokedStrip(toolCalls: message.toolCalls),
         if (streamingPlain)
-          SelectableText(
-            data,
+          StreamingTextBody(
+            data: data,
             style: TextStyle(
               fontSize: 14,
               height: 1.65,

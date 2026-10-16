@@ -27,15 +27,15 @@ class MarkdownHost extends StatefulWidget {
 
 class _MarkdownHostState extends State<MarkdownHost> {
   Widget? _cachedBody;
-  String? _cacheKey;
+  (bool, bool, String, String)? _cacheKey;
 
   String _themeKey(FluentTokens tokens) =>
       '${tokens.ink.toARGB32()}:${tokens.primary.toARGB32()}:'
       '${tokens.surfaceMuted.toARGB32()}:${tokens.border.toARGB32()}:'
       '${tokens.inkSecondary.toARGB32()}:${tokens.danger.toARGB32()}';
 
-  String _buildCacheKey(FluentTokens tokens) =>
-      '${widget.error}|${widget.compact}|${_themeKey(tokens)}|${widget.data}';
+  (bool, bool, String, String) _buildCacheKey(FluentTokens tokens) =>
+      (widget.error, widget.compact, _themeKey(tokens), widget.data);
 
   @override
   Widget build(BuildContext context) {

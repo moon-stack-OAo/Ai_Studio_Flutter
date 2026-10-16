@@ -22,6 +22,7 @@ class ChatSessionRepository extends ChangeNotifier {
        _attachmentStore = attachmentStore ?? MemoryImageAssetStore();
 
   final ChatSessionStorage _storage;
+  late final ChatSnapshotWriter _writer = ChatSnapshotWriter(_storage.save);
   final ImageAssetStore _attachmentStore;
 
   ImageAssetStore get attachmentStore => _attachmentStore;
@@ -126,7 +127,7 @@ class ChatSessionRepository extends ChangeNotifier {
   }
 
   Future<void> _persist() async {
-    await _storage.save(
+    await _writer.save(
       ChatStoreSnapshot(sessions: _sessions, activeId: _activeId),
     );
   }
@@ -372,12 +373,12 @@ class ChatSessionRepository extends ChangeNotifier {
         updatedAt: streamingTick ? session.updatedAt : _now(),
       ),
     );
-    if (persist) await _persist();
     if (streamingTick) {
       _notifyUiThrottled();
     } else {
       _notifyUiNow();
     }
+    if (persist) await _persist();
   }
 
   /// 追加流式内容到指定 assistant 消息。

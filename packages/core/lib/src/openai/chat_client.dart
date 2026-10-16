@@ -58,6 +58,7 @@ class OpenAiCompatibleChatClient {
     ActiveChatCredentials credentials, {
     required List<Map<String, dynamic>> messages,
     void Function(String delta, String fullText)? onDelta,
+    void Function(String delta)? onContentDelta,
     double temperature = defaultChatTemperature,
     int? maxTokens,
     List<Map<String, dynamic>>? tools,
@@ -71,6 +72,7 @@ class OpenAiCompatibleChatClient {
       model: credentials.chatModel,
       messages: messages,
       onDelta: onDelta,
+      onContentDelta: onContentDelta,
       temperature: temperature,
       maxTokens: maxTokens,
       tools: tools,
@@ -83,6 +85,8 @@ class OpenAiCompatibleChatClient {
   /// 返回 [ChatStreamResult]；通过 [onDelta] 回调文本增量。
   ///
   /// [tools] / [toolChoice] 为可选；未传时请求体与历史行为一致（不带 tools）。
+  /// [onContentDelta] 仅发布增量，适合调用方自行合批；[onDelta] 为兼容旧调用方
+  /// 继续提供全文，只有传入该回调时才会逐 delta 构建全文字符串。
   /// 取消：传入可关闭的 [client] 并在外部 `client.close()`，
   /// 或使用本实例 [close]（仅当 ownsClient）。
   /// 用户取消抛出 [ChatAbortException]（文案「已取消」）。
@@ -92,6 +96,7 @@ class OpenAiCompatibleChatClient {
     required String model,
     required List<Map<String, dynamic>> messages,
     void Function(String delta, String fullText)? onDelta,
+    void Function(String delta)? onContentDelta,
     double temperature = defaultChatTemperature,
     int? maxTokens,
     List<Map<String, dynamic>>? tools,
@@ -181,14 +186,19 @@ class OpenAiCompatibleChatClient {
 
     final parser = SseLineParser();
     final toolAcc = ToolCallAccumulator();
-    var fullText = '';
+    final fullText = StringBuffer();
     String? finishReason;
     try {
-      await for (final bytes in response.stream.timeout(reqTimeout)) {
-        final chunk = utf8.decode(bytes, allowMalformed: true);
+      // 按原始网络字节事件计时，避免 UTF-8 缓冲未完整字符时误判超时。
+      final chunks = response.stream
+          .timeout(reqTimeout)
+          .transform(const Utf8Decoder(allowMalformed: true));
+      responseLoop:
+      await for (final chunk in chunks) {
         final events = parser.addChunk(chunk);
         for (final event in events) {
-          if (event.done) continue;
+          // 退出外层 await for，等待取消响应订阅，不依赖服务端关闭连接。
+          if (event.done) break responseLoop;
           if (event.finishReason != null) {
             finishReason = event.finishReason;
           }
@@ -196,12 +206,13 @@ class OpenAiCompatibleChatClient {
             toolAcc.apply(event.toolCallDeltas);
           }
           if (event.delta.isEmpty) continue;
-          fullText += event.delta;
-          onDelta?.call(event.delta, fullText);
+          fullText.write(event.delta);
+          onContentDelta?.call(event.delta);
+          onDelta?.call(event.delta, fullText.toString());
         }
       }
       for (final event in parser.flush()) {
-        if (event.done) continue;
+        if (event.done) break;
         if (event.finishReason != null) {
           finishReason = event.finishReason;
         }
@@ -209,8 +220,9 @@ class OpenAiCompatibleChatClient {
           toolAcc.apply(event.toolCallDeltas);
         }
         if (event.delta.isEmpty) continue;
-        fullText += event.delta;
-        onDelta?.call(event.delta, fullText);
+        fullText.write(event.delta);
+        onContentDelta?.call(event.delta);
+        onDelta?.call(event.delta, fullText.toString());
       }
     } on TimeoutException {
       throw const ChatApiException('请求超时，请稍后重试或增大超时时间');
@@ -224,7 +236,7 @@ class OpenAiCompatibleChatClient {
     }
 
     return ChatStreamResult(
-      content: fullText,
+      content: fullText.toString(),
       toolCalls: toolAcc.snapshot(),
       finishReason: finishReason,
     );

@@ -217,7 +217,14 @@ class SseLineParser {
       final payload = extractSseDataPayload(line);
       if (payload == null) continue;
       final event = parseSseDataPayload(payload);
-      if (event != null) events.add(event);
+      if (event != null) {
+        events.add(event);
+        if (event.done) {
+          // 终止后的完整行与残留行都忽略，避免后续错误帧抢先抛错。
+          _buffer.clear();
+          break;
+        }
+      }
     }
     return events;
   }
@@ -232,7 +239,10 @@ class SseLineParser {
       final payload = extractSseDataPayload(line);
       if (payload == null) continue;
       final event = parseSseDataPayload(payload);
-      if (event != null) events.add(event);
+      if (event != null) {
+        events.add(event);
+        if (event.done) break;
+      }
     }
     return events;
   }

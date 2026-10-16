@@ -113,6 +113,28 @@ void main() {
       expect(flushed.single.delta, 'Z');
     });
 
+    test('[DONE] 后同 chunk 的错误帧与残留行均忽略', () {
+      final parser = SseLineParser();
+      final events = parser.addChunk(
+        'data: {"choices":[{"delta":{"content":"A"}}]}\n'
+        'data: [DONE]\n'
+        'data: {"error":{"message":"不应抛错"}}\n'
+        'data: {"choices":[{"delta":{"content":"不应 flush"}}]}',
+      );
+      expect(events, hasLength(2));
+      expect(events.first.delta, 'A');
+      expect(events.last.done, isTrue);
+      expect(parser.flush(), isEmpty);
+    });
+
+    test('flush 无换行的 [DONE]', () {
+      final parser = SseLineParser();
+      expect(parser.addChunk('data: [DO'), isEmpty);
+      expect(parser.addChunk('NE]'), isEmpty);
+      expect(parser.flush().single.done, isTrue);
+      expect(parser.flush(), isEmpty);
+    });
+
     test('跨 chunk 的 tool_calls 增量', () {
       final parser = SseLineParser();
       final acc = ToolCallAccumulator();

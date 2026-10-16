@@ -48,12 +48,25 @@ class ChatPage extends StatefulWidget {
 class _ChatPageState extends State<ChatPage> {
   late final ChatController _controller;
   late final SkillRepository _skills;
+  late final ValueNotifier<(String?, String?, ChatOverrides?)> _sessionChrome;
   String? _lastBanner;
+
+  (String?, String?, ChatOverrides?) _chromeSignature() {
+    final session = widget.sessionRepository.activeSession;
+    return (session?.id, session?.title, session?.overrides);
+  }
+
+  void _onSessionChanged() {
+    _sessionChrome.value = _chromeSignature();
+  }
 
   @override
   void initState() {
     super.initState();
-    _skills = widget.skillRepository ?? SkillRepository(storage: MemorySkillStorage());
+    _sessionChrome = ValueNotifier(_chromeSignature());
+    widget.sessionRepository.addListener(_onSessionChanged);
+    _skills =
+        widget.skillRepository ?? SkillRepository(storage: MemorySkillStorage());
     if (!_skills.isLoaded) unawaited(_skills.load().catchError((Object _) {}));
     _controller = ChatController(
       skillRepository: _skills,
@@ -97,6 +110,8 @@ class _ChatPageState extends State<ChatPage> {
 
   @override
   void dispose() {
+    widget.sessionRepository.removeListener(_onSessionChanged);
+    _sessionChrome.dispose();
     _controller.removeListener(_onControllerChanged);
     _controller.dispose();
     if (widget.skillRepository == null) _skills.dispose();
@@ -151,10 +166,7 @@ class _ChatPageState extends State<ChatPage> {
     return ListenableBuilder(
       listenable: Listenable.merge([
         widget.providerRepository,
-        widget.sessionRepository,
-        widget.generation,
-        _controller,
-        ?widget.mcpServerRepository,
+        _sessionChrome,
       ]),
       builder: (context, _) {
         final ready = widget.providerRepository.hasConfiguredChatProvider;
@@ -170,10 +182,8 @@ class _ChatPageState extends State<ChatPage> {
         }
 
         final session = widget.sessionRepository.activeSession;
-        final messages = session?.messages ?? const <ChatMessage>[];
         final creds = widget.providerRepository.activeChatCredentials;
         final modelLabel = creds?.chatModel ?? '';
-        final streamingHere = _controller.isStreamingActiveSession;
         final title = session?.title ?? '新对话';
         final hasOverrides = session != null && !session.overrides.isEmpty;
 
@@ -271,36 +281,64 @@ class _ChatPageState extends State<ChatPage> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Expanded(
-                child: MessageList(
-                  key: ValueKey(session?.id),
-                  messages: messages,
-                  recallEnabled: !streamingHere,
-                  onRecallUser: (id) => _controller.recallUserMessage(id),
-                  emptyHint: '开始第一条对话',
-                  emptySubtitle: '当前会话还没有消息，在下方输入即可开始。',
-                  emptySecondaryActionLabel: '打开会话列表',
-                  onEmptySecondaryAction: _openSessions,
-                  liveToolTraces: _controller.liveToolTraces,
+                child: ListenableBuilder(
+                  listenable: Listenable.merge([
+                    widget.sessionRepository,
+                    widget.generation,
+                    _controller,
+                  ]),
+                  builder: (context, _) {
+                    final active = widget.sessionRepository.activeSession;
+                    return MessageList(
+                      key: ValueKey(active?.id),
+                      messages: active?.messages ?? const <ChatMessage>[],
+                      recallEnabled: !_controller.isStreamingActiveSession,
+                      onRecallUser: (id) => _controller.recallUserMessage(id),
+                      emptyHint: '开始第一条对话',
+                      emptySubtitle: '当前会话还没有消息，在下方输入即可开始。',
+                      emptySecondaryActionLabel: '打开会话列表',
+                      onEmptySecondaryAction: _openSessions,
+                      liveToolTraces: _controller.liveToolTraces,
+                    );
+                  },
                 ),
               ),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                child: SkillSummary(repository: _skills, target: SkillTarget.chat, enabled: !widget.generation.busy),
-              ),
-              Composer(
-                enabled: _controller.canSend,
-                streaming: streamingHere,
-                onSend: _controller.send,
-                onStop: _controller.stop,
-                visionSupported: _controller.activeChatSupportsVision,
-                draftAttachments: _controller.draftAttachments,
-                onPickAttachments: streamingHere
-                    ? null
-                    : () => _controller.pickAttachments(),
-                onRemoveDraftAttachment:
-                    _controller.removeDraftAttachmentAt,
-                canSendWithDraft: (text) =>
-                    _controller.canSendWith(textDraft: text),
+              ListenableBuilder(
+                listenable: Listenable.merge([
+                  widget.generation,
+                  _controller,
+                ]),
+                builder: (context, _) {
+                  final streamingHere = _controller.isStreamingActiveSession;
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        child: SkillSummary(
+                          repository: _skills,
+                          target: SkillTarget.chat,
+                          enabled: !widget.generation.busy,
+                        ),
+                      ),
+                      Composer(
+                        enabled: _controller.canSend,
+                        streaming: streamingHere,
+                        onSend: _controller.send,
+                        onStop: _controller.stop,
+                        visionSupported: _controller.activeChatSupportsVision,
+                        draftAttachments: _controller.draftAttachments,
+                        onPickAttachments: streamingHere
+                            ? null
+                            : () => _controller.pickAttachments(),
+                        onRemoveDraftAttachment:
+                            _controller.removeDraftAttachmentAt,
+                        canSendWithDraft: (text) =>
+                            _controller.canSendWith(textDraft: text),
+                      ),
+                    ],
+                  );
+                },
               ),
             ],
           ),

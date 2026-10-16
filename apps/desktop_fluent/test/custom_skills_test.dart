@@ -145,6 +145,7 @@ class _EnhanceClient extends OpenAiCompatibleChatClient {
     ActiveChatCredentials credentials, {
     required List<Map<String, dynamic>> messages,
     void Function(String delta, String fullText)? onDelta,
+    void Function(String delta)? onContentDelta,
     double temperature = defaultChatTemperature,
     int? maxTokens,
     List<Map<String, dynamic>>? tools,
@@ -154,6 +155,7 @@ class _EnhanceClient extends OpenAiCompatibleChatClient {
   }) {
     requests.add(messages);
     onDelta?.call('流式结果', '流式结果');
+    onContentDelta?.call('流式结果');
     final completer = Completer<ChatStreamResult>();
     pending.add(completer);
     return completer.future;
@@ -583,7 +585,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('摘要响应启停，预览来自 core，空技能仍可管理', (tester) async {
+  testWidgets('摘要响应启停，详情内预览来自 core，关闭后隐藏正文，空技能仍可管理', (tester) async {
     final repo = await _repository();
     addTearDown(repo.dispose);
     var managed = false;
@@ -597,8 +599,13 @@ void main() {
       ),
     );
     expect(find.text('技能 1：画面保真'), findsOneWidget);
-    await tester.tap(find.text('最终提示词预览'));
+    expect(find.text('最终提示词预览'), findsNothing);
+    expect(find.byType(SelectableText), findsNothing);
+    await tester.tap(find.text('技能 1：画面保真'));
     await tester.pumpAndSettle();
+    expect(find.text(_skill.prompt), findsOneWidget);
+    expect(find.text(_skill.rules), findsOneWidget);
+    expect(find.text('最终提示词'), findsOneWidget);
     expect(
       find.text(
         composeSkillPrompt(
@@ -608,18 +615,24 @@ void main() {
       ),
       findsOneWidget,
     );
+    await tester.tap(find.text('关闭'));
+    await tester.pumpAndSettle();
+    expect(find.byType(SelectableText), findsNothing);
+    expect(find.text('最终提示词'), findsNothing);
     await repo.setEnabled('s1', false);
     await tester.pumpAndSettle();
     expect(find.text('技能：未启用 · 管理技能'), findsOneWidget);
     await tester.tap(find.text('技能：未启用 · 管理技能'));
     await tester.pumpAndSettle();
+    expect(find.text('当前没有生效的自定义技能。'), findsOneWidget);
+    expect(find.text('猫'), findsOneWidget);
     await tester.tap(find.text('管理技能'));
     await tester.pumpAndSettle();
     expect(managed, true);
   });
 
   for (final target in [SkillTarget.image, SkillTarget.video]) {
-    testWidgets('${target.label}预览与详情去除用户提示词首尾空白，保留内部空白', (tester) async {
+    testWidgets('${target.label}摘要详情去除用户提示词首尾空白，保留内部空白', (tester) async {
       final repo = await _repository();
       addTearDown(repo.dispose);
       await _pump(
@@ -630,25 +643,14 @@ void main() {
           prompt: '\n  猫 在 窗边 \t\n',
         ),
       );
-      await tester.tap(find.text('最终提示词预览'));
-      await tester.pumpAndSettle();
       for (final enabled in [true, false]) {
         await repo.setEnabled(_skill.id, enabled);
         await tester.pumpAndSettle();
         final expected = enabled
             ? '【技能：画面保真】\n提示词：\n保持原主体\n规则：\n避免增加角色\n\n【用户需求】\n猫 在 窗边'
             : '猫 在 窗边';
-        expect(
-          tester
-              .widget<SelectableText>(
-                find.descendant(
-                  of: find.byType(SkillSummary),
-                  matching: find.byType(SelectableText),
-                ),
-              )
-              .data,
-          expected,
-        );
+        expect(find.text('最终提示词预览'), findsNothing);
+        expect(find.byType(SelectableText), findsNothing);
         await tester.tap(find.text(enabled ? '技能 1：画面保真' : '技能：未启用 · 管理技能'));
         await tester.pumpAndSettle();
         expect(
@@ -666,7 +668,57 @@ void main() {
         );
         await tester.tap(find.text('关闭'));
         await tester.pumpAndSettle();
+        expect(find.byType(SelectableText), findsNothing);
       }
+    });
+  }
+
+  for (final prompt in <String?>[null, '']) {
+    testWidgets('摘要禁用时不可打开，${prompt == null ? '对话仅显示技能详情' : '空输入仍可查看最终提示词'}', (
+      tester,
+    ) async {
+      final repo = await _repository();
+      addTearDown(repo.dispose);
+      final target = prompt == null ? SkillTarget.chat : SkillTarget.image;
+      await repo.saveSkill(
+        _skill.copyWith(targets: SkillTarget.values.toSet()),
+      );
+      Widget summary(bool enabled) => SkillSummary(
+        repository: repo,
+        target: target,
+        prompt: prompt,
+        enabled: enabled,
+      );
+      await _pump(tester, summary(false));
+      expect(tester.widget<Button>(find.byType(Button)).onPressed, isNull);
+      await tester.tap(find.text('技能 1：画面保真'));
+      await tester.pumpAndSettle();
+      expect(find.byType(ContentDialog), findsNothing);
+      await _pump(tester, summary(true));
+      expect(find.text('最终提示词预览'), findsNothing);
+      expect(find.byType(SelectableText), findsNothing);
+      await tester.tap(find.text('技能 1：画面保真'));
+      await tester.pumpAndSettle();
+      expect(find.text(_skill.prompt), findsOneWidget);
+      expect(find.text(_skill.rules), findsOneWidget);
+      expect(
+        find.text('最终提示词'),
+        prompt == null ? findsNothing : findsOneWidget,
+      );
+      if (prompt != null) {
+        expect(
+          find.text(
+            composeSkillPrompt(
+              prompt: prompt,
+              skills: repo.snapshotFor(target),
+            ).trim(),
+          ),
+          findsOneWidget,
+        );
+      }
+      await tester.tap(find.text('关闭'));
+      await tester.pumpAndSettle();
+      expect(find.byType(SelectableText), findsNothing);
     });
   }
 

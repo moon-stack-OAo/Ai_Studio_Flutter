@@ -24,43 +24,29 @@ class SkillSummary extends StatelessWidget {
       listenable: repository,
       builder: (context, _) {
         final skills = repository.snapshotFor(target);
-        final finalPrompt = prompt == null
-            ? null
-            : composeSkillPrompt(prompt: prompt!.trim(), skills: skills).trim();
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Button(
-              onPressed: enabled
-                  ? () => showSkillDetails(
-                      context,
-                      skills: skills,
-                      title: '${target.label}生效技能',
-                      finalPrompt: finalPrompt,
-                      onManage: onManage,
-                    )
-                  : null,
-              child: Text(
-                skills.isEmpty
-                    ? '技能：未启用 · 管理技能'
-                    : '技能 ${skills.length}：${skills.map((s) => s.name).join('、')}',
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontSize: 12),
-              ),
-            ),
-            if (prompt != null)
-              Expander(
-                header: const Text('最终提示词预览', style: TextStyle(fontSize: 12)),
-                content: ConstrainedBox(
-                  constraints: const BoxConstraints(maxHeight: 180),
-                  child: SingleChildScrollView(
-                    child: SelectableText(finalPrompt!),
-                  ),
-                ),
-              ),
-          ],
+        return Button(
+          onPressed: enabled
+              ? () => showSkillDetails(
+                  context,
+                  skills: skills,
+                  title: '${target.label}生效技能',
+                  finalPrompt: prompt == null
+                      ? null
+                      : composeSkillPrompt(
+                          prompt: prompt!.trim(),
+                          skills: skills,
+                        ).trim(),
+                  onManage: onManage,
+                )
+              : null,
+          child: Text(
+            skills.isEmpty
+                ? '技能：未启用 · 管理技能'
+                : '技能 ${skills.length}：${skills.map((s) => s.name).join('、')}',
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontSize: 12),
+          ),
         );
       },
     );

@@ -31,6 +31,7 @@ class _ControlledChatClient extends OpenAiCompatibleChatClient {
     ActiveChatCredentials credentials, {
     required List<Map<String, dynamic>> messages,
     void Function(String delta, String fullText)? onDelta,
+    void Function(String delta)? onContentDelta,
     double temperature = defaultChatTemperature,
     int? maxTokens,
     List<Map<String, dynamic>>? tools,

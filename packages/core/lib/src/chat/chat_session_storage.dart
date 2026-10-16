@@ -1,5 +1,7 @@
+import 'dart:async';
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'chat_attach.dart';
@@ -109,6 +111,81 @@ abstract class ChatSessionStorage {
   Future<void> save(ChatStoreSnapshot snapshot);
 }
 
+/// 串行写入；在途写入期间仅保留最新待写快照。
+/// 被合并请求的等待者随实际覆盖它的写入完成；失败只影响该批等待者。
+class ChatSnapshotWriter {
+  ChatSnapshotWriter(this._write);
+
+  final Future<void> Function(ChatStoreSnapshot) _write;
+  ChatStoreSnapshot? _pending;
+  List<Completer<void>> _waiters = [];
+  bool _running = false;
+
+  Future<void> save(ChatStoreSnapshot snapshot) {
+    final waiter = Completer<void>();
+    _pending = snapshot;
+    _waiters.add(waiter);
+    if (!_running) {
+      _running = true;
+      scheduleMicrotask(_drain);
+    }
+    return waiter.future;
+  }
+
+  Future<void> _drain() async {
+    while (_pending != null) {
+      final snapshot = _pending!;
+      final waiters = _waiters;
+      _pending = null;
+      _waiters = [];
+      try {
+        await _write(snapshot);
+        for (final waiter in waiters) {
+          waiter.complete();
+        }
+      } catch (error, stack) {
+        for (final waiter in waiters) {
+          waiter.completeError(error, stack);
+        }
+      }
+    }
+    _running = false;
+  }
+}
+
+// 顶层函数仅接收纯数据模型，不捕获 prefs、平台通道或 repository。
+String _encodeChatSnapshot(ChatStoreSnapshot snapshot) {
+  final prepared = prepareChatPersistPayload(snapshot);
+  return jsonEncode({
+    'activeId': prepared.activeId,
+    'sessions': prepared.sessions.map((s) => s.toJson()).toList(),
+  });
+}
+
+bool _needsBackgroundEncoding(ChatStoreSnapshot snapshot) {
+  var chars = 0;
+  var messages = 0;
+  for (final session in snapshot.sessions) {
+    chars += session.title.length + (session.overrides.systemPrompt?.length ?? 0);
+    if (chars >= 64 * 1024) return true;
+    for (final message in session.messages) {
+      if (++messages >= 256) return true;
+      chars += message.content.length;
+      for (final call in message.toolCalls) {
+        chars += call.arguments.length;
+      }
+      for (final attachment in message.attachments) {
+        chars += attachment.src.length;
+      }
+      for (final skill in message.appliedSkills) {
+        chars += skill.prompt.length + skill.rules.length;
+      }
+      if (chars >= 64 * 1024) return true;
+    }
+  }
+  return false;
+}
+
 /// SharedPreferences：`core.chat_sessions.v1` → `{sessions, activeId}`。
 class PrefsChatSessionStorage implements ChatSessionStorage {
   PrefsChatSessionStorage({SharedPreferences? prefs}) : _prefsOverride = prefs;
@@ -117,6 +194,7 @@ class PrefsChatSessionStorage implements ChatSessionStorage {
 
   final SharedPreferences? _prefsOverride;
   SharedPreferences? _prefs;
+  late final ChatSnapshotWriter _writer = ChatSnapshotWriter(_save);
 
   Future<SharedPreferences> _ensurePrefs() async {
     return _prefs ??= _prefsOverride ?? await SharedPreferences.getInstance();
@@ -156,14 +234,16 @@ class PrefsChatSessionStorage implements ChatSessionStorage {
   }
 
   @override
-  Future<void> save(ChatStoreSnapshot snapshot) async {
+  Future<void> save(ChatStoreSnapshot snapshot) => _writer.save(snapshot);
+
+  Future<void> _save(ChatStoreSnapshot snapshot) async {
     final prefs = await _ensurePrefs();
-    final prepared = prepareChatPersistPayload(snapshot);
-    final payload = <String, dynamic>{
-      'activeId': prepared.activeId,
-      'sessions': prepared.sessions.map((s) => s.toJson()).toList(),
-    };
-    await prefs.setString(prefsKey, jsonEncode(payload));
+    final payload = _needsBackgroundEncoding(snapshot)
+        ? await compute(_encodeChatSnapshot, snapshot)
+        : _encodeChatSnapshot(snapshot);
+    if (!await prefs.setString(prefsKey, payload)) {
+      throw StateError('保存对话失败');
+    }
   }
 }
 

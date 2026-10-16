@@ -143,6 +143,8 @@ void main() {
         return http.StreamedResponse(
           Stream.value(
             utf8.encode(
+              'data: {"choices":[{"delta":{"content":"准备"}}]}\n'
+              'data: {"choices":[{"delta":{"content":"调用工具"}}]}\n'
               'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_1","type":"function","function":{"name":"biz.query","arguments":"{}"}}]},"finish_reason":"tool_calls"}]}\n'
               'data: [DONE]\n',
             ),
@@ -203,11 +205,16 @@ void main() {
     expect(msgs[0].appliedSkills.single.rules, '旧规则');
     expect(msgs[1].role, ChatRole.assistant);
     expect(msgs[1].hasToolCalls, isTrue);
+    expect(msgs[1].content, '准备调用工具');
+    expect(msgs[1].streaming, isFalse);
     expect(msgs[2].role, ChatRole.tool);
     expect(msgs[2].content, contains('tool-ok'));
     expect(msgs.last.role, ChatRole.assistant);
     expect(msgs.last.content, contains('完成'));
     expect(fakeSessions['mcp_1']!.calls, ['biz.query']);
+    await Future<void>.delayed(const Duration(milliseconds: 100));
+    expect(sessions.activeSession!.messages[1].streaming, isFalse);
+    expect(sessions.activeSession!.messages.last.content, '根据工具：完成');
     facade.dispose();
   });
 

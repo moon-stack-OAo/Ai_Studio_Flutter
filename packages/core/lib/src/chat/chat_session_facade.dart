@@ -26,6 +26,7 @@ import '../settings/chat_defaults_repository.dart';
 import '../util/id.dart';
 import 'chat_attach.dart';
 import 'chat_context_trim.dart';
+import 'chat_delta_batcher.dart';
 import 'chat_errors.dart';
 import 'chat_models.dart';
 import 'chat_session_repository.dart';
@@ -126,8 +127,8 @@ class ChatSessionFacade {
 
   final ProviderModelsCache modelsCache;
 
-  String? _streamingAssistantId;
-  DateTime? _lastPersistAt;
+  VoidCallback? _cancelStream;
+  bool _disposed = false;
 
   bool get isStreamingActiveSession => generation.isCurrent(_sessions.activeId);
 
@@ -199,6 +200,7 @@ class ChatSessionFacade {
     List<Uint8List>? attachmentBytes,
     List<String?>? attachmentMimes,
   }) async {
+    if (_disposed) return;
     final text = raw.trim();
     final appliedSkills =
         _skillRepository?.snapshotFor(SkillTarget.chat) ??
@@ -283,7 +285,6 @@ class ChatSessionFacade {
       model: chatModel,
     );
     if (assistantMsg == null) return;
-    _streamingAssistantId = assistantMsg.id;
 
     final defaults = _chatDefaults.defaults;
     final historyForApi = [...historyBefore, userMsg];
@@ -313,21 +314,43 @@ class ChatSessionFacade {
     final openaiTools = _resolveOpenAiTools(chatModel);
     final mcpActive = openaiTools != null && openaiTools.isNotEmpty;
 
+    if (_disposed) {
+      await _sessions.markStopped(sessionId, assistantMsg.id);
+      return;
+    }
     final streamClient = _createHttpClient();
-    // abort 时关闭 chat client，并关闭进行中的 MCP sessions。
-    final token = generation.begin(sessionId, () {
+    ChatDeltaBatcher? batch;
+    var cancelled = false;
+    var currentAssistantId = assistantMsg.id;
+    Future<void> checkpoint = Future.value();
+    Object? checkpointError;
+    final checkpointClock = Stopwatch()..start();
+    void cancelStream() {
+      if (cancelled) return;
+      cancelled = true;
+      batch?.close();
+      // 即便底层 close 未及时结束读取，也立即封口，后续 delta 会被拒绝。
+      checkpoint = _sessions.updateMessage(
+        sessionId,
+        currentAssistantId,
+        streaming: false,
+        stopped: true,
+      ).catchError((Object error) {
+        checkpointError = error;
+      });
       try {
         streamClient.close();
       } catch (_) {}
       _closeMcpSessions();
-    });
-    onNotify();
+    }
+    _cancelStream = cancelStream;
+    // abort 时关闭 chat client，并关闭进行中的 MCP sessions。
+    final token = generation.begin(sessionId, cancelStream);
+    if (!_disposed) onNotify();
 
     final sw = Stopwatch()..start();
-    var currentAssistantId = assistantMsg.id;
     var aborted = false;
     var errored = false;
-    String? errorBanner;
 
     try {
       var round = 0;
@@ -335,11 +358,31 @@ class ChatSessionFacade {
       var workingMessages = List<Map<String, dynamic>>.from(apiMessages);
 
       while (true) {
-        if (!_isGenCurrent(sessionId)) {
+        if (cancelled || !_isGenCurrent(sessionId)) {
           aborted = true;
           break;
         }
 
+        final roundAssistantId = currentAssistantId;
+        batch = ChatDeltaBatcher(
+          interval: kChatStreamingUiMinInterval,
+          onFlush: (content) {
+            final persist =
+                checkpointClock.elapsed >= const Duration(seconds: 2);
+            if (persist) checkpointClock.reset();
+            final update = _sessions.updateMessage(
+              sessionId,
+              roundAssistantId,
+              content: content,
+              streaming: true,
+              persist: persist,
+            );
+            final handled = update.catchError((Object error) {
+              checkpointError = error;
+            });
+            if (persist) checkpoint = handled;
+          },
+        );
         final result = await _chatClient.streamChatWithCredentials(
           creds,
           messages: workingMessages,
@@ -349,15 +392,16 @@ class ChatSessionFacade {
           toolChoice: mcpActive ? 'auto' : null,
           timeout: defaults.apiTimeout,
           client: streamClient,
-          onDelta: (delta, full) {
-            unawaited(_onDelta(sessionId, currentAssistantId, delta, full));
-          },
+          onContentDelta: batch.add,
         );
+        batch.close();
+        await checkpoint;
 
-        if (!_isGenCurrent(sessionId)) {
+        if (cancelled || !_isGenCurrent(sessionId)) {
           aborted = true;
           break;
         }
+        if (checkpointError != null) throw checkpointError!;
 
         if (!mcpActive || !result.hasToolCalls) {
           await _sessions.updateMessage(
@@ -410,8 +454,10 @@ class ChatSessionFacade {
         final callResults = await orchestrator.runRound(
           calls: requests,
           prompter: _toolAuthPrompter!,
-          onTrace: _onToolTrace,
-          isCancelled: () => !_isGenCurrent(sessionId),
+          onTrace: (trace) {
+            if (!_disposed) _onToolTrace?.call(trace);
+          },
+          isCancelled: () => cancelled || !_isGenCurrent(sessionId),
           options: ToolCallOrchestratorOptions(
             maxRounds: remaining,
             serialCalls: true,
@@ -421,7 +467,7 @@ class ChatSessionFacade {
             .where((r) => r.status == McpToolCallStatus.success)
             .length;
 
-        if (!_isGenCurrent(sessionId)) {
+        if (cancelled || !_isGenCurrent(sessionId)) {
           aborted = true;
           break;
         }
@@ -454,7 +500,7 @@ class ChatSessionFacade {
           _logToolResult(tr);
         }
 
-        onNotify();
+        if (!_disposed) onNotify();
 
         // 下一轮助手气泡。
         final next = await _sessions.appendMessage(
@@ -466,17 +512,16 @@ class ChatSessionFacade {
         );
         if (next == null) break;
         currentAssistantId = next.id;
-        _streamingAssistantId = next.id;
       }
     } on ChatAbortException {
       aborted = true;
     } catch (e) {
-      if (isAbortLike(e)) {
+      batch?.close();
+      if (cancelled || isAbortLike(e)) {
         aborted = true;
       } else {
         errored = true;
         final msg = toChatErrorMessage(e, '请求失败');
-        errorBanner = msg;
         await _sessions.updateMessage(
           sessionId,
           currentAssistantId,
@@ -487,7 +532,7 @@ class ChatSessionFacade {
           latencyMs: sw.elapsedMilliseconds,
           persist: true,
         );
-        if (bannerOnStreamError) {
+        if (!_disposed && bannerOnStreamError) {
           onBanner?.call(msg);
         }
         final logs = _appLogs;
@@ -502,34 +547,29 @@ class ChatSessionFacade {
         }
       }
     } finally {
-      if (aborted && !errored) {
-        await _sessions.updateMessage(
-          sessionId,
-          currentAssistantId,
-          streaming: false,
-          stopped: true,
-          model: chatModel,
-          latencyMs: sw.elapsedMilliseconds,
-          persist: true,
-        );
-      }
-      _streamingAssistantId = null;
-      generation.end(sessionId, token);
-      _closeMcpSessions();
+      batch?.close();
       try {
-        streamClient.close();
-      } catch (_) {}
-      await _sessions.updateMessage(
-        sessionId,
-        currentAssistantId,
-        model: chatModel,
-        latencyMs: sw.elapsedMilliseconds,
-        persist: true,
-      );
-      if (errorBanner != null && bannerOnStreamError) {
-        // already notified
+        await checkpoint;
+        if (aborted && !errored) {
+          await _sessions.updateMessage(
+            sessionId,
+            currentAssistantId,
+            streaming: false,
+            stopped: true,
+            model: chatModel,
+            latencyMs: sw.elapsedMilliseconds,
+            persist: true,
+          );
+        }
+      } finally {
+        if (identical(_cancelStream, cancelStream)) _cancelStream = null;
+        generation.end(sessionId, token);
+        _closeMcpSessions();
+        try {
+          streamClient.close();
+        } catch (_) {}
+        if (!_disposed) onNotify();
       }
-      onNotify();
     }
   }
 
@@ -692,28 +732,10 @@ class ChatSessionFacade {
     }
   }
 
-  Future<void> _onDelta(
-    String sessionId,
-    String messageId,
-    String delta,
-    String full,
-  ) async {
-    if (_streamingAssistantId != messageId) return;
-    final now = DateTime.now();
-    final shouldPersist =
-        _lastPersistAt == null ||
-        now.difference(_lastPersistAt!) > const Duration(milliseconds: 400);
-    if (shouldPersist) _lastPersistAt = now;
-    await _sessions.updateMessage(
-      sessionId,
-      messageId,
-      content: full,
-      streaming: true,
-      persist: shouldPersist,
-    );
-  }
-
   void dispose() {
+    if (_disposed) return;
+    _disposed = true;
+    _cancelStream?.call();
     _mcpServers?.removeListener(_onMcpConfigurationChanged);
     _sessions.removeListener(_pruneSessionGrants);
     _mcpSessionGrants.clear();

@@ -23,41 +23,25 @@ class SkillSummary extends StatelessWidget {
       listenable: repository,
       builder: (context, _) {
         final skills = repository.snapshotFor(target);
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            TextButton.icon(
-              style: TextButton.styleFrom(alignment: Alignment.centerLeft),
-              onPressed: enabled
-                  ? () => showSkillDetails(
-                      context,
-                      skills: skills,
-                      repository: repository,
-                      target: target,
-                      draftPrompt: prompt,
-                    )
-                  : null,
-              icon: const Icon(Icons.auto_awesome_outlined, size: 18),
-              label: Text(
-                skills.isEmpty
-                    ? '自定义技能 · 未启用 · 管理'
-                    : '生效技能：${skills.map((s) => s.name).join('、')}',
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-            if (prompt != null)
-              ExpansionTile(
-                enabled: enabled,
-                title: const Text('最终提示词预览', style: TextStyle(fontSize: 12)),
-                childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-                children: [
-                  SelectableText(
-                    composeSkillPrompt(prompt: prompt!.trim(), skills: skills),
-                  ),
-                ],
-              ),
-          ],
+        return TextButton.icon(
+          style: TextButton.styleFrom(alignment: Alignment.centerLeft),
+          onPressed: enabled
+              ? () => showSkillDetails(
+                  context,
+                  skills: skills,
+                  repository: repository,
+                  target: target,
+                  draftPrompt: prompt,
+                )
+              : null,
+          icon: const Icon(Icons.auto_awesome_outlined, size: 18),
+          label: Text(
+            skills.isEmpty
+                ? '自定义技能 · 未启用 · 管理'
+                : '生效技能：${skills.map((s) => s.name).join('、')}',
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
         );
       },
     );
