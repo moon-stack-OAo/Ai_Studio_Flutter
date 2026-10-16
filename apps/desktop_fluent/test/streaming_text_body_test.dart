@@ -77,6 +77,12 @@ void main() {
           globalPosition: position(startBlock, start),
         ),
       );
+      // 与鼠标按下时一致：先在起点折叠选区，再拖动结束边界。
+      delegate.dispatchSelectionEvent(
+        SelectionEdgeUpdateEvent.forEnd(
+          globalPosition: position(startBlock, start),
+        ),
+      );
       delegate.dispatchSelectionEvent(
         SelectionEdgeUpdateEvent.forEnd(
           globalPosition: position(endBlock, end),
@@ -88,7 +94,11 @@ void main() {
           .onPressed
           ?.call();
       await tester.pump();
-      expect(copied, expected);
+      expect(
+        copied,
+        expected,
+        reason: '选区：块 $startBlock:$start → 块 $endBlock:$end',
+      );
     }
   });
 
