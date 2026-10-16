@@ -85,6 +85,15 @@ void main() {
   });
 
   group('supportsChatTools', () {
+    test('Agnes 对话模型支持 tools，媒体型号不挂载工具', () {
+      expect(supportsChatTools('agnes-2.0-flash'), isTrue);
+      expect(supportsChatTools('agnes-2.5-flash'), isTrue);
+      expect(supportsChatTools('  AgnesAI/AGNES-2.5-FLASH  '), isTrue);
+      expect(supportsChatTools('agnes-image-2.0-flash'), isFalse);
+      expect(supportsChatTools('agnes-image-2.1-flash'), isFalse);
+      expect(supportsChatTools('AgnesAI/AGNES-VIDEO-V2.0'), isFalse);
+    });
+
     test('启发式与 force', () {
       expect(supportsChatTools('gpt-4o'), isTrue);
       expect(supportsChatTools('grok-4.5'), isTrue);

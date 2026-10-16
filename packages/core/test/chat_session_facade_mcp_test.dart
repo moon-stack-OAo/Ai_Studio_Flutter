@@ -111,7 +111,11 @@ void main() {
     facade.dispose();
   });
 
-  test('有 tool_calls 时串行 call 并回灌再生成', () async {
+  Future<void> verifyToolCalling(String chatModel) async {
+    await providers.updateProvider(
+      providers.activeProviderId,
+      chatModel: chatModel,
+    );
     final skills = SkillRepository(
       storage: MemorySkillStorage([
         const CustomSkill(
@@ -132,6 +136,8 @@ void main() {
     final client = MockClient.streaming((request, bodyStream) async {
       final body = jsonDecode(await bodyStream.bytesToString()) as Map;
       round++;
+      expect(body['model'], chatModel);
+      expect(body['tools'], isA<List>());
       final system = (body['messages'] as List).first['content'] as String;
       expect(system, startsWith('会话规则'));
       expect(system, contains('旧规则'));
@@ -139,7 +145,6 @@ void main() {
       expect(system, isNot(contains('新规则')));
       if (round == 1) {
         await skills.saveSkill(skills.skills.single.copyWith(rules: '新规则'));
-        expect(body['tools'], isA<List>());
         return http.StreamedResponse(
           Stream.value(
             utf8.encode(
@@ -197,7 +202,9 @@ void main() {
       toolAuthPrompter: allowAllToolAuthPrompter,
     );
 
+    expect(facade.activeChatSupportsTools, isTrue);
     await facade.send('查一下', onNotify: () {});
+    expect(round, 2);
     final msgs = sessions.activeSession!.messages;
     // user + assistant(tool_calls) + tool + assistant(final)
     expect(msgs.length, greaterThanOrEqualTo(4));
@@ -216,7 +223,13 @@ void main() {
     expect(sessions.activeSession!.messages[1].streaming, isFalse);
     expect(sessions.activeSession!.messages.last.content, '根据工具：完成');
     facade.dispose();
-  });
+  }
+
+  for (final chatModel in ['gpt-4o', 'agnes-2.0-flash', 'agnes-2.5-flash']) {
+    test('$chatModel 有 tool_calls 时串行 call 并回灌再生成', () async {
+      await verifyToolCalling(chatModel);
+    });
+  }
 
   test('用户拒绝授权：回灌拒绝且不 call Server', () async {
     var round = 0;
