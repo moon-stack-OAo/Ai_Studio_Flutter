@@ -85,9 +85,8 @@ class _ChatModelPickerSheetState extends State<_ChatModelPickerSheet> {
     final loading = models.isEmpty
         ? (ctrlLoading || widget.initiallyLoading)
         : ctrlLoading;
-    final changed = loading != _loading ||
-        error != _error ||
-        !_sameIds(_models, models);
+    final changed =
+        loading != _loading || error != _error || !_sameIds(_models, models);
     if (!changed) return;
     setState(() {
       _loading = loading;
@@ -231,8 +230,8 @@ class _ChatModelPickerSheetState extends State<_ChatModelPickerSheet> {
                           _loading
                               ? '加载中…'
                               : (q.isEmpty
-                                  ? '无可用模型，点击刷新拉取'
-                                  : '无匹配「${_queryCtrl.text.trim()}」'),
+                                    ? '无可用模型，点击刷新拉取'
+                                    : '无匹配「${_queryCtrl.text.trim()}」'),
                           style: TextStyle(
                             fontSize: 13,
                             color: tokens.inkMuted,
@@ -241,6 +240,8 @@ class _ChatModelPickerSheetState extends State<_ChatModelPickerSheet> {
                         ),
                       )
                     : ListView.builder(
+                        keyboardDismissBehavior:
+                            ScrollViewKeyboardDismissBehavior.onDrag,
                         padding: const EdgeInsets.fromLTRB(8, 0, 8, 16),
                         itemCount: filtered.length,
                         itemBuilder: (context, index) {
@@ -248,8 +249,9 @@ class _ChatModelPickerSheetState extends State<_ChatModelPickerSheet> {
                           final active = o.value == current;
                           return ListTile(
                             selected: active,
-                            selectedTileColor:
-                                tokens.primary.withValues(alpha: 0.10),
+                            selectedTileColor: tokens.primary.withValues(
+                              alpha: 0.10,
+                            ),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(10),
                             ),

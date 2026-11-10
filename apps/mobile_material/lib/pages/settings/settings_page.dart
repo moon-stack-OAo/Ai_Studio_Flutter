@@ -61,16 +61,17 @@ class _SettingsPageState extends State<SettingsPage>
   static const _baseTabs = <String>['提供商', '对话', '技能', '外观', '日志', '关于'];
   static const _labTabLabel = '实验室';
 
-  List<String> get _tabs => _portalPrefs.unlocked
-      ? [..._baseTabs, _labTabLabel]
-      : _baseTabs;
+  List<String> get _tabs =>
+      _portalPrefs.unlocked ? [..._baseTabs, _labTabLabel] : _baseTabs;
 
   int get _aboutTabIndex => _baseTabs.indexOf('关于');
 
   @override
   void initState() {
     super.initState();
-    _skills = widget.skillRepository ?? SkillRepository(storage: MemorySkillStorage());
+    _skills =
+        widget.skillRepository ??
+        SkillRepository(storage: MemorySkillStorage());
     if (!_skills.isLoaded) unawaited(_skills.load().catchError((Object _) {}));
     _portalPrefs = widget.hiddenPortalPrefs ?? HiddenPortalPrefs();
     _portalPrefs.addListener(_onPortalPrefsChanged);
@@ -176,33 +177,35 @@ class _SettingsPageState extends State<SettingsPage>
             fontWeight: FontWeight.w500,
             fontFamily: tokens.fontFamily,
           ),
-          tabs: [
-            for (final label in tabs) Tab(text: label, height: 44),
-          ],
+          tabs: [for (final label in tabs) Tab(text: label, height: 44)],
         ),
       ),
-      body: TabBarView(
-        controller: _tabController,
-        children: [
-          SettingsProvidersTab(
-            repository: widget.providerRepository,
-            mcpServerRepository: widget.mcpServerRepository,
-            mcpSessionFactory: widget.mcpSessionFactory,
-          ),
-          SettingsChatDefaultsTab(repository: widget.chatDefaultsRepository),
-          SettingsSkillsTab(repository: _skills),
-          SettingsAppearanceTab(themeController: widget.themeController),
-          SettingsLogsTab(repository: widget.appLogRepository),
-          SettingsAboutTab(
-            skillRepository: _skills,
-            dataBackupService: widget.dataBackupService,
-            themeController: widget.themeController,
-            generation: widget.generation,
-            updateController: widget.updateController,
-            onUnlockHiddenPortal: _toggleLab,
-          ),
-          if (_portalPrefs.unlocked) const HiddenPortalPage(),
-        ],
+      body: GestureDetector(
+        onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
+        behavior: HitTestBehavior.translucent,
+        child: TabBarView(
+          controller: _tabController,
+          children: [
+            SettingsProvidersTab(
+              repository: widget.providerRepository,
+              mcpServerRepository: widget.mcpServerRepository,
+              mcpSessionFactory: widget.mcpSessionFactory,
+            ),
+            SettingsChatDefaultsTab(repository: widget.chatDefaultsRepository),
+            SettingsSkillsTab(repository: _skills),
+            SettingsAppearanceTab(themeController: widget.themeController),
+            SettingsLogsTab(repository: widget.appLogRepository),
+            SettingsAboutTab(
+              skillRepository: _skills,
+              dataBackupService: widget.dataBackupService,
+              themeController: widget.themeController,
+              generation: widget.generation,
+              updateController: widget.updateController,
+              onUnlockHiddenPortal: _toggleLab,
+            ),
+            if (_portalPrefs.unlocked) const HiddenPortalPage(),
+          ],
+        ),
       ),
     );
   }

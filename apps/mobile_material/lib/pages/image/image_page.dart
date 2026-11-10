@@ -482,6 +482,8 @@ class _ImagePageState extends State<ImagePage> {
                   child: CustomScrollView(
                     key: ValueKey(session?.id),
                     controller: _scroll,
+                    keyboardDismissBehavior:
+                        ScrollViewKeyboardDismissBehavior.onDrag,
                     slivers: [
                       SliverPadding(
                         padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
@@ -693,6 +695,8 @@ class _ImageSessionListPage extends StatelessWidget {
                 illustration: const MaterialEmptyIllustration.noSessions(),
               )
             : ListView.separated(
+                keyboardDismissBehavior:
+                    ScrollViewKeyboardDismissBehavior.onDrag,
                 itemCount: sessions.length,
                 separatorBuilder: (_, _) =>
                     Divider(height: 1, color: tokens.border),

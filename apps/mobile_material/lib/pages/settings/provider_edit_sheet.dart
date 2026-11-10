@@ -19,10 +19,7 @@ Future<void> showProviderEditSheet({
     isDismissible: true,
     enableDrag: true,
     builder: (ctx) {
-      return _ProviderEditSheet(
-        repository: repository,
-        providerId: providerId,
-      );
+      return _ProviderEditSheet(repository: repository, providerId: providerId);
     },
   );
 }
@@ -383,205 +380,205 @@ class _ProviderEditSheetState extends State<_ProviderEditSheet> {
                 child: BackToTopHost(
                   builder: (context, scroll) => ListView(
                     controller: scroll,
+                    keyboardDismissBehavior:
+                        ScrollViewKeyboardDismissBehavior.onDrag,
                     padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
                     children: [
-                    Text(
-                      '基本信息',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: tokens.inkSecondary,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    TextField(
-                      controller: _nameCtrl,
-                      decoration: const InputDecoration(
-                        labelText: '显示名称',
-                        hintText: '例如 OpenAI 兼容 · 自建',
-                      ),
-                      onChanged: (_) => _markDirty(),
-                    ),
-                    const SizedBox(height: 12),
-                    DropdownButtonFormField<ProviderType>(
-                      key: ValueKey(_type),
-                      initialValue: _type,
-                      decoration: const InputDecoration(labelText: '类型'),
-                      items: [
-                        for (final t in ProviderType.values)
-                          DropdownMenuItem(value: t, child: Text(t.label)),
-                      ],
-                      onChanged: (v) {
-                        if (v == null) return;
-                        setState(() {
-                          _type = v;
-                          _dirty = true;
-                        });
-                      },
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: _baseUrlCtrl,
-                      decoration: const InputDecoration(
-                        labelText: 'Base URL',
-                        hintText: 'https://api.example.com/v1',
-                      ),
-                      onChanged: (_) => _markDirty(),
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: _apiKeyCtrl,
-                      obscureText: _obscureKey,
-                      decoration: InputDecoration(
-                        labelText: 'API Key',
-                        hintText: 'sk-…',
-                        suffixIcon: IconButton(
-                          tooltip: _obscureKey ? '显示密钥' : '隐藏密钥',
-                          icon: Icon(
-                            _obscureKey
-                                ? Icons.visibility_outlined
-                                : Icons.visibility_off_outlined,
-                          ),
-                          onPressed: () =>
-                              setState(() => _obscureKey = !_obscureKey),
+                      Text(
+                        '基本信息',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: tokens.inkSecondary,
                         ),
                       ),
-                      onChanged: (_) => _markDirty(),
-                    ),
-                    const SizedBox(height: 16),
-                    Text(
-                      '连接与模型',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: tokens.inkSecondary,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: OutlinedButton(
-                            onPressed: (!_canProbeConnection || _testing)
-                                ? null
-                                : _testConnection,
-                            child: Text(_testing ? '测试中…' : '测试连接'),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: OutlinedButton(
-                            onPressed:
-                                (!_canProbeConnection || _listingModels)
-                                    ? null
-                                    : _pullModels,
-                            child:
-                                Text(_listingModels ? '拉取中…' : '拉取模型'),
-                          ),
-                        ),
-                      ],
-                    ),
-                    if (!_canProbeConnection)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 8),
-                        child: Text(
-                          '需先填写 Base URL 与 API Key',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: tokens.inkMuted,
-                          ),
-                        ),
-                      )
-                    else if (_statusText != null)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 8),
-                        child: Text(
-                          '● $_statusText',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color:
-                                _statusOk ? tokens.success : tokens.danger,
-                          ),
-                        ),
-                      ),
-                    const SizedBox(height: 14),
-                    Text(
-                      '对话模型',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: tokens.inkSecondary,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    FilterableModelPicker(
-                      controller: _chatModelCtrl,
-                      options: _stableOptions(
-                        ModelKind.chat,
-                        selected.chatModel,
-                      ),
-                      placeholder: 'gpt-4o / grok-4.5',
-                      onChanged: (_) => _markDirty(),
-                    ),
-                    const SizedBox(height: 14),
-                    Text(
-                      '生图模型',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: tokens.inkSecondary,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    FilterableModelPicker(
-                      controller: _imageModelCtrl,
-                      options: _stableOptions(
-                        ModelKind.image,
-                        selected.imageModel,
-                      ),
-                      placeholder: 'gpt-image-1 / grok-imagine-image',
-                      onChanged: (_) => _markDirty(),
-                    ),
-                    const SizedBox(height: 14),
-                    Text(
-                      '视频模型',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: tokens.inkSecondary,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    FilterableModelPicker(
-                      controller: _videoModelCtrl,
-                      options: _stableOptions(
-                        ModelKind.video,
-                        selected.videoModel,
-                      ),
-                      placeholder: 'sora-2 / grok-imagine-video',
-                      allowClear: true,
-                      clearLabel: '不使用',
-                      onChanged: (_) => _markDirty(),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      '先「拉取模型」；列表可搜索筛选。密钥仅存本机；视频可清空表示不使用。',
-                      style: TextStyle(fontSize: 11, color: tokens.inkMuted),
-                    ),
-                    if (!selected.builtin) ...[
                       const SizedBox(height: 8),
-                      Align(
-                        alignment: Alignment.centerLeft,
-                        child: TextButton(
-                          onPressed: _delete,
-                          style: TextButton.styleFrom(
-                            foregroundColor: tokens.danger,
+                      TextField(
+                        controller: _nameCtrl,
+                        decoration: const InputDecoration(
+                          labelText: '显示名称',
+                          hintText: '例如 OpenAI 兼容 · 自建',
+                        ),
+                        onChanged: (_) => _markDirty(),
+                      ),
+                      const SizedBox(height: 12),
+                      DropdownButtonFormField<ProviderType>(
+                        key: ValueKey(_type),
+                        initialValue: _type,
+                        decoration: const InputDecoration(labelText: '类型'),
+                        items: [
+                          for (final t in ProviderType.values)
+                            DropdownMenuItem(value: t, child: Text(t.label)),
+                        ],
+                        onChanged: (v) {
+                          if (v == null) return;
+                          setState(() {
+                            _type = v;
+                            _dirty = true;
+                          });
+                        },
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: _baseUrlCtrl,
+                        decoration: const InputDecoration(
+                          labelText: 'Base URL',
+                          hintText: 'https://api.example.com/v1',
+                        ),
+                        onChanged: (_) => _markDirty(),
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: _apiKeyCtrl,
+                        obscureText: _obscureKey,
+                        decoration: InputDecoration(
+                          labelText: 'API Key',
+                          hintText: 'sk-…',
+                          suffixIcon: IconButton(
+                            tooltip: _obscureKey ? '显示密钥' : '隐藏密钥',
+                            icon: Icon(
+                              _obscureKey
+                                  ? Icons.visibility_outlined
+                                  : Icons.visibility_off_outlined,
+                            ),
+                            onPressed: () =>
+                                setState(() => _obscureKey = !_obscureKey),
                           ),
-                          child: const Text('删除此提供商…'),
+                        ),
+                        onChanged: (_) => _markDirty(),
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        '连接与模型',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: tokens.inkSecondary,
                         ),
                       ),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton(
+                              onPressed: (!_canProbeConnection || _testing)
+                                  ? null
+                                  : _testConnection,
+                              child: Text(_testing ? '测试中…' : '测试连接'),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: OutlinedButton(
+                              onPressed:
+                                  (!_canProbeConnection || _listingModels)
+                                  ? null
+                                  : _pullModels,
+                              child: Text(_listingModels ? '拉取中…' : '拉取模型'),
+                            ),
+                          ),
+                        ],
+                      ),
+                      if (!_canProbeConnection)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 8),
+                          child: Text(
+                            '需先填写 Base URL 与 API Key',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: tokens.inkMuted,
+                            ),
+                          ),
+                        )
+                      else if (_statusText != null)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 8),
+                          child: Text(
+                            '● $_statusText',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: _statusOk ? tokens.success : tokens.danger,
+                            ),
+                          ),
+                        ),
+                      const SizedBox(height: 14),
+                      Text(
+                        '对话模型',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: tokens.inkSecondary,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      FilterableModelPicker(
+                        controller: _chatModelCtrl,
+                        options: _stableOptions(
+                          ModelKind.chat,
+                          selected.chatModel,
+                        ),
+                        placeholder: 'gpt-4o / grok-4.5',
+                        onChanged: (_) => _markDirty(),
+                      ),
+                      const SizedBox(height: 14),
+                      Text(
+                        '生图模型',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: tokens.inkSecondary,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      FilterableModelPicker(
+                        controller: _imageModelCtrl,
+                        options: _stableOptions(
+                          ModelKind.image,
+                          selected.imageModel,
+                        ),
+                        placeholder: 'gpt-image-1 / grok-imagine-image',
+                        onChanged: (_) => _markDirty(),
+                      ),
+                      const SizedBox(height: 14),
+                      Text(
+                        '视频模型',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: tokens.inkSecondary,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      FilterableModelPicker(
+                        controller: _videoModelCtrl,
+                        options: _stableOptions(
+                          ModelKind.video,
+                          selected.videoModel,
+                        ),
+                        placeholder: 'sora-2 / grok-imagine-video',
+                        allowClear: true,
+                        clearLabel: '不使用',
+                        onChanged: (_) => _markDirty(),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        '先「拉取模型」；列表可搜索筛选。密钥仅存本机；视频可清空表示不使用。',
+                        style: TextStyle(fontSize: 11, color: tokens.inkMuted),
+                      ),
+                      if (!selected.builtin) ...[
+                        const SizedBox(height: 8),
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: TextButton(
+                            onPressed: _delete,
+                            style: TextButton.styleFrom(
+                              foregroundColor: tokens.danger,
+                            ),
+                            child: const Text('删除此提供商…'),
+                          ),
+                        ),
+                      ],
                     ],
-                  ],
                   ),
                 ),
               ),

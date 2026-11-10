@@ -55,9 +55,7 @@ class SessionListPage extends StatelessWidget {
             controller: ctrl,
             autofocus: true,
             maxLines: 1,
-            decoration: const InputDecoration(
-              hintText: '会话标题',
-            ),
+            decoration: const InputDecoration(hintText: '会话标题'),
             onSubmitted: (v) => Navigator.of(ctx).pop(v.trim()),
           ),
           actions: [
@@ -126,8 +124,9 @@ class SessionListPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final tokens = materialTokensOf(context);
-    final density =
-        UiDensity.fromVisualDensity(Theme.of(context).visualDensity);
+    final density = UiDensity.fromVisualDensity(
+      Theme.of(context).visualDensity,
+    );
     final itemVPad = density.sessionItemVerticalPadding;
     final separator = density.sessionListSeparator;
 
@@ -155,6 +154,8 @@ class SessionListPage extends StatelessWidget {
                 illustration: const MaterialEmptyIllustration.noSessions(),
               )
             : ListView.separated(
+                keyboardDismissBehavior:
+                    ScrollViewKeyboardDismissBehavior.onDrag,
                 padding: const EdgeInsets.fromLTRB(12, 8, 12, 88),
                 itemCount: sessions.length,
                 separatorBuilder: (context, index) =>

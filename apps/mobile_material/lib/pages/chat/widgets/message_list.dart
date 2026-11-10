@@ -157,6 +157,7 @@ class _MessageListState extends State<MessageList> {
       onNotification: _onScroll,
       child: ListView.builder(
         controller: _scroll,
+        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
         // 末尾锚定在 offset=0，底部定位不依赖懒加载的总高度估算。
         reverse: true,
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),

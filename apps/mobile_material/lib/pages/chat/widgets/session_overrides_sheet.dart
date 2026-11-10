@@ -29,6 +29,8 @@ Future<void> showSessionOverridesSheet({
             child: Padding(
               padding: EdgeInsets.only(bottom: media.viewInsets.bottom),
               child: SingleChildScrollView(
+                keyboardDismissBehavior:
+                    ScrollViewKeyboardDismissBehavior.onDrag,
                 padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
@@ -121,8 +123,9 @@ Future<void> showSessionOverridesSheet({
                       onChanged: overrideTemp
                           ? (v) {
                               setLocal(() {
-                                temperature =
-                                    double.parse(v.toStringAsFixed(2));
+                                temperature = double.parse(
+                                  v.toStringAsFixed(2),
+                                );
                               });
                             }
                           : null,
@@ -154,8 +157,9 @@ Future<void> showSessionOverridesSheet({
                         FilledButton(
                           onPressed: () async {
                             final overrides = ChatOverrides(
-                              systemPrompt:
-                                  overrideSystem ? systemCtrl.text : null,
+                              systemPrompt: overrideSystem
+                                  ? systemCtrl.text
+                                  : null,
                               temperature: overrideTemp ? temperature : null,
                             );
                             await onSave(overrides);

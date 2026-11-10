@@ -632,6 +632,7 @@ class _PromptAssistSheetState extends State<PromptAssistSheet> {
         const SizedBox(height: 8),
         Expanded(
           child: ListView.separated(
+            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
             padding: const EdgeInsets.only(right: 8),
             itemCount: presets.length,
             separatorBuilder: (context, index) => const SizedBox(height: 8),

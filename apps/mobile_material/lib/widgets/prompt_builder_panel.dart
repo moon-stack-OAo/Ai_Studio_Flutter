@@ -543,6 +543,7 @@ class _PromptBuilderPanelState extends State<PromptBuilderPanel> {
         const SizedBox(height: gap),
         Expanded(
           child: SingleChildScrollView(
+            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
             padding: const EdgeInsets.only(right: 8),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,

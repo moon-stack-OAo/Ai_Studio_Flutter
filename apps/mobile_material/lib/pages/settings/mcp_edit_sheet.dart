@@ -121,8 +121,9 @@ class _McpEditSheetState extends State<_McpEditSheet>
       _nameCtrl.text = s.displayName;
       _baseUrlCtrl.text = s.baseUrl;
       _tokenCtrl.clear();
-      _authKind =
-          s.authKind == McpAuthKind.oauth ? McpAuthKind.none : s.authKind;
+      _authKind = s.authKind == McpAuthKind.oauth
+          ? McpAuthKind.none
+          : s.authKind;
       _enabled = s.enabled;
       _hasStoredToken = await _repo.hasBearerSecret(s.id);
       if (s.lastError != null && s.lastError!.isNotEmpty) {
@@ -161,10 +162,7 @@ class _McpEditSheetState extends State<_McpEditSheet>
       return false;
     }
     if (current.transport == McpTransport.stdio) {
-      var next = current.copyWith(
-        displayName: name,
-        enabled: false,
-      );
+      var next = current.copyWith(displayName: name, enabled: false);
       await _repo.update(next);
       await _loadFormFromSelected();
       if (!mounted) return false;
@@ -248,8 +246,7 @@ class _McpEditSheetState extends State<_McpEditSheet>
     Navigator.of(context).pop();
   }
 
-  bool get _isStdioUnsupported =>
-      _selected?.transport == McpTransport.stdio;
+  bool get _isStdioUnsupported => _selected?.transport == McpTransport.stdio;
 
   bool get _canProbe =>
       !_isStdioUnsupported && _baseUrlCtrl.text.trim().isNotEmpty;
@@ -348,7 +345,10 @@ class _McpEditSheetState extends State<_McpEditSheet>
     }
   }
 
-  Future<void> _setToolPolicy(String toolName, McpToolPolicyLevel? level) async {
+  Future<void> _setToolPolicy(
+    String toolName,
+    McpToolPolicyLevel? level,
+  ) async {
     await _repo.setToolPolicyOverride(_serverId, toolName, level);
   }
 
@@ -378,27 +378,17 @@ class _McpEditSheetState extends State<_McpEditSheet>
     return [
       Text(
         '元数据存本机；Bearer Token 存 OS 凭据库。仅支持 HTTP/SSE（Streamable JSON-RPC）。本地 stdio 仅桌面可用。',
-        style: TextStyle(
-          fontSize: 12,
-          color: tokens.inkMuted,
-        ),
+        style: TextStyle(fontSize: 12, color: tokens.inkMuted),
       ),
       if (_isStdioUnsupported) ...[
         const SizedBox(height: 12),
         Card(
-          color: Color.lerp(
-            tokens.danger,
-            tokens.surface,
-            0.9,
-          ),
+          color: Color.lerp(tokens.danger, tokens.surface, 0.9),
           child: Padding(
             padding: const EdgeInsets.all(12),
             child: Text(
               '此 Server 为本地 stdio，仅桌面可用。移动端无法探测或调用；请在桌面端管理，或改用 HTTP/SSE。',
-              style: TextStyle(
-                fontSize: 13,
-                color: tokens.danger,
-              ),
+              style: TextStyle(fontSize: 13, color: tokens.danger),
             ),
           ),
         ),
@@ -430,10 +420,7 @@ class _McpEditSheetState extends State<_McpEditSheet>
           ),
           child: Text(
             '本地 stdio（仅桌面）',
-            style: TextStyle(
-              fontSize: 14,
-              color: tokens.inkMuted,
-            ),
+            style: TextStyle(fontSize: 14, color: tokens.inkMuted),
           ),
         )
       else
@@ -454,10 +441,7 @@ class _McpEditSheetState extends State<_McpEditSheet>
           _isStdioUnsupported
               ? '本地 stdio 仅桌面可用，移动端不可启用'
               : (_enabled ? '对话可暴露其 tools' : '已停用，不参与对话'),
-          style: TextStyle(
-            fontSize: 12,
-            color: tokens.inkMuted,
-          ),
+          style: TextStyle(fontSize: 12, color: tokens.inkMuted),
         ),
         value: _isStdioUnsupported ? false : _enabled,
         onChanged: _isStdioUnsupported
@@ -486,10 +470,7 @@ class _McpEditSheetState extends State<_McpEditSheet>
             : _authKind,
         decoration: const InputDecoration(labelText: '鉴权方式'),
         items: const [
-          DropdownMenuItem(
-            value: McpAuthKind.none,
-            child: Text('无鉴权'),
-          ),
+          DropdownMenuItem(value: McpAuthKind.none, child: Text('无鉴权')),
           DropdownMenuItem(
             value: McpAuthKind.bearer,
             child: Text('Bearer Token'),
@@ -524,9 +505,7 @@ class _McpEditSheetState extends State<_McpEditSheet>
                     ? Icons.visibility_outlined
                     : Icons.visibility_off_outlined,
               ),
-              onPressed: () => setState(
-                () => _obscureToken = !_obscureToken,
-              ),
+              onPressed: () => setState(() => _obscureToken = !_obscureToken),
             ),
           ),
           onChanged: (_) => _markDirty(),
@@ -552,19 +531,14 @@ class _McpEditSheetState extends State<_McpEditSheet>
               )
             : const Icon(Icons.wifi_tethering),
         label: Text(_probing ? '探测中…' : '测试连接 / 刷新 tools'),
-        style: FilledButton.styleFrom(
-          minimumSize: const Size.fromHeight(44),
-        ),
+        style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(44)),
       ),
       if (!_canProbe)
         Padding(
           padding: const EdgeInsets.only(top: 8),
           child: Text(
             '需先填写 Base URL',
-            style: TextStyle(
-              fontSize: 12,
-              color: tokens.inkMuted,
-            ),
+            style: TextStyle(fontSize: 12, color: tokens.inkMuted),
           ),
         )
       else if (_statusText != null)
@@ -587,19 +561,13 @@ class _McpEditSheetState extends State<_McpEditSheet>
         const SizedBox(height: 14),
         Text(
           '尚未拉取工具列表。保存 URL 后点「测试连接 / 刷新 tools」。',
-          style: TextStyle(
-            fontSize: 12,
-            color: tokens.inkMuted,
-          ),
+          style: TextStyle(fontSize: 12, color: tokens.inkMuted),
         ),
       ],
     ];
   }
 
-  Widget _buildToolsPolicyTab(
-    MaterialTokens tokens,
-    McpServerConfig selected,
-  ) {
+  Widget _buildToolsPolicyTab(MaterialTokens tokens, McpServerConfig selected) {
     if (selected.toolsCache.isEmpty) {
       return Align(
         alignment: Alignment.topLeft,
@@ -607,10 +575,7 @@ class _McpEditSheetState extends State<_McpEditSheet>
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
           child: Text(
             '尚未拉取工具列表。请到「连接配置」保存 URL 后测试连接。',
-            style: TextStyle(
-              fontSize: 13,
-              color: tokens.inkMuted,
-            ),
+            style: TextStyle(fontSize: 13, color: tokens.inkMuted),
           ),
         ),
       );
@@ -715,9 +680,7 @@ class _McpEditSheetState extends State<_McpEditSheet>
                 tabs: [
                   const Tab(text: '连接配置', height: 40),
                   Tab(
-                    text: toolsCount == 0
-                        ? '工具策略'
-                        : '工具策略（$toolsCount）',
+                    text: toolsCount == 0 ? '工具策略' : '工具策略（$toolsCount）',
                     height: 40,
                   ),
                 ],
@@ -729,6 +692,8 @@ class _McpEditSheetState extends State<_McpEditSheet>
                     BackToTopHost(
                       builder: (context, scroll) => ListView(
                         controller: scroll,
+                        keyboardDismissBehavior:
+                            ScrollViewKeyboardDismissBehavior.onDrag,
                         padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
                         children: [
                           ..._buildFormSections(tokens, selected),
@@ -799,11 +764,11 @@ class _ServerDefaultPolicyBlock extends StatelessWidget {
   final ValueChanged<McpToolPolicyLevel?> onChanged;
 
   static String _levelShort(McpToolPolicyLevel level) => switch (level) {
-        McpToolPolicyLevel.deny => '拒绝',
-        McpToolPolicyLevel.confirmAlways => '每次确认',
-        McpToolPolicyLevel.confirmOnce => '本会话确认一次',
-        McpToolPolicyLevel.autoAllow => '自动允许',
-      };
+    McpToolPolicyLevel.deny => '拒绝',
+    McpToolPolicyLevel.confirmAlways => '每次确认',
+    McpToolPolicyLevel.confirmOnce => '本会话确认一次',
+    McpToolPolicyLevel.autoAllow => '自动允许',
+  };
 
   @override
   Widget build(BuildContext context) {
@@ -822,10 +787,7 @@ class _ServerDefaultPolicyBlock extends StatelessWidget {
         const SizedBox(height: 4),
         Text(
           '未单独覆盖的工具走此默认；选「按副作用」时读操作仍可自动允许。',
-          style: TextStyle(
-            fontSize: 12,
-            color: tokens.inkMuted,
-          ),
+          style: TextStyle(fontSize: 12, color: tokens.inkMuted),
         ),
         const SizedBox(height: 8),
         DropdownButtonFormField<String>(
@@ -883,21 +845,21 @@ class _ToolsPolicyList extends StatelessWidget {
   final McpToolPolicyLevel? defaultToolPolicy;
   final Map<String, McpToolPolicyLevel> overrides;
   final void Function(String toolName, McpToolPolicyLevel? level)
-      onPolicyChanged;
+  onPolicyChanged;
   final ScrollController? scrollController;
 
   static String _sideLabel(McpToolSideEffect s) => switch (s) {
-        McpToolSideEffect.read => '读',
-        McpToolSideEffect.write => '写',
-        McpToolSideEffect.unknown => '未知',
-      };
+    McpToolSideEffect.read => '读',
+    McpToolSideEffect.write => '写',
+    McpToolSideEffect.unknown => '未知',
+  };
 
   static String _levelShort(McpToolPolicyLevel level) => switch (level) {
-        McpToolPolicyLevel.deny => '拒绝',
-        McpToolPolicyLevel.confirmAlways => '每次确认',
-        McpToolPolicyLevel.confirmOnce => '本会话确认一次',
-        McpToolPolicyLevel.autoAllow => '自动允许',
-      };
+    McpToolPolicyLevel.deny => '拒绝',
+    McpToolPolicyLevel.confirmAlways => '每次确认',
+    McpToolPolicyLevel.confirmOnce => '本会话确认一次',
+    McpToolPolicyLevel.autoAllow => '自动允许',
+  };
 
   static String _policyLabel(
     McpToolPolicyLevel? level,
@@ -933,6 +895,7 @@ class _ToolsPolicyList extends StatelessWidget {
         borderRadius: BorderRadius.circular(10),
         child: ListView.separated(
           controller: scrollController,
+          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
           padding: const EdgeInsets.all(8),
           itemCount: tools.length,
           separatorBuilder: (_, _) => const SizedBox(height: 8),
@@ -1014,10 +977,7 @@ class _ToolsPolicyList extends StatelessWidget {
                           _policyLabel(null, tool, defaultToolPolicy),
                         ),
                       ),
-                      const DropdownMenuItem(
-                        value: 'deny',
-                        child: Text('拒绝'),
-                      ),
+                      const DropdownMenuItem(value: 'deny', child: Text('拒绝')),
                       const DropdownMenuItem(
                         value: 'confirm_always',
                         child: Text('每次确认'),

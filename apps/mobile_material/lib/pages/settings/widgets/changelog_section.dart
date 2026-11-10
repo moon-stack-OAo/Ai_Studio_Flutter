@@ -54,10 +54,7 @@ class ChangelogSection extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         // 页内跟关于页同滚，避免卡片内再套一层滚动条。
-        ChangelogEntryList(
-          entries: _summaryEntries,
-          scrollable: false,
-        ),
+        ChangelogEntryList(entries: _summaryEntries, scrollable: false),
         const SizedBox(height: 4),
         TextButton(
           style: TextButton.styleFrom(
@@ -137,81 +134,81 @@ class _ChangelogHistorySheetState extends State<_ChangelogHistorySheet> {
         child: SizedBox(
           width: maxSheetWidth,
           height: height,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 4, 8, 8),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          '更新日志',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                            color: tokens.ink,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          '完整历史 · 已安装 ${widget.currentVersionLabel}',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: tokens.inkMuted,
-                            height: 1.4,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  TextButton(
-                    onPressed: () => Navigator.pop(context),
-                    child: const Text('关闭'),
-                  ),
-                ],
-              ),
-            ),
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
-                child: Stack(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 4, 8, 8),
+                child: Row(
                   children: [
-                    Positioned.fill(
-                      child: ChangelogEntryList(
-                        entries: widget.entries,
-                        scrollable: true,
-                        controller: _scroll,
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '更新日志',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                              color: tokens.ink,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            '完整历史 · 已安装 ${widget.currentVersionLabel}',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: tokens.inkMuted,
+                              height: 1.4,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                    Positioned(
-                      right: 16,
-                      bottom: 16,
-                      child: IgnorePointer(
-                        ignoring: !_showBackToTop,
-                        child: AnimatedOpacity(
-                          opacity: _showBackToTop ? 1 : 0,
-                          duration: const Duration(milliseconds: 160),
-                          child: BackToTopButton(onPressed: _scrollToTop),
-                        ),
-                      ),
+                    TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text('关闭'),
                     ),
                   ],
                 ),
               ),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-              child: FilledButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('完成'),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
+                  child: Stack(
+                    children: [
+                      Positioned.fill(
+                        child: ChangelogEntryList(
+                          entries: widget.entries,
+                          scrollable: true,
+                          controller: _scroll,
+                        ),
+                      ),
+                      Positioned(
+                        right: 16,
+                        bottom: 16,
+                        child: IgnorePointer(
+                          ignoring: !_showBackToTop,
+                          child: AnimatedOpacity(
+                            opacity: _showBackToTop ? 1 : 0,
+                            duration: const Duration(milliseconds: 160),
+                            child: BackToTopButton(onPressed: _scrollToTop),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
-            ),
-          ],
-        ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+                child: FilledButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('完成'),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -268,6 +265,7 @@ class _ChangelogEntryListState extends State<ChangelogEntryList> {
 
     return SingleChildScrollView(
       controller: widget.controller,
+      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: children,
@@ -331,8 +329,10 @@ class _ChangelogRowState extends State<_ChangelogRow> {
             child: ConstrainedBox(
               constraints: const BoxConstraints(minHeight: 48),
               child: Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 10,
+                ),
                 child: Row(
                   children: [
                     AnimatedRotation(
@@ -363,10 +363,7 @@ class _ChangelogRowState extends State<_ChangelogRow> {
                         entry.dateLabel,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: tokens.inkMuted,
-                        ),
+                        style: TextStyle(fontSize: 11, color: tokens.inkMuted),
                       ),
                     ),
                     if (pill != null) ...[
@@ -416,9 +413,7 @@ class _ChangelogRowState extends State<_ChangelogRow> {
                             onPressed: () {
                               setState(() => _detailsOpen = !_detailsOpen);
                             },
-                            child: Text(
-                              _detailsOpen ? '收起详细变更' : '显示详细变更',
-                            ),
+                            child: Text(_detailsOpen ? '收起详细变更' : '显示详细变更'),
                           ),
                           if (_detailsOpen) ...[
                             const SizedBox(height: 4),
@@ -469,11 +464,7 @@ class _StatusPill extends StatelessWidget {
       ),
       child: Text(
         label,
-        style: TextStyle(
-          fontSize: 10,
-          fontWeight: FontWeight.w600,
-          color: fg,
-        ),
+        style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: fg),
       ),
     );
   }

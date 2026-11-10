@@ -91,10 +91,13 @@ class _AppShellState extends State<AppShell> {
   @override
   void initState() {
     super.initState();
-    _skills = widget.skillRepository ?? SkillRepository(storage: MemorySkillStorage());
+    _skills =
+        widget.skillRepository ??
+        SkillRepository(storage: MemorySkillStorage());
     if (!_skills.isLoaded) unawaited(_skills.load().catchError((Object _) {}));
     _ownsUpdater = widget.updateController == null;
-    _updater = widget.updateController ??
+    _updater =
+        widget.updateController ??
         MobileUpdateController(
           appLogRepository: widget.appLogRepository,
           updatePrefs: widget.updatePrefs,
@@ -142,10 +145,7 @@ class _AppShellState extends State<AppShell> {
     final messenger = ScaffoldMessenger.of(context);
     messenger.hideCurrentSnackBar();
     messenger.showSnackBar(
-      SnackBar(
-        content: const Text('再按一次退出'),
-        duration: window,
-      ),
+      SnackBar(content: const Text('再按一次退出'), duration: window),
     );
   }
 
@@ -238,9 +238,7 @@ class _AppShellState extends State<AppShell> {
       case UpdatePromptAction.later:
         final messenger = ScaffoldMessenger.of(context);
         messenger.hideCurrentSnackBar();
-        messenger.showSnackBar(
-          const SnackBar(content: Text('可在 设置 → 关于 中安装')),
-        );
+        messenger.showSnackBar(const SnackBar(content: Text('可在 设置 → 关于 中安装')));
       case UpdatePromptAction.install:
         if (_updater.isIos) return;
         final ok = await _updater.downloadAndInstall(result: result);
@@ -262,14 +260,16 @@ class _AppShellState extends State<AppShell> {
   @override
   Widget build(BuildContext context) {
     final tokens = materialTokensOf(context);
-    final density =
-        UiDensity.fromVisualDensity(Theme.of(context).visualDensity);
+    final density = UiDensity.fromVisualDensity(
+      Theme.of(context).visualDensity,
+    );
     final viewInsetsBottom = MediaQuery.viewInsetsOf(context).bottom;
     // 全面屏手势条 / 三键导航：NavigationBar 自身 SafeArea 会叠在 theme height 之下，
     // 槽位必须含 viewPadding，否则收起键盘时底栏提前弹出并可能裁切手势区。
     final systemBottom = MediaQuery.viewPaddingOf(context).bottom;
     // 与 theme 同步（含字号极端档抬高），避免槽位矮于真实底栏。
-    final navHeight = Theme.of(context).navigationBarTheme.height ??
+    final navHeight =
+        Theme.of(context).navigationBarTheme.height ??
         density.navigationBarHeight;
     final navSlotHeight = navHeight + systemBottom;
     // 与键盘高度同相位收起，避免 bottomNavigationBar: null 瞬时跳变。
@@ -286,66 +286,71 @@ class _AppShellState extends State<AppShell> {
         resizeToAvoidBottomInset: false,
         body: SafeArea(
           bottom: false,
-          child: IndexedStack(
-            index: selectedIndex,
-            children: [
-              for (final section in AppSection.values)
-                if (section == AppSection.chat)
-                  ChatPage(
-                    skillRepository: _skills,
-                    providerRepository: widget.providerRepository,
-                    sessionRepository: widget.sessionRepository,
-                    chatDefaultsRepository: widget.chatDefaultsRepository,
-                    appLogRepository: widget.appLogRepository,
-                    generation: widget.generation,
-                    chatClient: widget.chatClient,
-                    mcpServerRepository: widget.mcpServerRepository,
-                    mcpSessionFactory: widget.mcpSessionFactory,
-                    onOpenProviders: _openProviders,
-                  )
-                else if (section == AppSection.image)
-                  ImagePage(
-                    skillRepository: _skills,
-                    providerRepository: widget.providerRepository,
-                    sessionRepository: widget.imageSessionRepository,
-                    chatDefaultsRepository: widget.chatDefaultsRepository,
-                    appLogRepository: widget.appLogRepository,
-                    generation: widget.generation,
-                    chatClient: widget.chatClient,
-                    imageClient: widget.imageClient,
-                    onOpenProviders: _openProviders,
-                  )
-                else if (section == AppSection.video)
-                  VideoPage(
-                    skillRepository: _skills,
-                    providerRepository: widget.providerRepository,
-                    sessionRepository: widget.videoSessionRepository,
-                    chatDefaultsRepository: widget.chatDefaultsRepository,
-                    appLogRepository: widget.appLogRepository,
-                    generation: widget.generation,
-                    chatClient: widget.chatClient,
-                    videoClient: widget.videoClient,
-                    videoPosterService: widget.videoPosterService,
-                    onOpenProviders: _openProviders,
-                  )
-                else if (section == AppSection.settings)
-                  SettingsPage(
-                    skillRepository: _skills,
-                    themeController: widget.themeController,
-                    providerRepository: widget.providerRepository,
-                    chatDefaultsRepository: widget.chatDefaultsRepository,
-                    appearanceRepository: widget.appearanceRepository,
-                    appLogRepository: widget.appLogRepository,
-                    dataBackupService: widget.dataBackupService,
-                    generation: widget.generation,
-                    initialTabIndex: _settingsTabIndex,
-                    updateController: _updater,
-                    mcpServerRepository: widget.mcpServerRepository,
-                    mcpSessionFactory: widget.mcpSessionFactory,
-                  )
-                else
-                  const SizedBox.shrink(),
-            ],
+          // 点消息区 / 空白处收起 IME；按钮与 TextField 自行竞争手势，不受影响。
+          child: GestureDetector(
+            onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
+            behavior: HitTestBehavior.translucent,
+            child: IndexedStack(
+              index: selectedIndex,
+              children: [
+                for (final section in AppSection.values)
+                  if (section == AppSection.chat)
+                    ChatPage(
+                      skillRepository: _skills,
+                      providerRepository: widget.providerRepository,
+                      sessionRepository: widget.sessionRepository,
+                      chatDefaultsRepository: widget.chatDefaultsRepository,
+                      appLogRepository: widget.appLogRepository,
+                      generation: widget.generation,
+                      chatClient: widget.chatClient,
+                      mcpServerRepository: widget.mcpServerRepository,
+                      mcpSessionFactory: widget.mcpSessionFactory,
+                      onOpenProviders: _openProviders,
+                    )
+                  else if (section == AppSection.image)
+                    ImagePage(
+                      skillRepository: _skills,
+                      providerRepository: widget.providerRepository,
+                      sessionRepository: widget.imageSessionRepository,
+                      chatDefaultsRepository: widget.chatDefaultsRepository,
+                      appLogRepository: widget.appLogRepository,
+                      generation: widget.generation,
+                      chatClient: widget.chatClient,
+                      imageClient: widget.imageClient,
+                      onOpenProviders: _openProviders,
+                    )
+                  else if (section == AppSection.video)
+                    VideoPage(
+                      skillRepository: _skills,
+                      providerRepository: widget.providerRepository,
+                      sessionRepository: widget.videoSessionRepository,
+                      chatDefaultsRepository: widget.chatDefaultsRepository,
+                      appLogRepository: widget.appLogRepository,
+                      generation: widget.generation,
+                      chatClient: widget.chatClient,
+                      videoClient: widget.videoClient,
+                      videoPosterService: widget.videoPosterService,
+                      onOpenProviders: _openProviders,
+                    )
+                  else if (section == AppSection.settings)
+                    SettingsPage(
+                      skillRepository: _skills,
+                      themeController: widget.themeController,
+                      providerRepository: widget.providerRepository,
+                      chatDefaultsRepository: widget.chatDefaultsRepository,
+                      appearanceRepository: widget.appearanceRepository,
+                      appLogRepository: widget.appLogRepository,
+                      dataBackupService: widget.dataBackupService,
+                      generation: widget.generation,
+                      initialTabIndex: _settingsTabIndex,
+                      updateController: _updater,
+                      mcpServerRepository: widget.mcpServerRepository,
+                      mcpSessionFactory: widget.mcpSessionFactory,
+                    )
+                  else
+                    const SizedBox.shrink(),
+              ],
+            ),
           ),
         ),
         bottomNavigationBar: ClipRect(

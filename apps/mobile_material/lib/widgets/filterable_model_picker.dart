@@ -97,9 +97,9 @@ class _FilterableModelPickerState extends State<FilterableModelPicker> {
   void _toggle() {
     if (!widget.enabled) return;
     if (widget.options.isEmpty && !widget.allowClear) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('请先点击「拉取模型」')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('请先点击「拉取模型」')));
       return;
     }
     setState(() => _expanded = !_expanded);
@@ -138,7 +138,8 @@ class _FilterableModelPickerState extends State<FilterableModelPicker> {
   Widget build(BuildContext context) {
     final tokens = materialTokensOf(context);
     final filtered = _filtered;
-    final showList = _expanded && (widget.options.isNotEmpty || widget.allowClear);
+    final showList =
+        _expanded && (widget.options.isNotEmpty || widget.allowClear);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -222,9 +223,7 @@ class _FilterableModelPickerState extends State<FilterableModelPicker> {
             child: InputChip(
               label: Text(
                 _tagText,
-                style: TextStyle(
-                  fontSize: 12,
-                ).withMonoFont(tokens),
+                style: TextStyle(fontSize: 12).withMonoFont(tokens),
               ),
               onDeleted: widget.enabled ? () => _commit('') : null,
               deleteButtonTooltipMessage: '清除所选模型',
@@ -283,6 +282,7 @@ class _ModelComboList extends StatelessWidget {
             )
           : ListView(
               padding: const EdgeInsets.all(4),
+              keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
               shrinkWrap: true,
               children: [
                 if (allowClear)

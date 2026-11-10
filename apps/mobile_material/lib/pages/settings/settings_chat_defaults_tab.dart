@@ -228,6 +228,7 @@ class _SettingsChatDefaultsTabState extends State<SettingsChatDefaultsTab>
     return BackToTopHost(
       builder: (context, scroll) => ListView(
         controller: scroll,
+        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
         padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
         children: [
           Card(

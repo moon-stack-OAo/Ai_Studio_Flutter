@@ -90,9 +90,8 @@ class _MediaModelPickerSheetState extends State<_MediaModelPickerSheet> {
     final loading = models.isEmpty
         ? (ctrlLoading || widget.initiallyLoading)
         : ctrlLoading;
-    final changed = loading != _loading ||
-        error != _error ||
-        !_sameIds(_models, models);
+    final changed =
+        loading != _loading || error != _error || !_sameIds(_models, models);
     if (!changed) return;
     setState(() {
       _loading = loading;
@@ -195,11 +194,7 @@ class _MediaModelPickerSheetState extends State<_MediaModelPickerSheet> {
     final readyProviders = widget.providers.providersReadyFor(widget.kind);
     final activeId = widget.providers.activeProviderId;
     final current = _activeModelId();
-    final options = modelOptionsByKind(
-      _models,
-      widget.kind,
-      current: current,
-    );
+    final options = modelOptionsByKind(_models, widget.kind, current: current);
     final q = _queryCtrl.text.trim().toLowerCase();
     final filtered = q.isEmpty
         ? options
@@ -211,7 +206,8 @@ class _MediaModelPickerSheetState extends State<_MediaModelPickerSheet> {
           ];
     final activeReady = readyProviders.any((p) => p.id == activeId);
     final showProviders =
-        readyProviders.length > 1 || (readyProviders.isNotEmpty && !activeReady);
+        readyProviders.length > 1 ||
+        (readyProviders.isNotEmpty && !activeReady);
 
     return SafeArea(
       child: Padding(
@@ -267,9 +263,7 @@ class _MediaModelPickerSheetState extends State<_MediaModelPickerSheet> {
                       return ChoiceChip(
                         label: Text(p.name),
                         selected: selected,
-                        onSelected: _loading
-                            ? null
-                            : (_) => _switchProvider(p),
+                        onSelected: _loading ? null : (_) => _switchProvider(p),
                         avatar: p.lastTestOk == null
                             ? null
                             : Icon(
@@ -321,8 +315,8 @@ class _MediaModelPickerSheetState extends State<_MediaModelPickerSheet> {
                           _loading
                               ? '加载中…'
                               : (q.isEmpty
-                                  ? '无可用模型，点击刷新拉取'
-                                  : '无匹配「${_queryCtrl.text.trim()}」'),
+                                    ? '无可用模型，点击刷新拉取'
+                                    : '无匹配「${_queryCtrl.text.trim()}」'),
                           style: TextStyle(
                             fontSize: 13,
                             color: tokens.inkMuted,
@@ -331,6 +325,8 @@ class _MediaModelPickerSheetState extends State<_MediaModelPickerSheet> {
                         ),
                       )
                     : ListView.builder(
+                        keyboardDismissBehavior:
+                            ScrollViewKeyboardDismissBehavior.onDrag,
                         padding: const EdgeInsets.fromLTRB(8, 0, 8, 16),
                         itemCount: filtered.length,
                         itemBuilder: (context, index) {
@@ -338,8 +334,9 @@ class _MediaModelPickerSheetState extends State<_MediaModelPickerSheet> {
                           final active = o.value == current;
                           return ListTile(
                             selected: active,
-                            selectedTileColor:
-                                tokens.primary.withValues(alpha: 0.10),
+                            selectedTileColor: tokens.primary.withValues(
+                              alpha: 0.10,
+                            ),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(10),
                             ),

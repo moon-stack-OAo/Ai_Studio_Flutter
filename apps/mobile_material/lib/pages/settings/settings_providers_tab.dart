@@ -104,10 +104,8 @@ class _SettingsProvidersTabState extends State<SettingsProvidersTab> {
     }
     await Navigator.of(context).push<void>(
       materialFadeSlideRoute(
-        builder: (context) => SettingsMcpPage(
-          repository: repo,
-          sessionFactory: factory,
-        ),
+        builder: (context) =>
+            SettingsMcpPage(repository: repo, sessionFactory: factory),
       ),
     );
   }
@@ -148,99 +146,97 @@ class _SettingsProvidersTabState extends State<SettingsProvidersTab> {
     return BackToTopHost(
       builder: (context, scroll) => ListView(
         controller: scroll,
+        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
         padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
         children: [
-        Text(
-          '点选切换当前提供商；可编辑或删除所选（内置不可删）',
-          style: TextStyle(fontSize: 12, color: tokens.inkMuted),
-        ),
-        const SizedBox(height: 8),
-        if (providers.isEmpty)
-          MaterialProvidersListEmpty(
-            onAdd: _addProvider,
-            illustration: const MaterialEmptyIllustration.noProviders(),
-          )
-        else
-          Card(
-            clipBehavior: Clip.antiAlias,
-            child: Column(
-              children: [
-                for (var i = 0; i < providers.length; i++) ...[
-                  if (i > 0) Divider(height: 1, color: tokens.border),
-                  _ProviderListTile(
-                    provider: providers[i],
-                    selected: providers[i].id == _selectedId,
-                    onTap: () => _selectProvider(providers[i].id),
-                  ),
-                ],
-              ],
-            ),
-          ),
-        if (providers.isNotEmpty) ...[
-          const SizedBox(height: 12),
-          FilledButton.tonalIcon(
-            onPressed: canEdit ? _openEditor : null,
-            icon: const Icon(Icons.edit_outlined),
-            label: const Text('编辑所选提供商'),
-            style: FilledButton.styleFrom(
-              minimumSize: const Size.fromHeight(44),
-            ),
-          ),
-          const SizedBox(height: 8),
-          OutlinedButton.icon(
-            onPressed: canDelete ? _deleteSelected : null,
-            icon: const Icon(Icons.delete_outline),
-            label: const Text('删除所选提供商'),
-            style: OutlinedButton.styleFrom(
-              minimumSize: const Size.fromHeight(44),
-              foregroundColor: canDelete ? tokens.danger : null,
-              side: BorderSide(
-                color: canDelete ? tokens.danger : tokens.border,
-              ),
-            ),
-          ),
-        ],
-        const SizedBox(height: 12),
-        OutlinedButton.icon(
-          onPressed: _addProvider,
-          icon: const Icon(Icons.add),
-          label: const Text('添加提供商'),
-          style: OutlinedButton.styleFrom(
-            minimumSize: const Size.fromHeight(44),
-            side: BorderSide(
-              color: tokens.border,
-              style: BorderStyle.solid,
-            ),
-          ),
-        ),
-        if (widget.mcpServerRepository != null &&
-            widget.mcpSessionFactory != null) ...[
-          const SizedBox(height: 20),
           Text(
-            '业务 MCP',
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-              color: tokens.ink,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            '配置 Server、鉴权与工具授权策略；不另开设置 Tab。',
+            '点选切换当前提供商；可编辑或删除所选（内置不可删）',
             style: TextStyle(fontSize: 12, color: tokens.inkMuted),
           ),
           const SizedBox(height: 8),
+          if (providers.isEmpty)
+            MaterialProvidersListEmpty(
+              onAdd: _addProvider,
+              illustration: const MaterialEmptyIllustration.noProviders(),
+            )
+          else
+            Card(
+              clipBehavior: Clip.antiAlias,
+              child: Column(
+                children: [
+                  for (var i = 0; i < providers.length; i++) ...[
+                    if (i > 0) Divider(height: 1, color: tokens.border),
+                    _ProviderListTile(
+                      provider: providers[i],
+                      selected: providers[i].id == _selectedId,
+                      onTap: () => _selectProvider(providers[i].id),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          if (providers.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            FilledButton.tonalIcon(
+              onPressed: canEdit ? _openEditor : null,
+              icon: const Icon(Icons.edit_outlined),
+              label: const Text('编辑所选提供商'),
+              style: FilledButton.styleFrom(
+                minimumSize: const Size.fromHeight(44),
+              ),
+            ),
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+              onPressed: canDelete ? _deleteSelected : null,
+              icon: const Icon(Icons.delete_outline),
+              label: const Text('删除所选提供商'),
+              style: OutlinedButton.styleFrom(
+                minimumSize: const Size.fromHeight(44),
+                foregroundColor: canDelete ? tokens.danger : null,
+                side: BorderSide(
+                  color: canDelete ? tokens.danger : tokens.border,
+                ),
+              ),
+            ),
+          ],
+          const SizedBox(height: 12),
           OutlinedButton.icon(
-            onPressed: _openMcp,
-            icon: const Icon(Icons.hub_outlined),
-            label: const Text('管理业务 MCP'),
+            onPressed: _addProvider,
+            icon: const Icon(Icons.add),
+            label: const Text('添加提供商'),
             style: OutlinedButton.styleFrom(
               minimumSize: const Size.fromHeight(44),
-              side: BorderSide(color: tokens.border),
+              side: BorderSide(color: tokens.border, style: BorderStyle.solid),
             ),
           ),
+          if (widget.mcpServerRepository != null &&
+              widget.mcpSessionFactory != null) ...[
+            const SizedBox(height: 20),
+            Text(
+              '业务 MCP',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: tokens.ink,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              '配置 Server、鉴权与工具授权策略；不另开设置 Tab。',
+              style: TextStyle(fontSize: 12, color: tokens.inkMuted),
+            ),
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+              onPressed: _openMcp,
+              icon: const Icon(Icons.hub_outlined),
+              label: const Text('管理业务 MCP'),
+              style: OutlinedButton.styleFrom(
+                minimumSize: const Size.fromHeight(44),
+                side: BorderSide(color: tokens.border),
+              ),
+            ),
+          ],
         ],
-      ],
       ),
     );
   }

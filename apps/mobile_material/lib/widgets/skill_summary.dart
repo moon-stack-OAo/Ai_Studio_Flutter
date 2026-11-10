@@ -148,6 +148,8 @@ class _SkillDetailsContent extends StatelessWidget {
             ),
             Expanded(
               child: ListView(
+                keyboardDismissBehavior:
+                    ScrollViewKeyboardDismissBehavior.onDrag,
                 padding: const EdgeInsets.all(16),
                 children: [
                   if (skills.isEmpty) const Text('没有生效的自定义技能'),

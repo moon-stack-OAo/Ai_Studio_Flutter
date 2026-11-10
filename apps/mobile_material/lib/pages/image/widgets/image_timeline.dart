@@ -35,10 +35,12 @@ class ImageTimeline extends StatefulWidget {
   final void Function(ImageItem item, int index, ImageRef ref) onSaveAlbum;
   final void Function(ImageItem item, int index, ImageRef ref)? onShare;
   final void Function(ImageItem item, int index, ImageRef ref)?
-      onUseAsReference;
+  onUseAsReference;
+
   /// 预览本回合参考图（`IMG-TURN-REF`）；与结果图分轨。
   final void Function(ImageItem item, int index, ImageRef ref)?
-      onPreviewReference;
+  onPreviewReference;
+
   /// `IMG-RERUN`：重新填写（回填 Composer）。
   final void Function(ImageItem item)? onRerun;
   final bool rerunEnabled;
@@ -78,9 +80,7 @@ class _ImageTimelineState extends State<ImageTimeline> {
 
   String _tailKey(List<ImageItem> items) {
     if (items.isEmpty) return '';
-    final last = items.reduce(
-      (a, b) => a.createdAt >= b.createdAt ? a : b,
-    );
+    final last = items.reduce((a, b) => a.createdAt >= b.createdAt ? a : b);
     return '${last.id}:${last.status.name}:${last.images.length}';
   }
 
@@ -116,6 +116,7 @@ class _ImageTimelineState extends State<ImageTimeline> {
 
     return ListView.builder(
       controller: _scroll,
+      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
       padding: const EdgeInsets.fromLTRB(0, 4, 0, 24),
       itemCount: sorted.length,
       itemBuilder: (context, index) {
@@ -162,9 +163,9 @@ class ImageTimelineTurn extends StatelessWidget {
   final void Function(ImageItem item, int index, ImageRef ref) onSaveAlbum;
   final void Function(ImageItem item, int index, ImageRef ref)? onShare;
   final void Function(ImageItem item, int index, ImageRef ref)?
-      onUseAsReference;
+  onUseAsReference;
   final void Function(ImageItem item, int index, ImageRef ref)?
-      onPreviewReference;
+  onPreviewReference;
   final void Function(ImageItem item)? onRerun;
   final bool rerunEnabled;
 
@@ -195,10 +196,7 @@ class ImageTimelineTurn extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _TimeSplit(
-          label: formatTimeSplitLabel(item.createdAt),
-          tokens: tokens,
-        ),
+        _TimeSplit(label: formatTimeSplitLabel(item.createdAt), tokens: tokens),
         Card(
           margin: EdgeInsets.zero,
           color: tokens.surface,
@@ -221,10 +219,12 @@ class ImageTimelineTurn extends StatelessWidget {
                   loadBytes: loadBytes,
                   onPreviewReference: onPreviewReference == null
                       ? null
-                      : (index, ref) =>
-                          onPreviewReference!(item, index, ref),
+                      : (index, ref) => onPreviewReference!(item, index, ref),
                 ),
-                AppliedSkillsButton(skills: item.appliedSkills, finalPrompt: item.finalPrompt),
+                AppliedSkillsButton(
+                  skills: item.appliedSkills,
+                  finalPrompt: item.finalPrompt,
+                ),
                 const SizedBox(height: 10),
                 if (isError)
                   Container(
@@ -424,7 +424,7 @@ class _ResultGrid extends StatelessWidget {
   final void Function(ImageItem item, int index, ImageRef ref) onSaveAlbum;
   final void Function(ImageItem item, int index, ImageRef ref)? onShare;
   final void Function(ImageItem item, int index, ImageRef ref)?
-      onUseAsReference;
+  onUseAsReference;
 
   @override
   Widget build(BuildContext context) {
@@ -701,9 +701,9 @@ class _UserPromptBubble extends StatelessWidget {
     if (prompt.isEmpty) return;
     await Clipboard.setData(ClipboardData(text: prompt));
     if (!context.mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('已复制')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('已复制')));
   }
 
   Future<void> _showActions(BuildContext context) async {
@@ -781,11 +781,7 @@ class _UserPromptBubble extends StatelessWidget {
 
 /// M-TurnRefThumbs：提示词左侧参考图缩略（触控间距友好）。
 class _TurnRefThumbs extends StatelessWidget {
-  const _TurnRefThumbs({
-    required this.refs,
-    this.loadBytes,
-    this.onTap,
-  });
+  const _TurnRefThumbs({required this.refs, this.loadBytes, this.onTap});
 
   final List<ImageRef> refs;
   final Future<Uint8List?> Function(ImageRef ref)? loadBytes;

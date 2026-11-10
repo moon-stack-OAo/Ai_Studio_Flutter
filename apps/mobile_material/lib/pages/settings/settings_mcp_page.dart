@@ -179,12 +179,15 @@ class _SettingsMcpPageState extends State<SettingsMcpPage> {
     if (confirmed != true || result == null || !result.hasEntries) return;
     if (!mounted) return;
 
-    final existingNames =
-        _repo.servers.map((s) => s.displayName).toList(growable: true);
+    final existingNames = _repo.servers
+        .map((s) => s.displayName)
+        .toList(growable: true);
     var imported = 0;
     for (final e in result.entries) {
-      final displayName =
-          uniqueMcpImportDisplayName(e.draft.displayName, existingNames);
+      final displayName = uniqueMcpImportDisplayName(
+        e.draft.displayName,
+        existingNames,
+      );
       existingNames.add(displayName);
       final d = e.draft;
       final token = e.bearerToken?.trim();
@@ -239,12 +242,11 @@ class _SettingsMcpPageState extends State<SettingsMcpPage> {
 
     return Scaffold(
       backgroundColor: tokens.canvas,
-      appBar: AppBar(
-        title: const Text('业务 MCP'),
-      ),
+      appBar: AppBar(title: const Text('业务 MCP')),
       body: BackToTopHost(
         builder: (context, scroll) => ListView(
           controller: scroll,
+          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
           padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
           children: [
             Text(
@@ -352,8 +354,8 @@ class _McpListTile extends StatelessWidget {
     final meta = isStdio
         ? '本地 stdio，仅桌面可用'
         : (server.baseUrl.trim().isNotEmpty
-            ? server.baseUrl.trim()
-            : '未填写 Base URL');
+              ? server.baseUrl.trim()
+              : '未填写 Base URL');
 
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
@@ -384,10 +386,7 @@ class _McpListTile extends StatelessWidget {
                 color: Color.lerp(pillFg, tokens.border, 0.55)!,
               ),
             ),
-            child: Text(
-              pill,
-              style: TextStyle(fontSize: 10, color: pillFg),
-            ),
+            child: Text(pill, style: TextStyle(fontSize: 10, color: pillFg)),
           ),
           IconButton(
             tooltip: '删除',

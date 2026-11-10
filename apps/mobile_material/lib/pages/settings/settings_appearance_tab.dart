@@ -5,18 +5,16 @@ import '../../app/theme_controller.dart';
 import '../../widgets/back_to_top_host.dart';
 
 class SettingsAppearanceTab extends StatelessWidget {
-  const SettingsAppearanceTab({
-    super.key,
-    required this.themeController,
-  });
+  const SettingsAppearanceTab({super.key, required this.themeController});
 
   final ThemeController themeController;
 
   @override
   Widget build(BuildContext context) {
     final tokens = materialTokensOf(context);
-    final density =
-        UiDensity.fromVisualDensity(Theme.of(context).visualDensity);
+    final density = UiDensity.fromVisualDensity(
+      Theme.of(context).visualDensity,
+    );
     final cardPad = density.settingsCardPadding;
     final formGap = density.settingsFormGap;
     return ListenableBuilder(
@@ -26,6 +24,7 @@ class SettingsAppearanceTab extends StatelessWidget {
         return BackToTopHost(
           builder: (context, scroll) => ListView(
             controller: scroll,
+            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
             padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
             children: [
               Card(
@@ -47,10 +46,7 @@ class SettingsAppearanceTab extends StatelessWidget {
                       SegmentedButton<ThemePreference>(
                         segments: [
                           for (final pref in ThemePreference.values)
-                            ButtonSegment(
-                              value: pref,
-                              label: Text(pref.label),
-                            ),
+                            ButtonSegment(value: pref, label: Text(pref.label)),
                         ],
                         selected: {selected},
                         onSelectionChanged: (set) {

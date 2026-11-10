@@ -191,6 +191,8 @@ class _SettingsSkillsTabState extends State<SettingsSkillsTab> {
               child: skills.isEmpty
                   ? const Center(child: Text('暂无技能，点击「新建技能」开始'))
                   : ReorderableListView.builder(
+                      keyboardDismissBehavior:
+                          ScrollViewKeyboardDismissBehavior.onDrag,
                       padding: const EdgeInsets.fromLTRB(12, 0, 12, 24),
                       buildDefaultDragHandles: false,
                       // 保留原始插入索引，统一处理拖动、读屏和键盘排序。
@@ -567,6 +569,7 @@ class _SkillEditorPageState extends State<SkillEditorPage> {
           ],
         ),
         body: ListView(
+          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
           padding: const EdgeInsets.all(16),
           children: [
             if (_saving) const LinearProgressIndicator(),
