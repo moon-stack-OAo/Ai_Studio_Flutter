@@ -30,8 +30,8 @@ class UpdateClient {
     this.requireSignature = true,
     this.installMaxAttempts = kUpdateInstallMaxAttempts,
     this.accessSession,
-  })  : _ownedClient = client == null,
-        _client = client ?? createSafeHttpClient();
+  }) : _ownedClient = client == null,
+       _client = client ?? createSafeHttpClient();
 
   /// 测试可注入下载目录；生产为 null 时用系统临时目录。
   final Directory? downloadDirectory;
@@ -88,7 +88,9 @@ class UpdateClient {
       final fallback = fallbackManifestUrl.trim();
       if (fallback.isEmpty ||
           fallback == url ||
-          !_canFallbackToGithub(e)) {
+          !(_githubOrigin(url) != null
+              ? _canFallbackFromProxy(e)
+              : _canFallbackToGithub(e))) {
         rethrow;
       }
       return _fetchManifestAt(fallback, client: client);
@@ -106,6 +108,37 @@ class UpdateClient {
         msg.contains('无法访问更新源') ||
         msg.contains('请求超时') ||
         msg.contains('网络');
+  }
+
+  /// 代理网络/HTTP 失败可直连；校验失败、取消不能切源绕过。
+  bool _canFallbackFromProxy(UpdateException error) {
+    final msg = error.message;
+    return isRetryableUpdateInstallError(error) ||
+        msg.contains('HTTP') ||
+        msg.contains('404') ||
+        msg.contains('安装包地址可能需要鉴权') ||
+        msg.contains('更新清单为空') ||
+        msg.contains('更新清单不是合法');
+  }
+
+  String? _githubOrigin(String url) {
+    if (!url.startsWith(kGithubUpdateProxyPrefix)) return null;
+    final origin = url.substring(kGithubUpdateProxyPrefix.length);
+    return _isGithubReleaseUrl(origin) ? origin : null;
+  }
+
+  bool _isGithubReleaseUrl(String url) {
+    final uri = Uri.tryParse(url);
+    return uri != null &&
+        uri.scheme == 'https' &&
+        uri.host == 'github.com' &&
+        uri.userInfo.isEmpty &&
+        !uri.hasPort &&
+        uri.pathSegments.length >= 5 &&
+        uri.pathSegments[2] == 'releases' &&
+        (uri.pathSegments[3] == 'download' ||
+            (uri.pathSegments[3] == 'latest' &&
+                uri.pathSegments[4] == 'download'));
   }
 
   Future<UpdateManifest> _fetchManifestAt(
@@ -126,12 +159,10 @@ class UpdateClient {
     late final http.Response response;
     try {
       response = await c
-          .get(uri, headers: _requestHeaders(json: true))
+          .get(uri, headers: _requestHeaders(uri, json: true))
           .timeout(timeout);
     } on TimeoutException {
-      throw const UpdateException(
-        '检查更新失败：请求超时，请检查网络后重试。',
-      );
+      throw const UpdateException('检查更新失败：请求超时，请检查网络后重试。');
     } on SocketException catch (e) {
       throw UpdateException(friendlyUpdateNetworkError(e));
     } on HttpException catch (e) {
@@ -224,9 +255,7 @@ class UpdateClient {
       }
 
       final matchedKey = _firstMatchingKey(manifest, candidates);
-      final asset = matchedKey == null
-          ? null
-          : manifest.platforms[matchedKey];
+      final asset = matchedKey == null ? null : manifest.platforms[matchedKey];
 
       if (!isRemoteNewer(manifest.version, current)) {
         return UpdateCheckResult.upToDate(
@@ -270,10 +299,7 @@ class UpdateClient {
     }
   }
 
-  String? _firstMatchingKey(
-    UpdateManifest manifest,
-    List<String> candidates,
-  ) {
+  String? _firstMatchingKey(UpdateManifest manifest, List<String> candidates) {
     for (final key in candidates) {
       final asset = manifest.platforms[key];
       if (asset != null && asset.url.isNotEmpty) return key;
@@ -296,8 +322,7 @@ class UpdateClient {
     http.Client? client,
     String? fileNameHint,
   }) async {
-    final maxAttempts =
-        installMaxAttempts < 1 ? 1 : installMaxAttempts;
+    final maxAttempts = installMaxAttempts < 1 ? 1 : installMaxAttempts;
     Object? lastError;
     for (var attempt = 1; attempt <= maxAttempts; attempt++) {
       _throwIfDownloadCancelled(shouldCancel);
@@ -335,6 +360,38 @@ class UpdateClient {
     String? fileNameHint,
   }) async {
     final url = asset.url.trim();
+    final origin =
+        _githubOrigin(url) ?? (_isGithubReleaseUrl(url) ? url : null);
+    Future<File> downloadAt(String target) => _downloadInstallerAt(
+      PlatformAsset(
+        url: target,
+        signature: asset.signature,
+        sha256: asset.sha256,
+        size: asset.size,
+      ),
+      onProgress: onProgress,
+      shouldCancel: shouldCancel,
+      client: client,
+      fileNameHint: fileNameHint,
+    );
+    if (origin == null) return downloadAt(url);
+    try {
+      return await downloadAt('$kGithubUpdateProxyPrefix$origin');
+    } on UpdateException catch (e) {
+      if (!_canFallbackFromProxy(e)) rethrow;
+      _throwIfDownloadCancelled(shouldCancel);
+      return downloadAt(origin);
+    }
+  }
+
+  Future<File> _downloadInstallerAt(
+    PlatformAsset asset, {
+    void Function(UpdateDownloadProgress progress)? onProgress,
+    bool Function()? shouldCancel,
+    http.Client? client,
+    String? fileNameHint,
+  }) async {
+    final url = asset.url.trim();
     if (url.isEmpty) {
       throw const UpdateException('安装包地址为空');
     }
@@ -352,12 +409,10 @@ class UpdateClient {
     late final http.StreamedResponse response;
     try {
       final request = http.Request('GET', uri);
-      request.headers.addAll(_requestHeaders());
+      request.headers.addAll(_requestHeaders(uri));
       response = await c.send(request).timeout(timeout);
     } on TimeoutException {
-      throw const UpdateException(
-        '下载更新失败：请求超时，请检查网络后重试。',
-      );
+      throw const UpdateException('下载更新失败：请求超时，请检查网络后重试。');
     } catch (e) {
       throw UpdateException(friendlyUpdateNetworkError(e));
     }
@@ -389,7 +444,7 @@ class UpdateClient {
     final sink = file.openWrite();
     var received = 0;
     try {
-      await for (final chunk in response.stream) {
+      await for (final chunk in response.stream.timeout(timeout)) {
         _throwIfDownloadCancelled(shouldCancel);
         sink.add(chunk);
         received += chunk.length;
@@ -482,11 +537,15 @@ class UpdateClient {
     }
   }
 
-  Map<String, String> _requestHeaders({bool json = false}) {
+  Map<String, String> _requestHeaders(Uri uri, {bool json = false}) {
+    final access = accessSession;
+    final accessOrigin = access == null ? null : Uri.tryParse(access.baseUrl);
     return {
       'User-Agent': 'AiStudio-Flutter-Updater/1.0',
       if (json) 'Accept': 'application/json',
-      ...?accessSession?.headers,
+      // 旧 AppDock 会话不能泄露给 GitHub 或第三方加速服务。
+      if (accessOrigin != null && uri.origin == accessOrigin.origin)
+        ...access!.headers,
     };
   }
 
@@ -494,7 +553,7 @@ class UpdateClient {
   Future<bool> _sniffAccessBody(http.StreamedResponse response) async {
     final chunks = <int>[];
     try {
-      await for (final chunk in response.stream) {
+      await for (final chunk in response.stream.timeout(timeout)) {
         if (chunks.length < 2048) {
           final room = 2048 - chunks.length;
           chunks.addAll(chunk.length <= room ? chunk : chunk.take(room));
@@ -515,7 +574,6 @@ class UpdateClient {
     }
     return name;
   }
-
 }
 
 /// 将检查/下载阶段的网络原始错误转成可读中文。

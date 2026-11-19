@@ -806,7 +806,7 @@ class _SettingsAboutPageState extends State<SettingsAboutPage> {
                   Text(
                     !configured
                         ? '更新通道：未配置更新源 · 不上架'
-                        : '更新通道：AppDock（完整性校验）· 不上架',
+                        : '更新通道：GitHub（ghfast.top 加速优先 / 直连兜底，完整性校验）· 不上架',
                     style: context.settingsText.caption,
                   ),
                   const SizedBox(height: 12),

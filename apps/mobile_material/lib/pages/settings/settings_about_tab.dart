@@ -912,7 +912,7 @@ class _SettingsAboutTabState extends State<SettingsAboutTab> {
                   const SizedBox(height: 6),
                   Text(
                     _isAndroid
-                        ? '更新通道：AppDock（完整性校验）'
+                        ? '更新通道：GitHub（ghfast.top 加速优先 / 直连兜底，完整性校验）'
                         : _isIos
                         ? '更新通道：非 App Store · 请通过内测渠道获取新版本'
                         : '分发：不上架 · 直链 / 侧载清单',

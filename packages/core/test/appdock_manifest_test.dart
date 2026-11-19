@@ -98,16 +98,9 @@ void main() {
     });
 
     test('skips prerelease-only feeds as empty latest', () {
-      final manifest = updateManifestFromAppDockVersions(
-        [
-          {
-            'tagName': 'v9.0.0',
-            'isPrerelease': true,
-            'assets': <Object>[],
-          },
-        ],
-        baseUrl: kAppDockBaseUrl,
-      );
+      final manifest = updateManifestFromAppDockVersions([
+        {'tagName': 'v9.0.0', 'isPrerelease': true, 'assets': <Object>[]},
+      ], baseUrl: kAppDockBaseUrl);
       expect(manifest.version, '0.0.0');
       expect(manifest.platforms, isEmpty);
     });
@@ -125,7 +118,7 @@ void main() {
       });
       final client = UpdateClient(
         client: mock,
-        manifestUrl: kDesktopUpdateManifestUrl,
+        manifestUrl: kAppDockUpdateManifestUrl,
       );
       final result = await client.checkForUpdate(
         currentVersion: '1.0.0',
@@ -150,7 +143,8 @@ void main() {
                   'name': 'setup.exe',
                   'platform': 'windows',
                   'arch': 'x64',
-                  'downloadUrl': '/api/v1/public/apps/ai-studio/assets/x/download',
+                  'downloadUrl':
+                      '/api/v1/public/apps/ai-studio/assets/x/download',
                 },
               ],
             },
@@ -160,7 +154,7 @@ void main() {
       });
       final client = UpdateClient(
         client: mock,
-        manifestUrl: kDesktopUpdateManifestUrl,
+        manifestUrl: kAppDockUpdateManifestUrl,
       );
       final result = await client.checkForUpdate(
         currentVersion: '1.0.0',
@@ -183,7 +177,7 @@ void main() {
       });
       final client = UpdateClient(
         client: mock,
-        manifestUrl: kDesktopUpdateManifestUrl,
+        manifestUrl: kAppDockUpdateManifestUrl,
       );
       final result = await client.checkForUpdate(
         currentVersion: '1.0.0',
@@ -223,7 +217,7 @@ void main() {
       });
       final client = UpdateClient(
         client: mock,
-        manifestUrl: kDesktopUpdateManifestUrl,
+        manifestUrl: kAppDockUpdateManifestUrl,
         accessSession: access,
       );
       final result = await client.checkForUpdate(
@@ -261,7 +255,7 @@ void main() {
       });
       final client = UpdateClient(
         client: mock,
-        manifestUrl: kDesktopUpdateManifestUrl,
+        manifestUrl: kAppDockUpdateManifestUrl,
         fallbackManifestUrl: kGithubDesktopUpdateManifestUrl,
       );
       final result = await client.checkForUpdate(
@@ -286,7 +280,7 @@ void main() {
       });
       final client = UpdateClient(
         client: mock,
-        manifestUrl: kDesktopUpdateManifestUrl,
+        manifestUrl: kAppDockUpdateManifestUrl,
         fallbackManifestUrl: kGithubDesktopUpdateManifestUrl,
       );
       final result = await client.checkForUpdate(
@@ -307,12 +301,13 @@ void main() {
       final dir = await Directory.systemTemp.createTemp('ai_appdock_');
       final client = UpdateClient(
         client: mock,
-        manifestUrl: kDesktopUpdateManifestUrl,
+        manifestUrl: kAppDockUpdateManifestUrl,
         downloadDirectory: dir,
       );
       final file = await client.downloadInstaller(
         PlatformAsset(
-          url: '$kAppDockBaseUrl/api/v1/public/apps/ai-studio/assets/win/download',
+          url:
+              '$kAppDockBaseUrl/api/v1/public/apps/ai-studio/assets/win/download',
           sha256: digest,
         ),
         fileNameHint: 'AI.Studio_setup.exe',

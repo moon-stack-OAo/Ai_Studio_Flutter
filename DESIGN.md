@@ -279,6 +279,7 @@ Flutter 落点：`packages/design_fluent` 与 `packages/design_material` 的 `Th
 - **外观**：主题（**仅浅色 / 深色**，不提供跟随系统）、**字号五档**、密度（密度含义可按系统解释）
 - **日志**（必有）：本机运行日志查看 / 筛选 / 搜索 / 复制 / 清空；时间格式 `YYYY-MM-DD HH:mm:ss`；不得含密钥明文
 - **关于与更新**：版本、检查更新、开源说明、导入导出 / 清数据；桌面安装更新；Android 侧载清单；iOS 非 Store 说明
+- **默认更新源**：桌面与 Android 使用 GitHub Release 清单和安装包，运行时优先 `ghfast.top` 加速、失败回退 GitHub 直连；发布清单始终保留原始 GitHub URL，完整性校验不变。
 - **仅 Fluent · 关闭行为**：退出 / 托盘 / 询问 —— **归入「关于与更新」页内**，不单独占设置分类
 - **业务 MCP（P6）**：Server CRUD、启用开关、鉴权引用、连通性探测、`tools/list` 刷新、按 tool 的分级授权覆盖（见 `SET-MCP-*` / §5.11）；桌面另可配 stdio（P6-S）；**不**另开主导航项
 

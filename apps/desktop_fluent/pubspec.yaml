@@ -1,7 +1,7 @@
 name: desktop_fluent
 description: AI Studio desktop app (Fluent Design).
 publish_to: 'none'
-version: 1.0.9+1792121747
+version: 1.0.10+1795069082
 
 environment:
   sdk: ^3.12.2

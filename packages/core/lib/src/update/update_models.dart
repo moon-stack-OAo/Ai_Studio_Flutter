@@ -6,22 +6,24 @@ const String kAppDockBaseUrl = 'https://appdock.livancen.top';
 /// 本产品在 AppDock 中的应用 slug。
 const String kAppDockAppSlug = 'ai-studio';
 
-/// 默认桌面更新清单 URL（优先 AppDock）。
-///
-/// 指向 AppDock 公开版本列表，由客户端映射成内部 [UpdateManifest]。
-/// AppDock 没有该应用时回退 [kGithubDesktopUpdateManifestUrl]。
-const String kDesktopUpdateManifestUrl =
+/// 可选的旧 AppDock 更新源，不再作为默认入口。
+const String kAppDockUpdateManifestUrl =
     '$kAppDockBaseUrl/api/v1/public/apps/$kAppDockAppSlug/versions';
 
-/// GitHub Releases 上的桌面 `latest.json`（AppDock 不可用时的回退）。
+/// GitHub Release 加速前缀；失败后直连原始 GitHub 地址。
+const String kGithubUpdateProxyPrefix = 'https://ghfast.top/';
+
+/// 默认桌面更新清单（GitHub 加速优先）。
+const String kDesktopUpdateManifestUrl =
+    '$kGithubUpdateProxyPrefix$kGithubDesktopUpdateManifestUrl';
+
+/// GitHub Releases 上的桌面 `latest.json`（加速源不可用时直连）。
 const String kGithubDesktopUpdateManifestUrl =
     'https://github.com/moon-stack-OAo/Ai_Studio_Flutter/releases/latest/download/latest.json';
 
-/// 默认 Android 侧载更新清单 URL（与桌面同一 AppDock 版本列表）。
-///
-/// 平台资产须含 **`sha256`**（64 位 hex）；下载地址为 AppDock 相对路径，客户端会补全。
-/// AppDock 没有该应用时回退 [kGithubAndroidUpdateManifestUrl]。
-const String kAndroidUpdateManifestUrl = kDesktopUpdateManifestUrl;
+/// 默认 Android 侧载清单（GitHub 加速优先，平台资产须含 sha256）。
+const String kAndroidUpdateManifestUrl =
+    '$kGithubUpdateProxyPrefix$kGithubAndroidUpdateManifestUrl';
 
 /// GitHub Releases 上的 Android `android-latest.json`。
 const String kGithubAndroidUpdateManifestUrl =
@@ -64,11 +66,11 @@ class PlatformAsset {
   }
 
   Map<String, dynamic> toJson() => {
-        'url': url,
-        if (signature.isNotEmpty) 'signature': signature,
-        if (sha256.isNotEmpty) 'sha256': sha256,
-        if (size != null) 'size': size,
-      };
+    'url': url,
+    if (signature.isNotEmpty) 'signature': signature,
+    if (sha256.isNotEmpty) 'sha256': sha256,
+    if (size != null) 'size': size,
+  };
 }
 
 /// Tauri 风格 `latest.json` 清单。
@@ -118,14 +120,12 @@ class UpdateManifest {
   }
 
   Map<String, dynamic> toJson() => {
-        'version': version,
-        if (notes.isNotEmpty) 'notes': notes,
-        if (pubDate.isNotEmpty) 'pub_date': pubDate,
-        if (product != null) 'product': product,
-        'platforms': {
-          for (final e in platforms.entries) e.key: e.value.toJson(),
-        },
-      };
+    'version': version,
+    if (notes.isNotEmpty) 'notes': notes,
+    if (pubDate.isNotEmpty) 'pub_date': pubDate,
+    if (product != null) 'product': product,
+    'platforms': {for (final e in platforms.entries) e.key: e.value.toJson()},
+  };
 
   /// 按候选平台键顺序匹配；返回第一个有非空 url 的条目。
   PlatformAsset? resolvePlatform(Iterable<String> candidateKeys) {
@@ -241,10 +241,7 @@ class UpdateCheckResult {
 
 /// 下载进度（字节）。
 class UpdateDownloadProgress {
-  const UpdateDownloadProgress({
-    required this.received,
-    this.total,
-  });
+  const UpdateDownloadProgress({required this.received, this.total});
 
   final int received;
   final int? total;
