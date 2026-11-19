@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 
 import '../image/image_asset_store.dart';
 import '../image/image_models.dart';
+import '../mcp/mcp_models.dart';
 import '../prompt/custom_skills.dart';
 import '../util/id.dart';
 import 'chat_attach.dart';
@@ -275,6 +276,7 @@ class ChatSessionRepository extends ChangeNotifier {
     List<ChatToolCall> toolCalls = const [],
     List<SkillSnapshot> appliedSkills = const [],
     String? toolCallId,
+    McpToolCallStatus? toolResultStatus,
   }) async {
     final index = _indexOf(sessionId);
     if (index < 0) return null;
@@ -295,6 +297,7 @@ class ChatSessionRepository extends ChangeNotifier {
       toolCalls: toolCalls,
       appliedSkills: List.unmodifiable(appliedSkills),
       toolCallId: toolCallId,
+      toolResultStatus: toolResultStatus,
     );
     var title = session.title;
     if (title == '新对话' && role == ChatRole.user) {

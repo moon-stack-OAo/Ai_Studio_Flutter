@@ -76,11 +76,8 @@ class ChatController extends ChangeNotifier {
   McpServerRepository? get mcpServers => _mcpServers;
 
   /// 当前发送回合的 live 工具轨迹（CHAT-TOOL-CALL）。
-  List<ChatToolCallTrace> get liveToolTraces {
-    final list = _liveTraces.values.toList(growable: false);
-    list.sort((a, b) => a.toolCallId.compareTo(b.toolCallId));
-    return list;
-  }
+  List<ChatToolCallTrace> get liveToolTraces =>
+      _liveTraces.values.toList(growable: false);
 
   bool get hasLiveToolTraces => _liveTraces.isNotEmpty;
 

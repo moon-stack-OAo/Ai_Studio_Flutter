@@ -491,6 +491,7 @@ class ChatSessionFacade {
             role: ChatRole.tool,
             content: content,
             toolCallId: tr.toolCallId,
+            toolResultStatus: tr.status,
           );
           workingMessages.add({
             'role': 'tool',

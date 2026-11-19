@@ -160,6 +160,9 @@ void main() {
       // 第二轮：应含 role=tool
       final messages = body['messages'] as List;
       expect(messages.any((m) => m is Map && m['role'] == 'tool'), isTrue);
+      final toolMessage =
+          messages.firstWhere((m) => m['role'] == 'tool') as Map;
+      expect(toolMessage.keys.toSet(), {'role', 'tool_call_id', 'content'});
       return http.StreamedResponse(
         Stream.value(
           utf8.encode(
@@ -216,6 +219,7 @@ void main() {
     expect(msgs[1].streaming, isFalse);
     expect(msgs[2].role, ChatRole.tool);
     expect(msgs[2].content, contains('tool-ok'));
+    expect(msgs[2].toolResultStatus, McpToolCallStatus.success);
     expect(msgs.last.role, ChatRole.assistant);
     expect(msgs.last.content, contains('完成'));
     expect(fakeSessions['mcp_1']!.calls, ['biz.query']);
@@ -292,6 +296,7 @@ void main() {
       (m) => m.role == ChatRole.tool,
     );
     expect(toolMsg.content, contains('拒绝'));
+    expect(toolMsg.toolResultStatus, McpToolCallStatus.rejected);
     facade.dispose();
   });
 

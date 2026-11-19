@@ -1,4 +1,5 @@
 import '../image/image_models.dart';
+import '../mcp/mcp_models.dart';
 import '../prompt/custom_skills.dart';
 import 'chat_attach.dart';
 
@@ -183,6 +184,7 @@ class ChatMessage {
     this.attachments = const [],
     this.toolCalls = const [],
     this.toolCallId,
+    this.toolResultStatus,
     this.appliedSkills = const [],
   });
 
@@ -211,6 +213,10 @@ class ChatMessage {
 
   /// role=tool 时对应的 `tool_call_id`；旧 JSON 无字段 → null。
   final String? toolCallId;
+
+  /// 工具结果的本地展示元数据；旧记录为 null，不属于任何请求协议。
+  /// 仅保存状态枚举，不额外保存参数、结果原文、凭据或推测耗时。
+  final McpToolCallStatus? toolResultStatus;
   final List<SkillSnapshot> appliedSkills;
 
   bool get hasToolCalls => toolCalls.isNotEmpty;
@@ -233,6 +239,8 @@ class ChatMessage {
     List<ChatToolCall>? toolCalls,
     String? toolCallId,
     bool clearToolCallId = false,
+    McpToolCallStatus? toolResultStatus,
+    bool clearToolResultStatus = false,
     List<SkillSnapshot>? appliedSkills,
   }) {
     return ChatMessage(
@@ -251,6 +259,9 @@ class ChatMessage {
       attachments: attachments ?? this.attachments,
       toolCalls: toolCalls ?? this.toolCalls,
       toolCallId: clearToolCallId ? null : (toolCallId ?? this.toolCallId),
+      toolResultStatus: clearToolResultStatus
+          ? null
+          : (toolResultStatus ?? this.toolResultStatus),
       appliedSkills: List.unmodifiable(appliedSkills ?? this.appliedSkills),
     );
   }
@@ -273,6 +284,7 @@ class ChatMessage {
     if (toolCalls.isNotEmpty)
       'toolCalls': toolCalls.map((t) => t.toJson()).toList(),
     if (toolCallId != null && toolCallId!.isNotEmpty) 'toolCallId': toolCallId,
+    if (toolResultStatus != null) 'toolResultStatus': toolResultStatus!.wire,
   };
 
   factory ChatMessage.fromJson(Map<String, dynamic> json) {
@@ -322,6 +334,9 @@ class ChatMessage {
       attachments: sanitizeChatAttachments(refs),
       toolCalls: calls,
       toolCallId: (tcid == null || tcid.isEmpty) ? null : tcid,
+      toolResultStatus: McpToolCallStatus.tryParse(
+        json['toolResultStatus']?.toString(),
+      ),
     );
   }
 }

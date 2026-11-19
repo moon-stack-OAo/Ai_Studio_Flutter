@@ -39,6 +39,9 @@ class _MessageListState extends State<MessageList> {
   bool _userScrolling = false;
   bool _bottomFrameScheduled = false;
   bool _forceBottom = false;
+  // MessageList is keyed by session.id by ChatPage. Retain user choices even
+  // when lazy children are disposed or live calls become persisted history.
+  final Map<String, ToolTraceExpansion> _toolExpansions = {};
 
   /// 固定上限；最大化时约束不变，避免 Markdown 闪卡。
   static const double _bubbleMaxWidth = 800;
@@ -148,19 +151,16 @@ class _MessageListState extends State<MessageList> {
 
     final lastUserId = _lastUserIdIn(widget.messages);
 
-    final items = groupChatMessagesForDisplay(widget.messages);
-    final live = widget.liveToolTraces;
-    final extra = live.isEmpty ? 0 : 1;
+    final items = groupChatMessagesForDisplay(
+      widget.messages,
+      liveTraces: widget.liveToolTraces,
+    );
     final keys = <Key>[
       for (final item in items)
         switch (item) {
           ChatDisplayMessage() => ValueKey(('message', item.message.id)),
-          ChatDisplayToolRound() => ValueKey((
-            'tool-round',
-            item.anchorMessageId ?? item.traces.first.toolCallId,
-          )),
+          ChatDisplayToolRound() => ValueKey(('tool-round', item.groupId)),
         },
-      if (live.isNotEmpty) const ValueKey('live-tool-traces'),
     ];
     final childIndices = <Key, int>{
       for (var i = 0; i < keys.length; i++) keys[i]: keys.length - i - 1,
@@ -172,21 +172,11 @@ class _MessageListState extends State<MessageList> {
         // 末尾锚定在 offset=0，底部定位不依赖懒加载的总高度估算。
         reverse: true,
         padding: const EdgeInsets.fromLTRB(28, 20, 28, 12),
-        itemCount: items.length + extra,
+        itemCount: items.length,
         findChildIndexCallback: (key) => childIndices[key],
         itemBuilder: (context, index) {
-          final displayIndex = items.length + extra - index - 1;
+          final displayIndex = items.length - index - 1;
           final key = keys[displayIndex];
-          if (displayIndex >= items.length) {
-            return _constrainedBubble(
-              key: key,
-              alignment: Alignment.centerLeft,
-              child: Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: ToolCallTraceGroup(traces: live),
-              ),
-            );
-          }
           final item = items[displayIndex];
           if (item is ChatDisplayToolRound) {
             return _constrainedBubble(
@@ -194,7 +184,13 @@ class _MessageListState extends State<MessageList> {
               alignment: Alignment.centerLeft,
               child: Padding(
                 padding: const EdgeInsets.only(bottom: 8),
-                child: ToolCallTraceGroup(traces: item.traces),
+                child: ToolCallTraceGroup(
+                  traces: item.traces,
+                  expansion: _toolExpansions.putIfAbsent(
+                    item.groupId,
+                    ToolTraceExpansion.new,
+                  ),
+                ),
               ),
             );
           }

@@ -89,6 +89,122 @@ Future<void> _wheelUp(WidgetTester tester) async {
 }
 
 void main() {
+  testWidgets('live overlays history in place, with body as hard boundary', (
+    tester,
+  ) async {
+    const messages = [
+      ChatMessage(
+        id: 'invoke',
+        createdAt: 1,
+        role: ChatRole.assistant,
+        content: '',
+        toolCalls: [
+          ChatToolCall(id: 'live-call', name: 'search', arguments: '{}'),
+        ],
+      ),
+      ChatMessage(
+        id: 'result',
+        createdAt: 2,
+        role: ChatRole.tool,
+        toolCallId: 'live-call',
+        content: 'old-result',
+      ),
+      ChatMessage(
+        id: 'body',
+        createdAt: 3,
+        role: ChatRole.assistant,
+        content: 'body-boundary',
+      ),
+    ];
+    await _pump(
+      tester,
+      'overlay',
+      messages,
+      liveToolTraces: [
+        _trace.copyWith(resultSummary: 'live-result'),
+        const ChatToolCallTrace(
+          toolCallId: 'other',
+          serverId: 'server',
+          serverDisplayName: 'Server',
+          toolName: 'other-tool',
+          status: McpToolCallStatus.success,
+        ),
+      ],
+    );
+    expect(find.byType(ToolCallTraceGroup), findsNWidgets(2));
+    for (final toggle
+        in find
+            .byKey(const ValueKey('tool-group-toggle'))
+            .evaluate()
+            .toList()) {
+      await tester.tap(find.byWidget(toggle.widget));
+      await tester.pumpAndSettle();
+    }
+    expect(find.text('live-result'), findsOneWidget);
+    expect(find.text('old-result'), findsNothing);
+    expect(
+      tester.getTopLeft(find.text('live-result')).dy,
+      lessThan(tester.getTopLeft(find.text('body-boundary')).dy),
+    );
+    expect(
+      tester.getTopLeft(find.text('body-boundary')).dy,
+      lessThan(tester.getTopLeft(find.text('other-tool')).dy),
+    );
+  });
+
+  testWidgets(
+    'expansion survives live persistence, offscreen disposal and is session isolated',
+    (tester) async {
+      await _pump(
+        tester,
+        'persist',
+        const [],
+        liveToolTraces: [
+          _trace.copyWith(argumentsSummary: 'args', resultSummary: 'result'),
+        ],
+      );
+      await tester.tap(find.byKey(const ValueKey('tool-group-toggle')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.textContaining('参数摘要（脱敏'));
+      await tester.pumpAndSettle();
+      const persisted = [
+        ChatMessage(
+          id: 'invoke',
+          createdAt: 1,
+          role: ChatRole.assistant,
+          content: '',
+          toolCalls: [
+            ChatToolCall(id: 'live-call', name: 'search', arguments: '{}'),
+          ],
+        ),
+        ChatMessage(
+          id: 'result',
+          createdAt: 2,
+          role: ChatRole.tool,
+          toolCallId: 'live-call',
+          content: 'saved-result',
+        ),
+      ];
+      await _pump(tester, 'persist', persisted);
+      expect(find.text('复制参数摘要'), findsOneWidget);
+      final long = [...persisted, ..._history('later')];
+      await _pump(tester, 'persist', long);
+      _position(tester).jumpTo(0);
+      await tester.pumpAndSettle();
+      expect(find.byType(ToolCallTraceGroup), findsNothing);
+      await tester.scrollUntilVisible(
+        find.byType(ToolCallTraceGroup),
+        600,
+        scrollable: find.byType(Scrollable).first,
+        maxScrolls: 100,
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('复制参数摘要'), findsOneWidget);
+      await _pump(tester, 'different-session', persisted);
+      expect(find.text('复制参数摘要'), findsNothing);
+      expect(find.textContaining('参数摘要（脱敏'), findsNothing);
+    },
+  );
   testWidgets('opening long history shows the last message', (tester) async {
     await _pump(tester, 'long', _history('long'));
     expect(_tail, findsOneWidget);
@@ -298,8 +414,12 @@ void main() {
     ];
     await _pump(tester, 'tools', messages, liveToolTraces: [_trace]);
     final groups = find.byType(ToolCallTraceGroup);
-    final liveState = tester.state(groups.at(0));
-    final roundState = tester.state(groups.at(1));
+    // Adjacent historical and unassociated live calls share one projection group.
+    expect(groups, findsOneWidget);
+    final roundState = tester.state(groups);
+    await tester.tap(find.byKey(const ValueKey('tool-group-toggle')));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('参数摘要（脱敏'), findsNWidgets(2));
     await _pump(
       tester,
       'tools',
@@ -314,8 +434,9 @@ void main() {
       ],
       liveToolTraces: [_trace.copyWith(resultSummary: 'Updated')],
     );
-    expect(tester.state(groups.at(0)), same(liveState));
+    expect(groups, findsNWidgets(2));
     expect(tester.state(groups.at(1)), same(roundState));
+    expect(find.textContaining('参数摘要（脱敏'), findsOneWidget);
     await _pump(tester, 'tools', messages);
     expect(groups, findsOneWidget);
     expect(tester.state(groups), same(roundState));

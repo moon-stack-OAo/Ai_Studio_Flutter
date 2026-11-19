@@ -1,16 +1,30 @@
 import 'package:core/core.dart';
 import 'package:design_fluent/design_fluent.dart';
 import 'package:fluent_ui/fluent_ui.dart';
+import 'package:flutter/services.dart';
 
-/// 一轮多个工具调用的聚合折叠（默认收起）。
+/// Owned by MessageList, not lazy list children. No execution state lives here.
+class ToolTraceExpansion {
+  bool expanded = false;
+  final Map<String, ToolTraceDetailsExpansion> details = {};
+}
+
+class ToolTraceDetailsExpansion {
+  bool arguments = false;
+  bool result = false;
+}
+
+/// Fluent-only presentation of one contiguous group from the core projection.
 class ToolCallTraceGroup extends StatefulWidget {
   const ToolCallTraceGroup({
     super.key,
     required this.traces,
+    this.expansion,
     this.initiallyExpanded = false,
   });
 
   final List<ChatToolCallTrace> traces;
+  final ToolTraceExpansion? expansion;
   final bool initiallyExpanded;
 
   @override
@@ -18,66 +32,44 @@ class ToolCallTraceGroup extends StatefulWidget {
 }
 
 class _ToolCallTraceGroupState extends State<ToolCallTraceGroup> {
-  late bool _expanded = widget.initiallyExpanded;
-
-  @override
-  void didUpdateWidget(covariant ToolCallTraceGroup oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    // 有待授权 / 执行中时自动展开，避免漏确认。
-    final needsAttention = widget.traces.any(
-      (t) =>
-          t.status == McpToolCallStatus.pendingAuth ||
-          t.status == McpToolCallStatus.running ||
-          t.status == McpToolCallStatus.queued,
-    );
-    if (needsAttention && !_expanded) {
-      _expanded = true;
-    }
-  }
-
-  String _headline(FluentTokens tokens) {
-    final n = widget.traces.length;
-    if (n == 0) return '工具调用';
-    if (n == 1) {
-      final t = widget.traces.first;
-      final name = (t.toolTitle?.trim().isNotEmpty == true)
-          ? t.toolTitle!.trim()
-          : t.toolName;
-      return '工具 · $name';
-    }
-    final ok =
-        widget.traces.where((t) => t.status == McpToolCallStatus.success).length;
-    final fail = widget.traces
-        .where(
-          (t) =>
-              t.status == McpToolCallStatus.failed ||
-              t.status == McpToolCallStatus.rejected ||
-              t.status == McpToolCallStatus.cancelled,
-        )
-        .length;
-    final pending = widget.traces
-        .where(
-          (t) =>
-              t.status == McpToolCallStatus.pendingAuth ||
-              t.status == McpToolCallStatus.running ||
-              t.status == McpToolCallStatus.queued,
-        )
-        .length;
-    final parts = <String>['已调用 $n 个工具'];
-    if (ok > 0) parts.add('成功 $ok');
-    if (fail > 0) parts.add('失败/拒绝 $fail');
-    if (pending > 0) parts.add('进行中 $pending');
-    return parts.join(' · ');
-  }
+  late final _local = ToolTraceExpansion()..expanded = widget.initiallyExpanded;
+  ToolTraceExpansion get expansion => widget.expansion ?? _local;
 
   @override
   Widget build(BuildContext context) {
     if (widget.traces.isEmpty) return const SizedBox.shrink();
     final tokens = fluentTokensOf(context);
+    final counts = <String, int>{};
+    for (final trace in widget.traces) {
+      counts.update(
+        _statusLabel(trace),
+        (count) => count + 1,
+        ifAbsent: () => 1,
+      );
+    }
+    final headline = widget.traces.length == 1
+        ? '工具 · ${widget.traces.first.toolTitle ?? widget.traces.first.toolName}'
+        : '工具调用 · ${widget.traces.length}';
+    final statuses = counts.entries
+        .map((entry) => '${entry.key} ${entry.value}')
+        .join(' · ');
+    final errors = widget.traces
+        .where(
+          (trace) =>
+              trace.status == McpToolCallStatus.failed ||
+              trace.status == McpToolCallStatus.rejected,
+        )
+        .map(
+          (trace) => mcpSanitizeSummary(
+            trace.errorMessage ?? trace.resultSummary,
+            maxLen: 160,
+          ),
+        )
+        .where((summary) => summary.isNotEmpty)
+        .toList();
     return Container(
-      margin: const EdgeInsets.only(bottom: 8),
       decoration: BoxDecoration(
-        color: Color.lerp(tokens.surface, tokens.canvas, 0.35),
+        color: tokens.surfaceMuted,
         borderRadius: BorderRadius.circular(8),
         border: Border.all(color: tokens.border),
       ),
@@ -85,81 +77,85 @@ class _ToolCallTraceGroupState extends State<ToolCallTraceGroup> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           HoverButton(
-            onPressed: () => setState(() => _expanded = !_expanded),
-            builder: (context, states) {
-              return Padding(
-                padding: const EdgeInsets.fromLTRB(12, 10, 8, 10),
-                child: Row(
-                  children: [
-                    Icon(
-                      _expanded
-                          ? FluentIcons.chevron_down
-                          : FluentIcons.chevron_right,
-                      size: 12,
-                      color: tokens.inkMuted,
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        _headline(tokens),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          color: tokens.ink,
-                          fontFamily: tokens.fontFamily,
-                        ),
-                      ),
-                    ),
-                    Text(
-                      _expanded ? '收起' : '展开',
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: tokens.inkMuted,
-                        fontFamily: tokens.fontFamily,
-                      ),
-                    ),
-                    const SizedBox(width: 4),
-                  ],
-                ),
-              );
-            },
-          ),
-          if (_expanded)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
-              child: Column(
+            key: const ValueKey('tool-group-toggle'),
+            onPressed: () =>
+                setState(() => expansion.expanded = !expansion.expanded),
+            builder: (context, states) => Padding(
+              padding: const EdgeInsets.all(10),
+              child: Row(
                 children: [
-                  for (final t in widget.traces) ToolCallTraceCard(trace: t),
+                  Icon(
+                    expansion.expanded
+                        ? FluentIcons.chevron_down
+                        : FluentIcons.chevron_right,
+                    size: 12,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Wrap(
+                      spacing: 12,
+                      runSpacing: 4,
+                      children: [
+                        Text(
+                          headline,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontSize: 12),
+                        ),
+                        Text(
+                          statuses,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: tokens.inkSecondary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Text(
+                    expansion.expanded ? '收起' : '展开',
+                    style: const TextStyle(fontSize: 12),
+                  ),
                 ],
               ),
             ),
+          ),
+          if (!expansion.expanded && errors.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+              child: Text(
+                errors.length == 1
+                    ? errors.first
+                    : '${errors.first} · 另有 ${errors.length - 1} 条错误摘要，展开查看',
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontSize: 12, color: tokens.danger),
+              ),
+            ),
+          if (expansion.expanded)
+            for (final trace in widget.traces)
+              ToolCallTraceCard(
+                key: ValueKey(trace.toolCallId),
+                trace: trace,
+                showDetails: expansion.expanded,
+                expansion: expansion.details.putIfAbsent(
+                  trace.toolCallId,
+                  ToolTraceDetailsExpansion.new,
+                ),
+              ),
         ],
       ),
     );
   }
 }
 
-/// CHAT-TOOL-CALL：单条工具调用轨迹卡（可展开参数/结果摘要）。
-class ToolCallTraceCard extends StatefulWidget {
-  const ToolCallTraceCard({
-    super.key,
-    required this.trace,
-  });
+bool _missingResult(ChatToolCallTrace trace) =>
+    trace.status == McpToolCallStatus.queued &&
+    trace.resultSummary == '历史记录缺少工具结果';
 
-  final ChatToolCallTrace trace;
-
-  @override
-  State<ToolCallTraceCard> createState() => _ToolCallTraceCardState();
-}
-
-class _ToolCallTraceCardState extends State<ToolCallTraceCard> {
-  bool _expanded = false;
-
-  ChatToolCallTrace get trace => widget.trace;
-
-  String get _statusLabel => switch (trace.status) {
+String _statusLabel(ChatToolCallTrace trace) => _missingResult(trace)
+    ? '结果缺失 / 状态未知'
+    : switch (trace.status) {
         McpToolCallStatus.queued => '排队中',
         McpToolCallStatus.pendingAuth => '待授权',
         McpToolCallStatus.running => '执行中',
@@ -169,161 +165,131 @@ class _ToolCallTraceCardState extends State<ToolCallTraceCard> {
         McpToolCallStatus.cancelled => '已取消',
       };
 
-  Color _statusColor(FluentTokens tokens) => switch (trace.status) {
-        McpToolCallStatus.success => tokens.success,
-        McpToolCallStatus.failed ||
-        McpToolCallStatus.rejected ||
-        McpToolCallStatus.cancelled =>
-          tokens.danger,
-        McpToolCallStatus.pendingAuth => tokens.warning,
-        McpToolCallStatus.running || McpToolCallStatus.queued => tokens.primary,
-      };
+/// Expanded tool identity, independent status region and summary disclosures.
+class ToolCallTraceCard extends StatefulWidget {
+  const ToolCallTraceCard({
+    super.key,
+    required this.trace,
+    this.showDetails = true,
+    this.expansion,
+  });
+  final ChatToolCallTrace trace;
+  final bool showDetails;
+  final ToolTraceDetailsExpansion? expansion;
 
-  String get _title {
-    final t = trace.toolTitle?.trim();
-    if (t != null && t.isNotEmpty) return t;
-    return trace.toolName;
-  }
+  @override
+  State<ToolCallTraceCard> createState() => _ToolCallTraceCardState();
+}
 
-  String get _summaryLine {
-    final err = trace.errorMessage?.trim();
-    if (err != null && err.isNotEmpty) return err;
-    final result = trace.resultSummary?.trim();
-    if (result != null && result.isNotEmpty) return result;
-    final args = trace.argumentsSummary?.trim();
-    if (args != null && args.isNotEmpty) return args;
-    return '';
-  }
-
-  bool get _canExpand {
-    final a = trace.argumentsSummary?.trim();
-    final r = trace.resultSummary?.trim();
-    final e = trace.errorMessage?.trim();
-    return (a != null && a.isNotEmpty) ||
-        (r != null && r.isNotEmpty) ||
-        (e != null && e.isNotEmpty);
-  }
+class _ToolCallTraceCardState extends State<ToolCallTraceCard> {
+  final _local = ToolTraceDetailsExpansion();
+  ToolTraceDetailsExpansion get expansion => widget.expansion ?? _local;
 
   @override
   Widget build(BuildContext context) {
+    final trace = widget.trace;
     final tokens = fluentTokensOf(context);
-    final statusFg = _statusColor(tokens);
-    final summary = _summaryLine;
-    final server = trace.serverDisplayName.trim();
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
-      decoration: BoxDecoration(
-        color: Color.lerp(tokens.surface, tokens.canvas, 0.35),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: tokens.border),
-      ),
+    final danger =
+        trace.status == McpToolCallStatus.failed ||
+        trace.status == McpToolCallStatus.rejected;
+    final color = danger
+        ? tokens.danger
+        : trace.status == McpToolCallStatus.pendingAuth || _missingResult(trace)
+        ? tokens.warning
+        : tokens.inkSecondary;
+    // These are explicitly sanitized, truncated summaries, never raw payloads.
+    final args = mcpSanitizeSummary(trace.argumentsSummary ?? '', maxLen: 800);
+    final result = mcpSanitizeSummary(trace.resultSummary ?? '', maxLen: 800);
+    final error = mcpSanitizeSummary(trace.errorMessage ?? '', maxLen: 800);
+    final title = trace.toolTitle?.trim().isNotEmpty == true
+        ? trace.toolTitle!.trim()
+        : trace.toolName;
+    final summary = error.isNotEmpty
+        ? error
+        : result.isNotEmpty
+        ? result
+        : args;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Row(
-            children: [
-              Icon(FluentIcons.chevron_up, size: 10, color: statusFg),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  _title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: tokens.ink,
-                    fontFamily: tokens.fontFamily,
-                  ),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final name = Text(
+                title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: tokens.ink,
                 ),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                decoration: BoxDecoration(
-                  color: Color.lerp(statusFg, tokens.surface, 0.88),
-                  borderRadius: BorderRadius.circular(999),
-                  border: Border.all(
-                    color: Color.lerp(statusFg, tokens.border, 0.55)!,
-                  ),
+              );
+              final status = Text(
+                _statusLabel(trace),
+                key: ValueKey('status:${trace.toolCallId}'),
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: color,
                 ),
-                child: Text(
-                  _statusLabel,
-                  style: TextStyle(
-                    fontSize: 10,
-                    color: statusFg,
-                    fontFamily: tokens.fontFamily,
-                  ),
-                ),
-              ),
-              if (_canExpand) ...[
-                const SizedBox(width: 4),
-                IconButton(
-                  icon: Icon(
-                    _expanded
-                        ? FluentIcons.chevron_up
-                        : FluentIcons.chevron_down,
-                    size: 12,
-                  ),
-                  onPressed: () => setState(() => _expanded = !_expanded),
-                ),
-              ],
-            ],
+              );
+              // Preserve a distinct status region; stack at narrow/large-text sizes.
+              if (constraints.maxWidth <
+                  360 * MediaQuery.textScalerOf(context).scale(1)) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [name, status],
+                );
+              }
+              return Row(
+                children: [
+                  Expanded(child: name),
+                  const SizedBox(width: 12),
+                  status,
+                ],
+              );
+            },
           ),
-          if (server.isNotEmpty) ...[
-            const SizedBox(height: 4),
-            Text(
-              server,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontSize: 11,
-                color: tokens.inkMuted,
-                fontFamily: tokens.fontFamily,
-              ),
-            ),
-          ],
-          if (!_expanded && summary.isNotEmpty) ...[
-            const SizedBox(height: 6),
+          Text(
+            [
+              trace.serverDisplayName.trim(),
+              trace.toolName,
+            ].where((part) => part.isNotEmpty).join(' · '),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(fontSize: 11, color: tokens.inkMuted),
+          ),
+          if (summary.isNotEmpty)
             Text(
               summary,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
+              maxLines: danger || error.isNotEmpty ? null : 2,
+              overflow: danger || error.isNotEmpty
+                  ? TextOverflow.visible
+                  : TextOverflow.ellipsis,
               style: TextStyle(
                 fontSize: 12,
-                height: 1.4,
-                color: tokens.inkSecondary,
-                fontFamily: tokens.fontFamily,
+                color: danger || error.isNotEmpty
+                    ? tokens.danger
+                    : tokens.inkSecondary,
               ),
             ),
-          ],
-          if (_expanded) ...[
-            if (trace.argumentsSummary?.trim().isNotEmpty == true) ...[
-              const SizedBox(height: 8),
-              _DetailBlock(
-                label: '参数',
-                body: trace.argumentsSummary!.trim(),
-                tokens: tokens,
-              ),
-            ],
-            if (trace.resultSummary?.trim().isNotEmpty == true) ...[
-              const SizedBox(height: 8),
-              _DetailBlock(
-                label: '结果',
-                body: trace.resultSummary!.trim(),
-                tokens: tokens,
-              ),
-            ],
-            if (trace.errorMessage?.trim().isNotEmpty == true) ...[
-              const SizedBox(height: 8),
-              _DetailBlock(
-                label: '错误',
-                body: trace.errorMessage!.trim(),
-                tokens: tokens,
-                danger: true,
-              ),
-            ],
+          if (widget.showDetails) ...[
+            _SummaryDisclosure(
+              label: '参数摘要',
+              body: args.isEmpty ? '暂无参数摘要' : args,
+              expanded: expansion.arguments,
+              onToggle: () =>
+                  setState(() => expansion.arguments = !expansion.arguments),
+            ),
+            _SummaryDisclosure(
+              label: '结果摘要',
+              body: result.isEmpty ? '暂无结果摘要' : result,
+              expanded: expansion.result,
+              onToggle: () =>
+                  setState(() => expansion.result = !expansion.result),
+            ),
           ],
         ],
       ),
@@ -331,12 +297,49 @@ class _ToolCallTraceCardState extends State<ToolCallTraceCard> {
   }
 }
 
+class _SummaryDisclosure extends StatelessWidget {
+  const _SummaryDisclosure({
+    required this.label,
+    required this.body,
+    required this.expanded,
+    required this.onToggle,
+  });
+  final String label;
+  final String body;
+  final bool expanded;
+  final VoidCallback onToggle;
+
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      HoverButton(
+        onPressed: onToggle,
+        builder: (context, states) => Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Text(
+            '${expanded ? '▾' : '▸'} $label（脱敏 / 可能截断）',
+            style: const TextStyle(fontSize: 12),
+          ),
+        ),
+      ),
+      if (expanded) ...[
+        SelectableText(body, style: const TextStyle(fontSize: 12)),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: Button(
+            onPressed: () => Clipboard.setData(ClipboardData(text: body)),
+            child: Text('复制$label'),
+          ),
+        ),
+      ],
+    ],
+  );
+}
+
 /// 助手气泡内嵌的 tool_calls 发起摘要（默认折叠为「调用了 N 个工具」）。
 class ToolCallsInvokedStrip extends StatefulWidget {
-  const ToolCallsInvokedStrip({
-    super.key,
-    required this.toolCalls,
-  });
+  const ToolCallsInvokedStrip({super.key, required this.toolCalls});
 
   final List<ChatToolCall> toolCalls;
 
@@ -394,8 +397,10 @@ class _ToolCallsInvokedStripState extends State<ToolCallsInvokedStrip> {
               children: [
                 for (final c in widget.toolCalls)
                   Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
                     decoration: BoxDecoration(
                       color: tokens.surfaceMuted,
                       borderRadius: BorderRadius.circular(6),
@@ -421,10 +426,7 @@ class _ToolCallsInvokedStripState extends State<ToolCallsInvokedStrip> {
 
 /// role=tool 消息的轻量结果气泡（默认折叠）。
 class ToolResultBubbleBody extends StatefulWidget {
-  const ToolResultBubbleBody({
-    super.key,
-    required this.message,
-  });
+  const ToolResultBubbleBody({super.key, required this.message});
 
   final ChatMessage message;
 
@@ -487,48 +489,6 @@ class _ToolResultBubbleBodyState extends State<ToolResultBubbleBody> {
             ),
           ),
         ],
-      ],
-    );
-  }
-}
-
-class _DetailBlock extends StatelessWidget {
-  const _DetailBlock({
-    required this.label,
-    required this.body,
-    required this.tokens,
-    this.danger = false,
-  });
-
-  final String label;
-  final String body;
-  final FluentTokens tokens;
-  final bool danger;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: 11,
-            fontWeight: FontWeight.w600,
-            color: tokens.inkMuted,
-            fontFamily: tokens.fontFamily,
-          ),
-        ),
-        const SizedBox(height: 4),
-        SelectableText(
-          body,
-          style: TextStyle(
-            fontSize: 12,
-            height: 1.4,
-            color: danger ? tokens.danger : tokens.inkSecondary,
-            fontFamily: tokens.fontFamily,
-          ),
-        ),
       ],
     );
   }

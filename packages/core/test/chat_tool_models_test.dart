@@ -2,6 +2,97 @@ import 'package:core/core.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test(
+    'tool result status round-trips, projects, and stays out of API messages',
+    () {
+      for (final status in [
+        McpToolCallStatus.success,
+        McpToolCallStatus.failed,
+        McpToolCallStatus.rejected,
+        McpToolCallStatus.cancelled,
+      ]) {
+        final message = ChatMessage(
+          id: 'tool',
+          createdAt: 1,
+          role: ChatRole.tool,
+          content: 'result',
+          toolCallId: 'call',
+          toolResultStatus: status,
+        );
+        final restored = ChatMessage.fromJson(message.toJson());
+        expect(restored.toolResultStatus, status);
+        expect(restored.copyWith(content: 'new').toolResultStatus, status);
+        expect(
+          restored.copyWith(clearToolResultStatus: true).toolResultStatus,
+          isNull,
+        );
+        final trace = buildToolRoundTraces(
+          toolCalls: const [],
+          toolResults: [restored],
+        ).single;
+        expect(trace.status, status);
+        expect(buildApiMessages(history: [restored]), [
+          {'role': 'tool', 'content': 'result', 'tool_call_id': 'call'},
+        ]);
+      }
+    },
+  );
+
+  test(
+    'legacy and unknown status compatible; content is not status metadata',
+    () {
+      final legacy = ChatMessage.fromJson({
+        'id': 'old',
+        'role': 'tool',
+        'content': '示例：用户拒绝；策略拒绝',
+        'toolResultStatus': 'future_status',
+      });
+      expect(legacy.toolResultStatus, isNull);
+      expect(legacy.toJson().containsKey('toolResultStatus'), isFalse);
+      ChatToolCallTrace project(ChatMessage m) =>
+          buildToolRoundTraces(toolCalls: const [], toolResults: [m]).single;
+      expect(project(legacy).status, McpToolCallStatus.success);
+      expect(
+        project(legacy.copyWith(error: true)).status,
+        McpToolCallStatus.failed,
+      );
+      expect(
+        project(legacy.copyWith(stopped: true)).status,
+        McpToolCallStatus.cancelled,
+      );
+    },
+  );
+
+  test('repository persists only optional enum metadata', () async {
+    final storage = MemoryChatSessionStorage();
+    final repo = ChatSessionRepository(storage: storage);
+    await repo.load();
+    for (final status in [
+      McpToolCallStatus.success,
+      McpToolCallStatus.failed,
+      McpToolCallStatus.rejected,
+      McpToolCallStatus.cancelled,
+    ]) {
+      await repo.appendMessage(
+        repo.activeId,
+        role: ChatRole.tool,
+        content: 'existing content',
+        toolCallId: status.wire,
+        toolResultStatus: status,
+      );
+    }
+    final restored = ChatSessionRepository(storage: storage);
+    await restored.load();
+    expect(restored.activeSession!.messages.map((m) => m.toolResultStatus), [
+      McpToolCallStatus.success,
+      McpToolCallStatus.failed,
+      McpToolCallStatus.rejected,
+      McpToolCallStatus.cancelled,
+    ]);
+    repo.dispose();
+    restored.dispose();
+  });
+
   group('ChatRole.tool', () {
     test('tryParse / wire', () {
       expect(ChatRole.tryParse('tool'), ChatRole.tool);
@@ -43,9 +134,7 @@ void main() {
         createdAt: 1,
         role: ChatRole.assistant,
         content: '',
-        toolCalls: [
-          ChatToolCall(id: 'c1', name: 'lookup', arguments: '{}'),
-        ],
+        toolCalls: [ChatToolCall(id: 'c1', name: 'lookup', arguments: '{}')],
       );
       final again = ChatMessage.fromJson(msg.toJson());
       expect(again.hasToolCalls, isTrue);
