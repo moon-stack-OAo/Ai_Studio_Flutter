@@ -1,5 +1,6 @@
 import 'package:core/core.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mobile_material/app/theme_controller.dart';
 import 'package:mobile_material/main.dart';
@@ -490,7 +491,32 @@ void main() {
 
     expect(find.byIcon(Icons.send_rounded), findsOneWidget);
     expect(find.byTooltip('发送'), findsOneWidget);
-    expect(find.bySemanticsLabel('消息输入'), findsWidgets);
+    // The visible hint is merged into the editable node's accessible label.
+    // Assert the actual TextField node, not an unrelated ancestor's text.
+    final input = tester.getSemantics(find.byType(TextField));
+    expect(
+      input,
+      matchesSemantics(
+        label: '消息输入\n输入消息…',
+        isTextField: true,
+        isMultiline: true,
+        hasEnabledState: true,
+        isEnabled: true,
+        isFocusable: true,
+        hasFocusAction: true,
+        hasTapAction: true,
+      ),
+    );
+    await tester.enterText(find.byType(TextField), '无障碍输入测试');
+    await tester.pump();
+    final editingInput = tester.getSemantics(find.byType(TextField));
+    expect(editingInput.label, '消息输入\n输入消息…');
+    expect(editingInput.value, '无障碍输入测试');
+    expect(editingInput.flagsCollection.isTextField, isTrue);
+    expect(
+      editingInput.getSemanticsData().hasAction(SemanticsAction.setText),
+      isTrue,
+    );
   });
 
   testWidgets('composer attach disabled when vision unsupported', (tester) async {

@@ -217,7 +217,8 @@ class _ComposerState extends State<Composer> {
               const SizedBox(width: 8),
               Expanded(
                 child: Semantics(
-                  textField: true,
+                  // Keep the label on the editable node, not the page ancestor.
+                  container: true,
                   label: '消息输入',
                   child: TextField(
                     controller: _controller,
