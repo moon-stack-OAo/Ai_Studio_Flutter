@@ -61,53 +61,50 @@ class _MarkdownHostState extends State<MarkdownHost> {
     final hit = _cachedBody;
     if (hit != null && _cacheKey == key) return hit;
 
+    // 小屏优先：标题降档、收紧块间距；宽表用 Intrinsic + 横滑，避免 Flex 挤压。
     final styleSheet = MarkdownStyleSheet(
       p: base,
-      pPadding: widget.compact
-          ? const EdgeInsets.only(bottom: 2)
-          : EdgeInsets.zero,
+      pPadding: const EdgeInsets.only(bottom: 2),
       a: base.copyWith(
         color: tokens.primary,
         decoration: TextDecoration.underline,
       ),
       h1: base.copyWith(
-        fontSize: widget.compact ? 15 : 22,
+        fontSize: widget.compact ? 15 : 18,
         fontWeight: FontWeight.w700,
         height: 1.3,
         color: ink,
       ),
       h1Padding: widget.compact
           ? const EdgeInsets.only(bottom: 4)
-          : EdgeInsets.zero,
+          : const EdgeInsets.fromLTRB(0, 2, 0, 4),
       h2: base.copyWith(
-        fontSize: widget.compact ? 14 : 18,
-        fontWeight: widget.compact ? FontWeight.w600 : FontWeight.w700,
+        fontSize: widget.compact ? 14 : 16,
+        fontWeight: FontWeight.w600,
         height: 1.35,
         color: ink,
       ),
       h2Padding: widget.compact
           ? const EdgeInsets.only(bottom: 4)
-          : EdgeInsets.zero,
+          : const EdgeInsets.fromLTRB(0, 2, 0, 2),
       h3: base.copyWith(
-        fontSize: widget.compact ? 12 : 16,
+        fontSize: widget.compact ? 12 : 15,
         fontWeight: FontWeight.w600,
         height: 1.35,
         color: ink,
       ),
       h3Padding: widget.compact
           ? const EdgeInsets.fromLTRB(0, 2, 0, 0)
-          : EdgeInsets.zero,
+          : const EdgeInsets.fromLTRB(0, 2, 0, 2),
       h4: base.copyWith(
-        fontSize: widget.compact ? 12 : 15,
+        fontSize: widget.compact ? 12 : 14,
         fontWeight: FontWeight.w600,
         height: 1.35,
         color: widget.compact ? tokens.inkSecondary : ink,
       ),
-      h4Padding: widget.compact
-          ? const EdgeInsets.fromLTRB(0, 2, 0, 0)
-          : EdgeInsets.zero,
+      h4Padding: const EdgeInsets.fromLTRB(0, 2, 0, 0),
       h5: base.copyWith(
-        fontSize: widget.compact ? 12 : 14,
+        fontSize: widget.compact ? 12 : 13.5,
         fontWeight: FontWeight.w600,
         color: ink,
       ),
@@ -123,11 +120,25 @@ class _MarkdownHostState extends State<MarkdownHost> {
       ),
       del: base.copyWith(decoration: TextDecoration.lineThrough),
       listBullet: base,
-      listBulletPadding: widget.compact
-          ? const EdgeInsets.only(right: 6)
-          : const EdgeInsets.only(right: 4),
-      tableHead: base.copyWith(fontWeight: FontWeight.w600),
-      tableBody: base,
+      listBulletPadding: const EdgeInsets.only(right: 6),
+      tableHead: base.copyWith(
+        fontSize: widget.compact ? 12 : 13,
+        fontWeight: FontWeight.w600,
+      ),
+      tableBody: base.copyWith(
+        fontSize: widget.compact ? 12 : 13,
+        height: 1.4,
+      ),
+      tableHeadAlign: TextAlign.left,
+      tablePadding: const EdgeInsets.only(bottom: 4),
+      tableBorder: TableBorder.all(color: tokens.border, width: 1),
+      // Intrinsic 才会触发 flutter_markdown 的横向滚动包装，避免窄屏挤乱。
+      tableColumnWidth: const IntrinsicColumnWidth(),
+      tableScrollbarThumbVisibility: false,
+      tableCellsPadding: widget.compact
+          ? const EdgeInsets.fromLTRB(6, 4, 6, 4)
+          : const EdgeInsets.fromLTRB(8, 6, 8, 6),
+      tableCellsDecoration: BoxDecoration(color: tokens.surface),
       blockquote: base.copyWith(color: tokens.inkSecondary),
       blockquoteDecoration: BoxDecoration(
         color: tokens.surfaceMuted,
@@ -135,9 +146,9 @@ class _MarkdownHostState extends State<MarkdownHost> {
           left: BorderSide(color: tokens.border, width: 3),
         ),
       ),
-      blockquotePadding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+      blockquotePadding: const EdgeInsets.fromLTRB(10, 6, 10, 6),
       code: TextStyle(
-        fontSize: widget.compact ? 11.5 : 13,
+        fontSize: widget.compact ? 11.5 : 12.5,
         height: 1.45,
         color: ink,
         backgroundColor: tokens.surfaceMuted,
@@ -149,8 +160,8 @@ class _MarkdownHostState extends State<MarkdownHost> {
           top: BorderSide(color: tokens.border, width: 1),
         ),
       ),
-      blockSpacing: widget.compact ? 4 : 10,
-      listIndent: widget.compact ? 16 : 24,
+      blockSpacing: widget.compact ? 4 : 8,
+      listIndent: widget.compact ? 14 : 18,
     );
 
     final body = MarkdownBody(

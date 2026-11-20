@@ -186,11 +186,15 @@ class MessageBubble extends StatelessWidget {
             onLongPress: isTool ? null : () => _showActions(context),
             child: ConstrainedBox(
               constraints: BoxConstraints(
-                maxWidth: MediaQuery.sizeOf(context).width * 0.88,
+                // 助手/工具近满宽便于 Markdown；用户气泡略收，避免对聊感失衡。
+                maxWidth: MediaQuery.sizeOf(context).width *
+                    (isUser ? 0.82 : 0.96),
               ),
               child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                padding: EdgeInsets.symmetric(
+                  horizontal: isUser ? 14 : 12,
+                  vertical: 10,
+                ),
                 decoration: BoxDecoration(
                   color: bg,
                   borderRadius: BorderRadius.circular(14),

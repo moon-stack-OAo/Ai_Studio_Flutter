@@ -160,7 +160,7 @@ class _MessageListState extends State<MessageList> {
         keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
         // 末尾锚定在 offset=0，底部定位不依赖懒加载的总高度估算。
         reverse: true,
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+        padding: const EdgeInsets.fromLTRB(12, 12, 12, 16),
         itemCount: items.length,
         findChildIndexCallback: (key) => childIndices[key],
         itemBuilder: (context, index) {

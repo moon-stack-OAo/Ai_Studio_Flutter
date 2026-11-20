@@ -76,10 +76,14 @@ class ChatController extends ChangeNotifier {
   McpServerRepository? get mcpServers => _mcpServers;
 
   /// 当前发送回合的 live 工具轨迹（CHAT-TOOL-CALL）。
-  List<ChatToolCallTrace> get liveToolTraces =>
-      _liveTraces.values.toList(growable: false);
+  ///
+  /// 仅在「活跃会话就是正在流式的那一个」时暴露；后台流继续跑时不得画到其他会话。
+  List<ChatToolCallTrace> get liveToolTraces => isStreamingActiveSession
+      ? _liveTraces.values.toList(growable: false)
+      : const <ChatToolCallTrace>[];
 
-  bool get hasLiveToolTraces => _liveTraces.isNotEmpty;
+  bool get hasLiveToolTraces =>
+      isStreamingActiveSession && _liveTraces.isNotEmpty;
 
   List<ChatDraftAttachment> get draftAttachments =>
       List.unmodifiable(_draftAttachments);
@@ -150,7 +154,10 @@ class ChatController extends ChangeNotifier {
 
   void _onToolTrace(ChatToolCallTrace trace) {
     _liveTraces[trace.toolCallId] = trace;
-    notifyListeners();
+    // 切到其他会话后仍可能收到后台流轨迹；只在当前可见会话需要时刷新 UI。
+    if (isStreamingActiveSession) {
+      notifyListeners();
+    }
   }
 
   void clearLiveToolTraces() {
@@ -162,14 +169,15 @@ class ChatController extends ChangeNotifier {
   Future<void> createSession() async {
     await _sessions.createSession();
     clearBannerError();
-    clearLiveToolTraces();
+    // 不在此清空 live traces：后台流可能仍在写原会话；getter 已按活跃流式会话门闩。
+    notifyListeners();
   }
 
   Future<void> setActiveSession(String id) async {
     if (id == _sessions.activeId) return;
     await _sessions.setActive(id);
     clearBannerError();
-    clearLiveToolTraces();
+    // 同上：保留原会话 live traces，切回流式会话时仍能看到进行中工具卡。
     notifyListeners();
   }
 

@@ -433,4 +433,60 @@ void main() {
       expect(find.byType(ToolCallTraceCard), findsOneWidget);
     },
   );
+
+  testWidgets(
+    '切到无 live 的会话时不展示工具卡；切回带 live 的会话才显示',
+    (tester) async {
+      const streamingMessages = [
+        ChatMessage(
+          id: 'user',
+          createdAt: 0,
+          role: ChatRole.user,
+          content: '请查一下',
+        ),
+        ChatMessage(
+          id: 'assistant-streaming',
+          createdAt: 1,
+          role: ChatRole.assistant,
+          content: '',
+          streaming: true,
+          toolCalls: [
+            ChatToolCall(id: 'live-call', name: 'search', arguments: '{}'),
+          ],
+        ),
+      ];
+      const otherSessionMessages = [
+        ChatMessage(
+          id: 'other-user',
+          createdAt: 0,
+          role: ChatRole.user,
+          content: '另一个会话',
+        ),
+      ];
+
+      // 原会话正在流式 + 有 live traces → 应出现工具卡。
+      await _pump(
+        tester,
+        'origin',
+        streamingMessages,
+        liveToolTraces: [_trace.copyWith(status: McpToolCallStatus.running)],
+      );
+      expect(find.byType(ToolCallTraceGroup), findsOneWidget);
+
+      // 模拟 ChatController 切到其他会话后把 liveToolTraces 门闩为空。
+      await _pump(tester, 'other', otherSessionMessages);
+      expect(find.byType(ToolCallTraceGroup), findsNothing);
+      expect(find.byType(ToolCallTraceCard), findsNothing);
+      expect(find.text('另一个会话'), findsOneWidget);
+
+      // 切回流式会话且重新暴露 live → 工具卡回来。
+      await _pump(
+        tester,
+        'origin',
+        streamingMessages,
+        liveToolTraces: [_trace.copyWith(status: McpToolCallStatus.running)],
+      );
+      expect(find.byType(ToolCallTraceGroup), findsOneWidget);
+    },
+  );
 }

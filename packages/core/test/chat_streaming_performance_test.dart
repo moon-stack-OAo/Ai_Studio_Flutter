@@ -324,5 +324,64 @@ void main() {
         isFalse,
       );
     });
+
+    test('流式中新建会话：后续 delta 仍写入原会话，不串到新会话', () async {
+      final originId = sessions.activeId;
+      final send = facade.send('hello', onNotify: () {});
+      await client.started.future;
+      client.emit('原会话首段');
+      await Future<void>.delayed(const Duration(milliseconds: 80));
+
+      final created = await sessions.createSession(title: '新会话');
+      expect(sessions.activeId, created.id);
+      expect(created.id, isNot(originId));
+      expect(sessions.activeSession!.messages, isEmpty);
+
+      client.emit('切换后继续');
+      await Future<void>.delayed(const Duration(milliseconds: 80));
+      client.result.complete(const ChatStreamResult(content: '原会话首段切换后继续'));
+      await send;
+
+      final origin = sessions.sessions.firstWhere((s) => s.id == originId);
+      final next = sessions.sessions.firstWhere((s) => s.id == created.id);
+      expect(origin.messages, hasLength(2));
+      expect(origin.messages.last.role, ChatRole.assistant);
+      expect(origin.messages.last.content, '原会话首段切换后继续');
+      expect(origin.messages.last.streaming, isFalse);
+      expect(next.messages, isEmpty);
+      expect(generation.busy, isFalse);
+      expect(generation.isCurrent(originId), isFalse);
+      expect(generation.isCurrent(created.id), isFalse);
+    });
+
+    test('流式中切换到已有会话：后续 delta 不写入目标会话', () async {
+      final originId = sessions.activeId;
+      final other = await sessions.createSession(title: '已有会话');
+      await sessions.setActive(originId);
+      expect(sessions.activeId, originId);
+
+      final send = facade.send('hello', onNotify: () {});
+      await client.started.future;
+      client.emit('A');
+      await Future<void>.delayed(const Duration(milliseconds: 80));
+
+      await sessions.setActive(other.id);
+      expect(sessions.activeId, other.id);
+      expect(generation.busy, isTrue);
+      expect(generation.isCurrent(originId), isTrue);
+      expect(generation.isCurrent(other.id), isFalse);
+
+      client.emit('B');
+      await Future<void>.delayed(const Duration(milliseconds: 80));
+      client.result.complete(const ChatStreamResult(content: 'AB'));
+      await send;
+
+      final origin = sessions.sessions.firstWhere((s) => s.id == originId);
+      final target = sessions.sessions.firstWhere((s) => s.id == other.id);
+      expect(origin.messages.last.content, 'AB');
+      expect(origin.messages.last.streaming, isFalse);
+      expect(target.messages, isEmpty);
+      expect(generation.busy, isFalse);
+    });
   });
 }
