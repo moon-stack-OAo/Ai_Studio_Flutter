@@ -29,6 +29,8 @@ class FilterableModelPicker extends StatefulWidget {
 
 class _FilterableModelPickerState extends State<FilterableModelPicker> {
   final _focus = FocusNode();
+  // 搜索草稿不能写入对外的 controller；它只保存已点选的模型。
+  final _searchController = TextEditingController();
   late String _tagText;
   String _query = '';
   bool _expanded = false;
@@ -37,9 +39,7 @@ class _FilterableModelPickerState extends State<FilterableModelPicker> {
   void initState() {
     super.initState();
     _tagText = widget.controller.text.trim();
-    _query = widget.controller.text;
     widget.controller.addListener(_onControllerTick);
-    _focus.addListener(_onFocusChanged);
   }
 
   @override
@@ -49,42 +49,28 @@ class _FilterableModelPickerState extends State<FilterableModelPicker> {
       oldWidget.controller.removeListener(_onControllerTick);
       widget.controller.addListener(_onControllerTick);
       _tagText = widget.controller.text.trim();
-      _query = widget.controller.text;
+      _query = '';
+      _searchController.clear();
     }
   }
 
   @override
   void dispose() {
     widget.controller.removeListener(_onControllerTick);
-    _focus
-      ..removeListener(_onFocusChanged)
-      ..dispose();
+    _searchController.dispose();
+    _focus.dispose();
     super.dispose();
   }
 
   void _onControllerTick() {
-    // 外部改 controller.text（如切换提供商）时须同步 _query，
-    // 否则再次展开会按旧搜索词过滤。用户键入时 raw 即输入内容，
-    // 与 onChanged 写入一致，不会误覆盖搜索态。
-    final raw = widget.controller.text;
-    final next = raw.trim();
-    if (next == _tagText && raw == _query) return;
+    // 外部切换模型时清理旧搜索，但不把焦点或键盘状态当作提交动作。
+    final next = widget.controller.text.trim();
+    if (next == _tagText) return;
     setState(() {
       _tagText = next;
-      _query = raw;
+      _query = '';
+      _searchController.clear();
     });
-  }
-
-  void _onFocusChanged() {
-    if (_focus.hasFocus) {
-      _open();
-    } else {
-      Future<void>.delayed(const Duration(milliseconds: 120), () {
-        if (!mounted || _focus.hasFocus) return;
-        setState(() => _expanded = false);
-        _commit(widget.controller.text);
-      });
-    }
   }
 
   void _open() {
@@ -103,7 +89,7 @@ class _FilterableModelPickerState extends State<FilterableModelPicker> {
       return;
     }
     setState(() => _expanded = !_expanded);
-    if (_expanded) _focus.requestFocus();
+    // 箭头用于浏览列表，不强制唤起输入法。
   }
 
   void _commit(String value) {
@@ -116,9 +102,11 @@ class _FilterableModelPickerState extends State<FilterableModelPicker> {
     }
     setState(() {
       _tagText = v;
-      _query = v;
+      _query = '';
+      _searchController.clear();
       _expanded = false;
     });
+    _focus.unfocus();
     widget.onChanged(v);
   }
 
@@ -145,7 +133,7 @@ class _FilterableModelPickerState extends State<FilterableModelPicker> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         TextField(
-          controller: widget.controller,
+          controller: _searchController,
           focusNode: _focus,
           enabled: widget.enabled,
           style: TextStyle(
@@ -173,22 +161,16 @@ class _FilterableModelPickerState extends State<FilterableModelPicker> {
               ? (text) {
                   setState(() {
                     _query = text;
-                    _tagText = text.trim();
                     if (widget.options.isNotEmpty || widget.allowClear) {
                       _expanded = true;
                     }
                   });
-                  widget.onChanged(text);
                 }
               : null,
           onSubmitted: widget.enabled
-              ? (text) {
-                  final list = _filtered;
-                  if (list.length == 1) {
-                    _commit(list.first.value);
-                  } else {
-                    _commit(text);
-                  }
+              ? (_) {
+                  // IME 完成仅收起键盘，选中模型必须显式点选。
+                  _focus.unfocus();
                 }
               : null,
         ),
@@ -201,7 +183,7 @@ class _FilterableModelPickerState extends State<FilterableModelPicker> {
             clearLabel: widget.clearLabel,
             emptyHint: _query.trim().isEmpty
                 ? '无可用模型'
-                : '无匹配「${_query.trim()}」· 回车可使用该名称',
+                : '无匹配「${_query.trim()}」',
             onPick: _commit,
           ),
         ],
@@ -260,90 +242,96 @@ class _ModelComboList extends StatelessWidget {
     final tokens = materialTokensOf(context);
     final showEmpty = items.isEmpty && !allowClear;
 
-    return Container(
+    return ConstrainedBox(
       constraints: const BoxConstraints(maxHeight: 200),
-      decoration: BoxDecoration(
+      child: Material(
         color: tokens.surfaceElevated,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: tokens.border),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: showEmpty
-          ? Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-              child: Text(
-                emptyHint,
-                style: TextStyle(
-                  fontSize: 12,
-                  color: tokens.inkMuted,
-                  fontFamily: tokens.fontFamily,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(10),
+          side: BorderSide(color: tokens.border),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: showEmpty
+            ? Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 12,
                 ),
-              ),
-            )
-          : ListView(
-              padding: const EdgeInsets.all(4),
-              keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-              shrinkWrap: true,
-              children: [
-                if (allowClear)
-                  ListTile(
-                    dense: true,
-                    selected: selected.isEmpty,
-                    title: Text(
-                      clearLabel,
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: tokens.inkMuted,
-                        fontFamily: tokens.fontFamily,
-                      ),
-                    ),
-                    onTap: () => onPick(''),
+                child: Text(
+                  emptyHint,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: tokens.inkMuted,
+                    fontFamily: tokens.fontFamily,
                   ),
-                if (items.isEmpty && allowClear)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 8,
-                    ),
-                    child: Text(
-                      emptyHint,
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: tokens.inkMuted,
-                        fontFamily: tokens.fontFamily,
-                      ),
-                    ),
-                  )
-                else
-                  for (final o in items)
+                ),
+              )
+            : ListView(
+                padding: const EdgeInsets.all(4),
+                keyboardDismissBehavior:
+                    ScrollViewKeyboardDismissBehavior.onDrag,
+                shrinkWrap: true,
+                children: [
+                  if (allowClear)
                     ListTile(
                       dense: true,
-                      selected: o.value == selected,
+                      selected: selected.isEmpty,
                       title: Text(
-                        o.label,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: o.manual
-                            ? TextStyle(
-                                fontSize: 13,
-                                fontFamily: tokens.fontFamily,
-                                color: tokens.inkMuted,
-                                fontWeight: o.value == selected
-                                    ? FontWeight.w600
-                                    : FontWeight.w400,
-                              )
-                            : TextStyle(
-                                fontSize: 13,
-                                color: tokens.ink,
-                                fontWeight: o.value == selected
-                                    ? FontWeight.w600
-                                    : FontWeight.w400,
-                              ).withMonoFont(tokens),
+                        clearLabel,
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: tokens.inkMuted,
+                          fontFamily: tokens.fontFamily,
+                        ),
                       ),
-                      onTap: () => onPick(o.value),
+                      onTap: () => onPick(''),
                     ),
-              ],
-            ),
+                  if (items.isEmpty && allowClear)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
+                      ),
+                      child: Text(
+                        emptyHint,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: tokens.inkMuted,
+                          fontFamily: tokens.fontFamily,
+                        ),
+                      ),
+                    )
+                  else
+                    for (final o in items)
+                      ListTile(
+                        dense: true,
+                        selected: o.value == selected,
+                        title: Text(
+                          o.label,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: o.manual
+                              ? TextStyle(
+                                  fontSize: 13,
+                                  fontFamily: tokens.fontFamily,
+                                  color: tokens.inkMuted,
+                                  fontWeight: o.value == selected
+                                      ? FontWeight.w600
+                                      : FontWeight.w400,
+                                )
+                              : TextStyle(
+                                  fontSize: 13,
+                                  color: tokens.ink,
+                                  fontWeight: o.value == selected
+                                      ? FontWeight.w600
+                                      : FontWeight.w400,
+                                ).withMonoFont(tokens),
+                        ),
+                        onTap: () => onPick(o.value),
+                      ),
+                ],
+              ),
+      ),
     );
   }
 }
