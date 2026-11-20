@@ -1,7 +1,7 @@
 name: mobile_material
 description: AI Studio mobile app (Material Design).
 publish_to: 'none'
-version: 1.0.10+1795069082
+version: 1.0.11+1795160044
 
 environment:
   sdk: ^3.12.2
