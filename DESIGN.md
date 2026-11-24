@@ -938,7 +938,7 @@ Flutter 落点：`packages/design_fluent` 与 `packages/design_material` 的 `Th
 | 发现流程          | **禁止** `collect_brief`；用 `skipDiscoveryBrief` + `start_run`                                                                  |
 | 联动            | 同主题主导航互跳；外观「浅色/深色」跳对侧主题稿（**无跟随系统**）                                                                                          |
 | 字体            | Fluent / Material **分栈**（§2.2.2）；均为系统字体，无 `@font-face`、无随仓字体文件                                                               |
-| Logo          | 沿用现网 `AI_Studio/src-tauri/icons` → 本仓 `design/brand/`；原型用 `design/opendesign/assets/logo.png`                                |
+| Logo          | 采用方案 A「折光 A」；母版 `icons/A-refracted-a/icon.svg`，运行 `python icons/generate_icons.py` 导出 `design/brand/` 与双端平台资源。原型 `design/opendesign/assets/logo.png` 暂保留旧稿，待按 OD 同步流程确认后更新                                |
 | 滚动条           | 细条（约 6px）、无上下箭头、半透明滑块                                                                                                        |
 | Fluent 设置页    | `fluent-{light\|dark}-settings-{providers\|mcp\|chat\|appearance\|logs\|about}.html`                                         |
 | Material 设置   | `material-{light\|dark}-settings.html`（五 Tab 单页）；**P6** 另有 `material-*-settings-mcp.html` 子页                                 |

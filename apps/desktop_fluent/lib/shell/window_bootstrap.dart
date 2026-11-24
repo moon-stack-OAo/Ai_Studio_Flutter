@@ -50,8 +50,12 @@ Future<void> bootstrapDesktopWindow({
       await windowManager.setBrightness(brightness);
     }
     await windowManager.setPreventClose(true);
-    await windowManager.show();
-    await windowManager.focus();
+    // Windows runner also waits for Flutter's first frame before showing.
+    // Do not bypass that guard while main() is still loading repositories.
+    if (!Platform.isWindows) {
+      await windowManager.show();
+      await windowManager.focus();
+    }
   });
 }
 

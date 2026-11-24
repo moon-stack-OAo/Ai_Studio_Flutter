@@ -38,15 +38,32 @@ class _BrandIntroGateState extends State<BrandIntroGate> {
   bool _userSkip = false;
 
   bool get _isReady => widget.ready?.value ?? true;
+  bool _logoFrameScheduled = false;
+
+  // Keep the intro visible for its full interval after the logo is painted.
+  Widget _buildLogoFrame(
+    BuildContext context,
+    Widget child,
+    int? frame,
+    bool synchronous,
+  ) {
+    if ((frame != null || synchronous) && !_logoFrameScheduled) {
+      _logoFrameScheduled = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || _dismissing) return;
+        _autoTimer = Timer(widget.displayDuration, () {
+          _minElapsed = true;
+          _tryDismiss();
+        });
+      });
+    }
+    return child;
+  }
 
   @override
   void initState() {
     super.initState();
     widget.ready?.addListener(_onReadyChanged);
-    _autoTimer = Timer(widget.displayDuration, () {
-      _minElapsed = true;
-      _tryDismiss();
-    });
   }
 
   @override
@@ -91,10 +108,7 @@ class _BrandIntroGateState extends State<BrandIntroGate> {
   Widget build(BuildContext context) {
     return Stack(
       fit: StackFit.expand,
-      children: [
-        widget.child,
-        if (_layerMounted) _buildOverlay(context),
-      ],
+      children: [widget.child, if (_layerMounted) _buildOverlay(context)],
     );
   }
 
@@ -106,8 +120,9 @@ class _BrandIntroGateState extends State<BrandIntroGate> {
       statusBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
       statusBarBrightness: isDark ? Brightness.dark : Brightness.light,
       systemNavigationBarColor: tokens.canvas,
-      systemNavigationBarIconBrightness:
-          isDark ? Brightness.light : Brightness.dark,
+      systemNavigationBarIconBrightness: isDark
+          ? Brightness.light
+          : Brightness.dark,
     );
 
     return Positioned.fill(
@@ -149,6 +164,7 @@ class _BrandIntroGateState extends State<BrandIntroGate> {
                           ),
                           child: Image.asset(
                             'assets/logo.png',
+                            frameBuilder: _buildLogoFrame,
                             fit: BoxFit.contain,
                             filterQuality: FilterQuality.medium,
                           ),

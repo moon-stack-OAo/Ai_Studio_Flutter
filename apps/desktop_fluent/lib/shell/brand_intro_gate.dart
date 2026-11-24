@@ -27,10 +27,24 @@ class _BrandIntroGateState extends State<BrandIntroGate> {
   Timer? _autoTimer;
   bool _dismissing = false;
 
-  @override
-  void initState() {
-    super.initState();
-    _autoTimer = Timer(widget.displayDuration, _dismiss);
+  bool _logoFrameScheduled = false;
+
+  // Count the visible duration only after the logo's first frame is painted.
+  // Cold asset decoding must not consume the entire brand intro interval.
+  Widget _buildLogoFrame(
+    BuildContext context,
+    Widget child,
+    int? frame,
+    bool synchronous,
+  ) {
+    if ((frame != null || synchronous) && !_logoFrameScheduled) {
+      _logoFrameScheduled = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || _dismissing) return;
+        _autoTimer = Timer(widget.displayDuration, _dismiss);
+      });
+    }
+    return child;
   }
 
   @override
@@ -55,10 +69,7 @@ class _BrandIntroGateState extends State<BrandIntroGate> {
   Widget build(BuildContext context) {
     return Stack(
       fit: StackFit.expand,
-      children: [
-        widget.child,
-        if (_layerMounted) _buildOverlay(context),
-      ],
+      children: [widget.child, if (_layerMounted) _buildOverlay(context)],
     );
   }
 
@@ -111,6 +122,7 @@ class _BrandIntroGateState extends State<BrandIntroGate> {
                           ),
                           child: Image.asset(
                             'assets/logo.png',
+                            frameBuilder: _buildLogoFrame,
                             fit: BoxFit.contain,
                             filterQuality: FilterQuality.medium,
                           ),

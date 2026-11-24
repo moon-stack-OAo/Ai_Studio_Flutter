@@ -13,6 +13,10 @@
 
 ## [Unreleased]
 
+### Changed
+
+- **品牌图标**：采用方案 A「折光 A」，统一双端应用内 Logo、Windows / macOS / iOS / Android 图标及桌面托盘；补充 Android 自适应与单色图标资源，保留 SVG 母版和可重复生成脚本。历史 Tauri 图标归档与 OpenDesign 原型暂不变。
+
 ### Added
 
 - **原生编译 CI**：代码相关 PR / 主分支推送增加 Windows、macOS debug、Android 单 ABI debug 与 iOS simulator 免签名编译检查；固定 Flutter 3.44.5、只读权限，不使用发布密钥或上传安装包。这是原生编译覆盖，不代表应用启动或真实插件存储回环已验证。
