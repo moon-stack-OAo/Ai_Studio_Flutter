@@ -97,7 +97,16 @@ class HistoryFileAccess {
 }
 
 Future<Directory> _defaultRoot() async =>
-    Directory('${(await getApplicationSupportDirectory()).path}/history_v2');
+    historyRootFromApplicationSupport(await getApplicationSupportDirectory());
+
+@visibleForTesting
+Future<Directory> historyRootFromApplicationSupport(Directory support) async {
+  // The OS-provided app container is trusted and can have system aliases
+  // (iOS /var -> /private/var). Resolve only that ancestor, not history_v2 or
+  // its children: links inside our managed storage must still be rejected.
+  final canonicalSupport = await support.resolveSymbolicLinks();
+  return Directory('$canonicalSupport/history_v2');
+}
 
 /// Small manifests reference immutable, content-addressed per-session revisions.
 /// The pending journal is authoritative once published, including deletions.

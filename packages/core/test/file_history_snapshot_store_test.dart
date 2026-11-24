@@ -795,6 +795,101 @@ void main() {
   }
 
   test(
+    'trusted support alias resolves before history IO and recovery',
+    () async {
+      final temp = await Directory.systemTemp.createTemp('history-support-');
+      try {
+        final support = await Directory('${temp.path}/support').create();
+        final alias = Link('${temp.path}/alias');
+        await alias.create(support.path);
+        final root = await historyRootFromApplicationSupport(
+          Directory(alias.path),
+        );
+        expect(root.path, '${await support.resolveSymbolicLinks()}/history_v2');
+        final s = FileChatSessionStorage(root: () async => root, prefs: prefs);
+        await s.load();
+        await s.save(_chat('retained'));
+        final restart = FileChatSessionStorage(
+          root: () async => root,
+          prefs: prefs,
+        );
+        expect((await restart.load()).sessions.first.title, 'retained');
+        expect((await restart.recover()).sessions.first.title, 'retained');
+        expect(restart.writesBlocked, isFalse);
+      } finally {
+        await temp.delete(recursive: true);
+      }
+    },
+    skip: Platform.isWindows
+        ? 'POSIX system alias regression (iOS/macOS/Linux)'
+        : false,
+  );
+
+  test('trusted support produces canonical managed history root', () async {
+    final temp = await Directory.systemTemp.createTemp('history-canonical-');
+    try {
+      final root = await historyRootFromApplicationSupport(temp);
+      expect(root.path, '${await temp.resolveSymbolicLinks()}/history_v2');
+      final s = FileChatSessionStorage(root: () async => root, prefs: prefs);
+      await s.load();
+      await s.save(_chat('retained'));
+      expect((await s.recover()).sessions.first.title, 'retained');
+    } finally {
+      await temp.delete(recursive: true);
+    }
+  });
+
+  for (final location in ['history_v2', 'scope', 'sessions', 'commit']) {
+    test(
+      'managed $location link remains blocked after support resolution',
+      () async {
+        final temp = await Directory.systemTemp.createTemp('history-link-');
+        try {
+          final support = await Directory('${temp.path}/support').create();
+          final outside = await Directory('${temp.path}/outside').create();
+          final marker = File('${outside.path}/marker');
+          await marker.writeAsString('unchanged');
+          final root = await historyRootFromApplicationSupport(support);
+          final s = FileChatSessionStorage(
+            root: () async => root,
+            prefs: prefs,
+          );
+          await s.load();
+          await s.save(_chat('retained'));
+          final scope = (await root.list().toList()).single as Directory;
+          final target = switch (location) {
+            'history_v2' => root.path,
+            'scope' => scope.path,
+            'sessions' => '${scope.path}/sessions',
+            _ => '${scope.path}/commit',
+          };
+          if (location == 'commit') {
+            await File(target).delete();
+            await Link(target).create(marker.path);
+          } else {
+            await Directory(target).delete(recursive: true);
+            await Link(target).create(outside.path);
+          }
+          final restart = FileChatSessionStorage(
+            root: () async => root,
+            prefs: prefs,
+          );
+          await expectLater(
+            restart.load(),
+            throwsA(isA<HistoryStorageException>()),
+          );
+          expect(restart.writesBlocked, isTrue);
+          expect(await marker.readAsString(), 'unchanged');
+          expect((await outside.list().toList()).length, 1);
+        } finally {
+          await temp.delete(recursive: true);
+        }
+      },
+      skip: Platform.isWindows ? 'POSIX symlink safety regression' : false,
+    );
+  }
+
+  test(
     'real file store and Windows basenames retain current revisions',
     () async {
       final root = await Directory.systemTemp.createTemp('history-file-test-');
