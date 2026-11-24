@@ -598,9 +598,26 @@ class _SettingsAboutTabState extends State<SettingsAboutTab> {
     try {
       picked = widget.backupReader != null ? null : await openFile(
         acceptedTypeGroups: [
-          const XTypeGroup(label: 'JSON', extensions: ['json']),
+          const XTypeGroup(
+            label: 'JSON',
+            extensions: ['json'],
+            mimeTypes: ['application/json'],
+            uniformTypeIdentifiers: ['public.json'],
+          ),
         ],
       );
+    } on MissingPluginException {
+      if (!mounted) return;
+      _snack('文件选择器组件不可用，请完整重启或更新应用。');
+      return;
+    } on ArgumentError {
+      if (!mounted) return;
+      _snack('文件选择器类型配置不兼容，请更新应用。');
+      return;
+    } on PlatformException {
+      if (!mounted) return;
+      _snack('系统文件选择器打开失败，请检查系统文件应用后重试。');
+      return;
     } catch (_) {
       if (!mounted) return;
       _snack('无法打开文件选择器，请稍后重试。');
