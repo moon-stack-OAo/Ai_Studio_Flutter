@@ -12,6 +12,8 @@ import 'package:desktop_fluent/pages/settings/settings_shell.dart';
 import 'package:desktop_fluent/update/update_controller.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
+// ignore: depend_on_referenced_packages
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
 Future<DataBackupService> makeBackup({
@@ -38,6 +40,7 @@ Future<DataBackupService> makeBackup({
 }
 
 void main() {
+  setUp(() => SharedPreferences.setMockInitialValues({}));
   Future<AppLogRepository> makeLogs() async {
     final repo = AppLogRepository(storage: MemoryAppLogStorage());
     await repo.load();

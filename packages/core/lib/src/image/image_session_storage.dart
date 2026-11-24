@@ -1,4 +1,9 @@
+import 'dart:io';
+
+import '../settings/file_history_snapshot_store.dart';
 import 'dart:convert';
+
+import '../settings/history_snapshot_store.dart';
 
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -19,8 +24,7 @@ const int maxImageB64SrcChars = 120000;
 List<ImageRef> _sanitizeImageRefList(List<ImageRef> list) {
   final out = <ImageRef>[];
   for (final img in list) {
-    if (img.type == ImageRefType.b64 &&
-        img.src.length > maxImageB64SrcChars) {
+    if (img.type == ImageRefType.b64 && img.src.length > maxImageB64SrcChars) {
       // 过大 b64 丢弃，避免 prefs 爆仓；应由 assetStore 落盘为 file。
       continue;
     }
@@ -90,10 +94,9 @@ List<ImageSession> clearStaleImageLoading(List<ImageSession> sessions) {
       if (item.status != ImageItemStatus.loading) return item;
       return item.copyWith(
         status: ImageItemStatus.error,
-        errorMessage:
-            (item.errorMessage == null || item.errorMessage!.isEmpty)
-                ? '上次异常中断'
-                : item.errorMessage,
+        errorMessage: (item.errorMessage == null || item.errorMessage!.isEmpty)
+            ? '上次异常中断'
+            : item.errorMessage,
       );
     }).toList();
     return session.copyWith(items: items);
@@ -129,7 +132,10 @@ abstract class ImageSessionStorage {
 }
 
 /// SharedPreferences：`core.image_sessions.v1` → `{sessions, activeId}`。
-class PrefsImageSessionStorage implements ImageSessionStorage {
+class PrefsImageSessionStorage
+    implements
+        ImageSessionStorage,
+        RecoverableHistoryStorage<ImageStoreSnapshot> {
   PrefsImageSessionStorage({SharedPreferences? prefs}) : _prefsOverride = prefs;
 
   static const prefsKey = 'core.image_sessions.v1';
@@ -137,60 +143,126 @@ class PrefsImageSessionStorage implements ImageSessionStorage {
   final SharedPreferences? _prefsOverride;
   SharedPreferences? _prefs;
 
+  late final HistorySnapshotStore<ImageStoreSnapshot> _history =
+      HistorySnapshotStore(
+        key: prefsKey,
+        prefs: _ensurePrefs,
+        decode: _decode,
+        empty: const ImageStoreSnapshot(sessions: [], activeId: ''),
+      );
+
+  @override
+  HistoryRecoveryState get recoveryState => _history.state;
+  @override
+  bool get writesBlocked => _history.blocked;
+  @override
+  Future<ImageStoreSnapshot> recover() => _history.recover();
+  @override
+  Future<void> replaceHistory(ImageStoreSnapshot snapshot) async {
+    final prepared = prepareImagePersistPayload(snapshot);
+    await _history.replace(
+      jsonEncode({
+        'activeId': prepared.activeId,
+        'sessions': prepared.sessions.map((s) => s.toJson()).toList(),
+      }),
+    );
+  }
+
+  @override
+  Future<void> clearHistory(ImageStoreSnapshot empty) async {
+    await _history.clear();
+    await save(empty);
+  }
+
   Future<SharedPreferences> _ensurePrefs() async {
     return _prefs ??= _prefsOverride ?? await SharedPreferences.getInstance();
   }
 
   @override
-  Future<ImageStoreSnapshot> load() async {
-    final prefs = await _ensurePrefs();
-    final raw = prefs.getString(prefsKey);
-    if (raw == null || raw.isEmpty) {
-      return const ImageStoreSnapshot(sessions: [], activeId: '');
-    }
-    try {
-      final decoded = jsonDecode(raw);
-      if (decoded is! Map) {
-        return const ImageStoreSnapshot(sessions: [], activeId: '');
-      }
-      final listRaw = decoded['sessions'];
-      final sessions = <ImageSession>[];
-      if (listRaw is List) {
-        for (final e in listRaw) {
-          if (e is Map) {
-            sessions.add(ImageSession.fromJson(Map<String, dynamic>.from(e)));
-          }
-        }
-      }
-      final prepared = prepareImagePersistPayload(
-        ImageStoreSnapshot(
-          sessions: clearStaleImageLoading(sessions),
-          activeId: decoded['activeId']?.toString() ?? '',
+  Future<ImageStoreSnapshot> load() => _history.load();
+
+  static ImageStoreSnapshot _decode(String raw) {
+    final decoded = decodeHistoryObject(raw, 'items');
+    return prepareImagePersistPayload(
+      ImageStoreSnapshot(
+        sessions: clearStaleImageLoading(
+          (decoded['sessions'] as List)
+              .map(
+                (e) =>
+                    ImageSession.fromJson(Map<String, dynamic>.from(e as Map)),
+              )
+              .toList(),
         ),
-      );
-      return prepared;
-    } catch (_) {
-      return const ImageStoreSnapshot(sessions: [], activeId: '');
-    }
+        activeId: decoded['activeId'] as String? ?? '',
+      ),
+    );
   }
 
   @override
   Future<void> save(ImageStoreSnapshot snapshot) async {
-    final prefs = await _ensurePrefs();
     final prepared = prepareImagePersistPayload(snapshot);
     final payload = <String, dynamic>{
       'activeId': prepared.activeId,
       'sessions': prepared.sessions.map((s) => s.toJson()).toList(),
     };
-    await prefs.setString(prefsKey, jsonEncode(payload));
+    await _history.save(jsonEncode(payload));
+  }
+}
+
+/// Per-session file history; prefs implementation remains the legacy reader.
+class FileImageSessionStorage
+    implements
+        ImageSessionStorage,
+        RecoverableHistoryStorage<ImageStoreSnapshot> {
+  FileImageSessionStorage({
+    Future<Directory> Function()? root,
+    SharedPreferences? prefs,
+    HistoryFileAccess files = const HistoryFileAccess(),
+  }) {
+    final legacy = PrefsImageSessionStorage(prefs: prefs);
+    _store = FileHistorySnapshotStore<ImageStoreSnapshot>(
+      scope: 'image',
+      legacyKey: PrefsImageSessionStorage.prefsKey,
+      legacyLoad: legacy.load,
+      decode: PrefsImageSessionStorage._decode,
+      encode: _encode,
+      empty: const ImageStoreSnapshot(sessions: [], activeId: ''),
+      root: root,
+      prefs: prefs == null ? null : () async => prefs,
+      files: files,
+    );
+  }
+  late final FileHistorySnapshotStore<ImageStoreSnapshot> _store;
+  @override
+  HistoryRecoveryState get recoveryState => _store.recoveryState;
+  @override
+  bool get writesBlocked => _store.writesBlocked;
+  @override
+  Future<ImageStoreSnapshot> load() => _store.load();
+  @override
+  Future<ImageStoreSnapshot> recover() => _store.recover();
+  @override
+  Future<void> save(ImageStoreSnapshot snapshot) => _store.save(snapshot);
+  @override
+  Future<void> replaceHistory(ImageStoreSnapshot snapshot) =>
+      _store.replaceHistory(snapshot);
+  @override
+  Future<void> clearHistory(ImageStoreSnapshot empty) =>
+      _store.clearHistory(empty);
+  static Future<String> _encode(ImageStoreSnapshot snapshot) async {
+    final prepared = prepareImagePersistPayload(snapshot);
+    return jsonEncode({
+      'activeId': prepared.activeId,
+      'sessions': prepared.sessions.map((s) => s.toJson()).toList(),
+    });
   }
 }
 
 /// 内存存储（单元测试）。
 class MemoryImageSessionStorage implements ImageSessionStorage {
   MemoryImageSessionStorage([ImageStoreSnapshot? initial])
-      : _snapshot = initial ??
-            const ImageStoreSnapshot(sessions: [], activeId: '');
+    : _snapshot =
+          initial ?? const ImageStoreSnapshot(sessions: [], activeId: '');
 
   ImageStoreSnapshot _snapshot;
 

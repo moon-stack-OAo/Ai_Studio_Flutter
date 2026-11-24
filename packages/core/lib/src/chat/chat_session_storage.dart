@@ -1,5 +1,10 @@
+import 'dart:io';
+
+import '../settings/file_history_snapshot_store.dart';
 import 'dart:async';
 import 'dart:convert';
+
+import '../settings/history_snapshot_store.dart';
 
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -43,8 +48,9 @@ ChatSession sanitizeChatSession(
   if (messages.length > msgLimit) {
     messages = messages.sublist(messages.length - msgLimit);
   }
-  messages =
-      messages.map((m) => sanitizeChatMessage(m, maxChars: maxMessageChars)).toList();
+  messages = messages
+      .map((m) => sanitizeChatMessage(m, maxChars: maxMessageChars))
+      .toList();
   return session.copyWith(messages: messages);
 }
 
@@ -120,6 +126,8 @@ class ChatSnapshotWriter {
   ChatStoreSnapshot? _pending;
   List<Completer<void>> _waiters = [];
   bool _running = false;
+  Completer<void>? _idle;
+  Future<void> flush() => _idle?.future ?? Future<void>.value();
 
   Future<void> save(ChatStoreSnapshot snapshot) {
     final waiter = Completer<void>();
@@ -127,6 +135,7 @@ class ChatSnapshotWriter {
     _waiters.add(waiter);
     if (!_running) {
       _running = true;
+      _idle = Completer<void>();
       scheduleMicrotask(_drain);
     }
     return waiter.future;
@@ -150,6 +159,8 @@ class ChatSnapshotWriter {
       }
     }
     _running = false;
+    _idle?.complete();
+    _idle = null;
   }
 }
 
@@ -166,7 +177,8 @@ bool _needsBackgroundEncoding(ChatStoreSnapshot snapshot) {
   var chars = 0;
   var messages = 0;
   for (final session in snapshot.sessions) {
-    chars += session.title.length + (session.overrides.systemPrompt?.length ?? 0);
+    chars +=
+        session.title.length + (session.overrides.systemPrompt?.length ?? 0);
     if (chars >= 64 * 1024) return true;
     for (final message in session.messages) {
       if (++messages >= 256) return true;
@@ -187,7 +199,10 @@ bool _needsBackgroundEncoding(ChatStoreSnapshot snapshot) {
 }
 
 /// SharedPreferences：`core.chat_sessions.v1` → `{sessions, activeId}`。
-class PrefsChatSessionStorage implements ChatSessionStorage {
+class PrefsChatSessionStorage
+    implements
+        ChatSessionStorage,
+        RecoverableHistoryStorage<ChatStoreSnapshot> {
   PrefsChatSessionStorage({SharedPreferences? prefs}) : _prefsOverride = prefs;
 
   static const prefsKey = 'core.chat_sessions.v1';
@@ -196,70 +211,125 @@ class PrefsChatSessionStorage implements ChatSessionStorage {
   SharedPreferences? _prefs;
   late final ChatSnapshotWriter _writer = ChatSnapshotWriter(_save);
 
+  late final HistorySnapshotStore<ChatStoreSnapshot> _history =
+      HistorySnapshotStore(
+        key: prefsKey,
+        prefs: _ensurePrefs,
+        decode: _decode,
+        empty: const ChatStoreSnapshot(sessions: [], activeId: ''),
+      );
+
+  @override
+  HistoryRecoveryState get recoveryState => _history.state;
+  @override
+  bool get writesBlocked => _history.blocked;
+  @override
+  Future<ChatStoreSnapshot> recover() => _history.recover();
+  @override
+  Future<void> replaceHistory(ChatStoreSnapshot snapshot) async {
+    await _writer.flush();
+    await _history.replace(_encodeChatSnapshot(snapshot));
+  }
+
+  @override
+  Future<void> clearHistory(ChatStoreSnapshot empty) async {
+    await _writer.flush();
+    await _history.clear();
+    await save(empty);
+  }
+
   Future<SharedPreferences> _ensurePrefs() async {
     return _prefs ??= _prefsOverride ?? await SharedPreferences.getInstance();
   }
 
   @override
-  Future<ChatStoreSnapshot> load() async {
-    final prefs = await _ensurePrefs();
-    final raw = prefs.getString(prefsKey);
-    if (raw == null || raw.isEmpty) {
-      return const ChatStoreSnapshot(sessions: [], activeId: '');
-    }
-    try {
-      final decoded = jsonDecode(raw);
-      if (decoded is! Map) {
-        return const ChatStoreSnapshot(sessions: [], activeId: '');
-      }
-      final listRaw = decoded['sessions'];
-      final sessions = <ChatSession>[];
-      if (listRaw is List) {
-        for (final e in listRaw) {
-          if (e is Map) {
-            sessions.add(ChatSession.fromJson(Map<String, dynamic>.from(e)));
-          }
-        }
-      }
-      final prepared = prepareChatPersistPayload(
-        ChatStoreSnapshot(
-          sessions: sessions,
-          activeId: decoded['activeId']?.toString() ?? '',
-        ),
-      );
-      return prepared;
-    } catch (_) {
-      return const ChatStoreSnapshot(sessions: [], activeId: '');
-    }
+  Future<ChatStoreSnapshot> load() => _history.load();
+
+  static ChatStoreSnapshot _decode(String raw) {
+    final decoded = decodeHistoryObject(raw, 'messages');
+    return prepareChatPersistPayload(
+      ChatStoreSnapshot(
+        sessions: (decoded['sessions'] as List)
+            .map(
+              (e) => ChatSession.fromJson(Map<String, dynamic>.from(e as Map)),
+            )
+            .toList(),
+        activeId: decoded['activeId'] as String? ?? '',
+      ),
+    );
   }
 
   @override
   Future<void> save(ChatStoreSnapshot snapshot) => _writer.save(snapshot);
 
   Future<void> _save(ChatStoreSnapshot snapshot) async {
-    final prefs = await _ensurePrefs();
     final payload = _needsBackgroundEncoding(snapshot)
         ? await compute(_encodeChatSnapshot, snapshot)
         : _encodeChatSnapshot(snapshot);
-    if (!await prefs.setString(prefsKey, payload)) {
-      throw StateError('保存对话失败');
-    }
+    await _history.save(payload);
+  }
+}
+
+/// Per-session file history; prefs implementation remains the legacy reader.
+class FileChatSessionStorage
+    implements
+        ChatSessionStorage,
+        RecoverableHistoryStorage<ChatStoreSnapshot> {
+  FileChatSessionStorage({
+    Future<Directory> Function()? root,
+    SharedPreferences? prefs,
+    HistoryFileAccess files = const HistoryFileAccess(),
+  }) {
+    final legacy = PrefsChatSessionStorage(prefs: prefs);
+    _store = FileHistorySnapshotStore<ChatStoreSnapshot>(
+      scope: 'chat',
+      legacyKey: PrefsChatSessionStorage.prefsKey,
+      legacyLoad: legacy.load,
+      decode: PrefsChatSessionStorage._decode,
+      encode: _encode,
+      empty: const ChatStoreSnapshot(sessions: [], activeId: ''),
+      root: root,
+      prefs: prefs == null ? null : () async => prefs,
+      files: files,
+    );
+  }
+  late final FileHistorySnapshotStore<ChatStoreSnapshot> _store;
+  @override
+  HistoryRecoveryState get recoveryState => _store.recoveryState;
+  @override
+  bool get writesBlocked => _store.writesBlocked;
+  @override
+  Future<ChatStoreSnapshot> load() => _store.load();
+  @override
+  Future<ChatStoreSnapshot> recover() => _store.recover();
+  @override
+  Future<void> save(ChatStoreSnapshot snapshot) => _store.save(snapshot);
+  @override
+  Future<void> replaceHistory(ChatStoreSnapshot snapshot) =>
+      _store.replaceHistory(snapshot);
+  @override
+  Future<void> clearHistory(ChatStoreSnapshot empty) =>
+      _store.clearHistory(empty);
+  static Future<String> _encode(ChatStoreSnapshot snapshot) async {
+    return _needsBackgroundEncoding(snapshot)
+        ? await compute(_encodeChatSnapshot, snapshot)
+        : _encodeChatSnapshot(snapshot);
   }
 }
 
 /// 内存存储（单元测试）。
 class MemoryChatSessionStorage implements ChatSessionStorage {
   MemoryChatSessionStorage([ChatStoreSnapshot? initial])
-      : _snapshot = initial ??
-            const ChatStoreSnapshot(sessions: [], activeId: '');
+    : _snapshot =
+          initial ?? const ChatStoreSnapshot(sessions: [], activeId: '');
 
   ChatStoreSnapshot _snapshot;
 
   @override
   Future<ChatStoreSnapshot> load() async => ChatStoreSnapshot(
-        sessions: List<ChatSession>.from(_snapshot.sessions),
-        activeId: _snapshot.activeId,
-      );
+    sessions: List<ChatSession>.from(_snapshot.sessions),
+    activeId: _snapshot.activeId,
+  );
 
   @override
   Future<void> save(ChatStoreSnapshot snapshot) async {

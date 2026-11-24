@@ -3,6 +3,8 @@ import 'dart:typed_data';
 
 import 'package:path_provider/path_provider.dart';
 
+import '../settings/managed_asset_files.dart';
+
 /// 生视频队列封面（抽帧 JPEG）落盘抽象。
 abstract class VideoPosterStore {
   /// 若已有缓存，返回本地路径；否则 `null`。
@@ -77,7 +79,9 @@ class FileVideoPosterStore implements VideoPosterStore {
       dir = override;
     } else {
       final docs = await getApplicationDocumentsDirectory();
-      dir = Directory('${docs.path}${Platform.pathSeparator}video_poster_cache');
+      dir = Directory(
+        '${docs.path}${Platform.pathSeparator}video_poster_cache',
+      );
     }
     if (!await dir.exists()) {
       await dir.create(recursive: true);
@@ -115,20 +119,12 @@ class FileVideoPosterStore implements VideoPosterStore {
   @override
   Future<void> delete(String itemId) async {
     final file = await _fileFor(itemId);
-    if (await file.exists()) {
-      await file.delete();
-    }
+    await ManagedAssetFiles(await _ensureDir()).delete(file.path);
   }
 
   @override
   Future<void> clearAll() async {
-    final dir = await _ensureDir();
-    if (!await dir.exists()) return;
-    await for (final entity in dir.list()) {
-      try {
-        await entity.delete(recursive: true);
-      } catch (_) {}
-    }
+    await ManagedAssetFiles(await _ensureDir()).clearExcept({});
   }
 
   @override

@@ -37,7 +37,7 @@ class SecureProviderStorage implements ProviderStorage {
     SharedPreferences? prefs,
     SecretStore? secretStore,
   })  : _prefsOverride = prefs,
-        _secrets = secretStore ?? FlutterSecureSecretStore();
+        _secrets = GuardedSecretStore(secretStore ?? FlutterSecureSecretStore());
 
   /// 元数据 prefs 键。
   static const prefsMetaKey = 'core.providers.v1';
@@ -48,6 +48,14 @@ class SecureProviderStorage implements ProviderStorage {
   final SharedPreferences? _prefsOverride;
   final SecretStore _secrets;
   SharedPreferences? _prefs;
+
+  // A timeout does not cancel a platform write. Reject new saves until it settles.
+  Future<void>? _secureWriteInFlight;
+  bool _saving = false;
+  bool get hasPendingWrites => _saving || _secureWriteInFlight != null || (_secrets as GuardedSecretStore).isPending;
+  void _checkPending() {
+    if (hasPendingWrites) throw StateError('安全存储仍在处理中，请稍后重试');
+  }
 
   /// 最近一次密钥迁移结果（供诊断；不含密钥明文）。
   String? lastMigrationNote;
@@ -103,8 +111,8 @@ class SecureProviderStorage implements ProviderStorage {
       try {
         await prefs.remove(keysStorageKey);
         lastMigrationNote = 'cleared empty legacy provider keys prefs';
-      } catch (e) {
-        lastMigrationNote = 'failed to clear empty legacy keys: $e';
+      } catch (_) {
+        lastMigrationNote = 'failed to clear empty legacy keys';
         debugPrint('[SecureProviderStorage] $lastMigrationNote');
       }
       return _readSecureKeys();
@@ -131,9 +139,9 @@ class SecureProviderStorage implements ProviderStorage {
           'migrated ${legacy.length} provider key(s) from prefs to secure storage';
       debugPrint('[SecureProviderStorage] $lastMigrationNote');
       return verified;
-    } catch (e) {
+    } catch (_) {
       lastMigrationNote =
-          'migration failed; plaintext prefs keys retained: $e';
+          'migration failed; plaintext prefs keys retained';
       debugPrint('[SecureProviderStorage] $lastMigrationNote');
       // 失败安全：用明文继续，不删 prefs。
       Map<String, String> secure = {};
@@ -148,6 +156,7 @@ class SecureProviderStorage implements ProviderStorage {
 
   @override
   Future<ProviderStoreSnapshot> load() async {
+    _checkPending();
     final prefs = await _ensurePrefs();
     final keyMap = await _migratePlaintextKeysIfNeeded(prefs);
 
@@ -199,6 +208,9 @@ class SecureProviderStorage implements ProviderStorage {
 
   @override
   Future<void> save(ProviderStoreSnapshot snapshot) async {
+    _checkPending();
+    _saving = true;
+    try {
     final prefs = await _ensurePrefs();
     final providers = snapshot.providers;
     final activeId = providers.any((p) => p.id == snapshot.activeProviderId)
@@ -209,7 +221,10 @@ class SecureProviderStorage implements ProviderStorage {
       'activeProviderId': activeId,
       'providers': providers.map((p) => p.toJsonMeta()).toList(),
     };
-    await prefs.setString(prefsMetaKey, jsonEncode(meta));
+    if (!await prefs.setString(prefsMetaKey, jsonEncode(meta))) {
+      try { await prefs.reload(); } catch (_) {}
+      throw StateError('提供商元数据保存失败');
+    }
 
     final keys = <String, String>{};
     for (final p in providers) {
@@ -219,22 +234,41 @@ class SecureProviderStorage implements ProviderStorage {
       }
     }
     // macOS Keychain 偶发弹窗/挂起；元数据已落 prefs，密钥写入限时，避免整页 UI 卡住。
+    final pending = () async {
+      await _writeSecureKeys(keys);
+      final verified = await _readSecureKeys();
+      if (verified.length != keys.length ||
+          keys.entries.any((entry) => verified[entry.key] != entry.value)) {
+        throw StateError('密钥存储校验失败');
+      }
+    }();
+    _secureWriteInFlight = pending;
+    // Observe eventual failure and clear the barrier only on actual completion.
+    unawaited(pending.then<void>((_) {
+      if (identical(_secureWriteInFlight, pending)) _secureWriteInFlight = null;
+    }, onError: (Object _, StackTrace _) {
+      if (identical(_secureWriteInFlight, pending)) _secureWriteInFlight = null;
+    }));
     try {
-      await _writeSecureKeys(keys).timeout(const Duration(seconds: 8));
-    } on TimeoutException catch (e) {
-      debugPrint('[SecureProviderStorage] secure keys write timed out: $e');
-      throw StateError('密钥写入超时（Keychain 无响应），元数据已保存');
+      await pending.timeout(const Duration(seconds: 8));
+    } on TimeoutException {
+      throw StateError('密钥写入仍在处理中，元数据可能已保存；请稍后重新预览');
+    } catch (_) {
+      throw StateError('密钥保存未完成，元数据可能已保存');
     }
 
     // 若仍有明文残留（例如上次迁移失败后用户又保存了），在安全写入成功后清除。
     if (prefs.containsKey(keysStorageKey)) {
       try {
         await prefs.remove(keysStorageKey);
-      } catch (e) {
+      } catch (_) {
         debugPrint(
-          '[SecureProviderStorage] failed to clear legacy keys after save: $e',
+          '[SecureProviderStorage] failed to clear legacy keys after save',
         );
       }
+    }
+    } finally {
+      _saving = false;
     }
   }
 }

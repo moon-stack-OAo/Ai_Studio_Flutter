@@ -215,6 +215,7 @@ class _McpEditSheetState extends State<_McpEditSheet>
     }
 
     await _repo.update(next);
+    if (!mounted) return false;
     _tokenCtrl.clear();
     await _loadFormFromSelected();
     if (!mounted) return false;
@@ -264,7 +265,7 @@ class _McpEditSheetState extends State<_McpEditSheet>
     }
     if (_dirty) {
       final saved = await _save();
-      if (!saved) return;
+      if (!saved || !mounted) return;
     }
     final server = _repo.findById(current.id);
     if (server == null || !server.hasBaseUrl) {
@@ -277,71 +278,50 @@ class _McpEditSheetState extends State<_McpEditSheet>
       _statusText = '探测中…';
       _statusOk = false;
     });
-    await _repo.update(
-      server.copyWith(
-        probeStatus: McpProbeStatus.probing,
-        clearLastError: true,
-      ),
-    );
-
-    McpSession? session;
     try {
-      session = widget.sessionFactory.create(server);
-      final result = await session.probe();
+      final outcome = await McpProbeService(
+        repository: _repo,
+        sessionFactory: widget.sessionFactory,
+      ).probe(server.id);
       if (!mounted) return;
-      if (result.ok) {
-        final tools = result.tools ?? const <McpToolDescriptor>[];
-        await _repo.replaceToolsCache(server.id, tools);
-        await _repo.update(
-          (_repo.findById(server.id) ?? server).copyWith(
-            probeStatus: McpProbeStatus.ready,
-            lastProbeAtMs: result.atMs,
-            clearLastError: true,
-            toolsCache: tools,
-          ),
-        );
-        setState(() {
-          _probing = false;
-          _statusOk = true;
-          _statusText =
-              '连接成功${result.serverName != null ? ' · ${result.serverName}' : ''} · ${tools.length} 个工具';
-        });
-        _snack('已刷新 ${tools.length} 个工具');
-      } else {
-        final msg = result.errorMessage ?? '探测失败';
-        await _repo.update(
-          (_repo.findById(server.id) ?? server).copyWith(
-            probeStatus: McpProbeStatus.error,
-            lastError: msg,
-            lastProbeAtMs: result.atMs,
-          ),
-        );
+      if (_serverId != server.id) {
+        setState(() => _probing = false);
+        return;
+      }
+      if (!outcome.applied) {
         setState(() {
           _probing = false;
           _statusOk = false;
-          _statusText = msg;
+          _statusText = '配置已变更，探测结果已忽略';
         });
-        _snack(msg, error: true);
+        return;
       }
-    } catch (e) {
+      final result = outcome.result;
+      final count = result.tools?.length ?? 0;
+      final message = result.ok
+          ? '已刷新 $count 个工具'
+          : mcpSanitizeSummary(result.errorMessage ?? '探测失败', maxLen: 200);
+      setState(() {
+        _probing = false;
+        _statusOk = result.ok;
+        _statusText = result.ok
+            ? '连接成功${result.serverName != null ? ' · ${result.serverName}' : ''} · $count 个工具'
+            : message;
+      });
+      _snack(message, error: !result.ok);
+    } catch (_) {
       if (!mounted) return;
-      final msg = mcpSanitizeSummary(e.toString(), maxLen: 200);
-      await _repo.update(
-        (_repo.findById(server.id) ?? server).copyWith(
-          probeStatus: McpProbeStatus.error,
-          lastError: msg,
-        ),
-      );
+      if (_serverId != server.id) {
+        setState(() => _probing = false);
+        return;
+      }
+      const message = '探测状态保存失败，请重试';
       setState(() {
         _probing = false;
         _statusOk = false;
-        _statusText = msg;
+        _statusText = message;
       });
-      _snack('探测失败：$msg', error: true);
-    } finally {
-      try {
-        session?.close();
-      } catch (_) {}
+      _snack(message, error: true);
     }
   }
 

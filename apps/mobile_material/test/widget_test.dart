@@ -369,7 +369,7 @@ void main() {
       storage: MemoryProviderStorage(
         ProviderStoreSnapshot(
           providers: [
-            const ProviderConfig(
+            ProviderConfig(
               id: 'custom-1',
               name: '自定义源',
               type: ProviderType.openaiCompatible,
@@ -379,7 +379,7 @@ void main() {
               enabled: true,
               builtin: false,
             ),
-            const ProviderConfig(
+            ProviderConfig(
               id: 'builtin-1',
               name: '内置源',
               type: ProviderType.openaiCompatible,

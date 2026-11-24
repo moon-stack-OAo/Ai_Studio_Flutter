@@ -38,18 +38,22 @@ Future<void> main() async {
     secretStoreAuthBuilder: (server) =>
         createMcpAuthProvider(server: server, secretStore: secretStore),
   );
+  final assetReferences = AssetReferenceGuard();
   final chatAttachmentStore = FileImageAssetStore(subdir: 'chat_image_cache');
   final sessions = ChatSessionRepository(
-    storage: PrefsChatSessionStorage(),
+    assetReferences: assetReferences,
+    storage: FileChatSessionStorage(),
     attachmentStore: chatAttachmentStore,
   );
   final imageAssetStore = FileImageAssetStore();
   final imageSessions = ImageSessionRepository(
-    storage: PrefsImageSessionStorage(),
+    assetReferences: assetReferences,
+    storage: FileImageSessionStorage(),
     assetStore: imageAssetStore,
   );
   final videoSessions = VideoSessionRepository(
-    storage: PrefsVideoSessionStorage(),
+    assetReferences: assetReferences,
+    storage: FileVideoSessionStorage(),
     assetStore: FileVideoAssetStore(),
     referenceImageStore: imageAssetStore,
   );

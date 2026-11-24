@@ -3,6 +3,9 @@ import 'dart:typed_data';
 
 import 'package:path_provider/path_provider.dart';
 
+import '../settings/asset_reference_guard.dart';
+import '../settings/managed_asset_files.dart';
+
 /// 生视频二进制落盘抽象。
 abstract class VideoAssetStore {
   /// 保存视频字节，返回本地路径或稳定 id。
@@ -20,7 +23,7 @@ abstract class VideoAssetStore {
 }
 
 /// 内存实现：路径形如 `memory://{id}`。
-class MemoryVideoAssetStore implements VideoAssetStore {
+class MemoryVideoAssetStore implements VideoAssetStore, SelectiveAssetClear {
   final Map<String, Uint8List> _map = {};
 
   Map<String, Uint8List> get entries => Map.unmodifiable(_map);
@@ -46,6 +49,11 @@ class MemoryVideoAssetStore implements VideoAssetStore {
   }
 
   @override
+  Future<void> clearExcept(Set<String> retained) async {
+    _map.removeWhere((key, _) => !retained.contains(key));
+  }
+
+  @override
   Future<int> estimateBytes() async {
     var total = 0;
     for (final bytes in _map.values) {
@@ -56,7 +64,7 @@ class MemoryVideoAssetStore implements VideoAssetStore {
 }
 
 /// 桌面/移动：落到应用文档目录 `video_cache/{id}.mp4`。
-class FileVideoAssetStore implements VideoAssetStore {
+class FileVideoAssetStore implements VideoAssetStore, SelectiveAssetClear {
   FileVideoAssetStore({this.overrideDir});
 
   final Directory? overrideDir;
@@ -112,26 +120,23 @@ class FileVideoAssetStore implements VideoAssetStore {
 
   @override
   Future<void> delete(String pathOrId) async {
-    final file = File(pathOrId);
-    if (await file.exists()) {
-      await file.delete();
-      return;
-    }
-    final byId = await _fileFor(pathOrId);
-    if (await byId.exists()) {
-      await byId.delete();
+    final files = ManagedAssetFiles(await _ensureDir());
+    // Bare ids remain supported; paths must never be sanitized into another id.
+    if (!pathOrId.contains(RegExp(r'[/\\:]')) &&
+        pathOrId != '.' &&
+        pathOrId != '..') {
+      await files.delete((await _fileFor(pathOrId)).path);
+    } else {
+      await files.delete(pathOrId);
     }
   }
 
   @override
-  Future<void> clearAll() async {
-    final dir = await _ensureDir();
-    if (!await dir.exists()) return;
-    await for (final entity in dir.list()) {
-      try {
-        await entity.delete(recursive: true);
-      } catch (_) {}
-    }
+  Future<void> clearAll() => clearExcept({});
+
+  @override
+  Future<void> clearExcept(Set<String> retained) async {
+    await ManagedAssetFiles(await _ensureDir()).clearExcept(retained);
   }
 
   @override

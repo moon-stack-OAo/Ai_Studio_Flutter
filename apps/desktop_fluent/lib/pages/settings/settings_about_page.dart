@@ -28,8 +28,12 @@ class SettingsAboutPage extends StatefulWidget {
     this.updateController,
     this.packageInfo,
     this.onUnlockHiddenPortal,
+    this.backupReader,
   });
 
+  /// 测试注入备份正文，生产默认使用系统文件选择器。
+  @visibleForTesting
+  final Future<String?> Function()? backupReader;
   final AppearanceRepository appearanceRepository;
   final DataBackupService dataBackupService;
   final SkillRepository? skillRepository;
@@ -133,6 +137,27 @@ class _SettingsAboutPageState extends State<SettingsAboutPage> {
     if (mounted) unawaited(_loadUsage());
   }
 
+  Future<void> _onRecoverHistory() async {
+    if (_busy) return;
+    if (widget.generation?.busy == true) {
+      final message = '请等待生成结束后再恢复历史。';
+      _showInfoBar(message, InfoBarSeverity.info);
+      return;
+    }
+    setState(() => _busy = true);
+    var message = '历史恢复检查完成。';
+    try {
+      await _backup.recoverHistory();
+    } catch (_) {
+      message = '历史恢复失败，原数据已保留。';
+    } finally {
+      if (mounted) {
+        setState(() => _busy = false);
+        _showInfoBar(message, InfoBarSeverity.info);
+      }
+    }
+  }
+
   Future<void> _loadPackageInfo() async {
     if (widget.packageInfo != null) {
       setState(() {
@@ -161,6 +186,9 @@ class _SettingsAboutPageState extends State<SettingsAboutPage> {
     final request = ++_usageRequest;
     setState(() => _usageLoading = true);
     try {
+      unawaited(_backup.loadImportStatus().then((_) {
+        if (mounted && request == _usageRequest) setState(() {});
+      }).catchError((Object _) {}));
       final usage = await _backup.estimateStorageUsage();
       if (!mounted || request != _usageRequest) return;
       setState(() {
@@ -428,12 +456,6 @@ class _SettingsAboutPageState extends State<SettingsAboutPage> {
     );
   }
 
-  void _stopGenerationIfBusy() {
-    final gen = widget.generation;
-    if (gen == null || !gen.busy) return;
-    gen.abort();
-  }
-
   Future<void> _onExport() async {
     if (_busy) return;
     var includeSecrets = false;
@@ -529,19 +551,35 @@ class _SettingsAboutPageState extends State<SettingsAboutPage> {
 
   Future<void> _onImport() async {
     if (_busy) return;
-    final files = await openFile(
+    setState(() => _busy = true);
+    try {
+      await _runImport();
+    } catch (_) {
+      if (mounted) _showInfoBar('无法导入，请检查文件与本机存储后重试。', InfoBarSeverity.error);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _runImport() async {
+    String? injected;
+    if (widget.backupReader != null) injected = await widget.backupReader!();
+    final files = widget.backupReader != null ? null : await openFile(
       acceptedTypeGroups: [
         const XTypeGroup(label: 'JSON', extensions: ['json']),
       ],
     );
-    if (files == null || !mounted) return;
+    if ((files == null && injected == null) || !mounted) return;
 
     String raw;
     try {
-      raw = await File(files.path).readAsString();
-    } catch (e) {
+      if (files != null && await files.length() > maxBackupJsonChars * 4) {
+        throw DataBackupFormatException('备份文件过大');
+      }
+      raw = injected ?? await File(files!.path).readAsString();
+    } catch (_) {
       if (!mounted) return;
-      _showInfoBar('无法读取文件：$e', InfoBarSeverity.error);
+      _showInfoBar('无法读取备份文件，请检查大小与访问权限。', InfoBarSeverity.error);
       return;
     }
 
@@ -556,9 +594,9 @@ class _SettingsAboutPageState extends State<SettingsAboutPage> {
       if (!mounted) return;
       _showInfoBar(e.message, InfoBarSeverity.error);
       return;
-    } catch (e) {
+    } catch (_) {
       if (!mounted) return;
-      _showInfoBar('无法解析备份：$e', InfoBarSeverity.error);
+      _showInfoBar('无法解析备份，请检查文件格式。', InfoBarSeverity.error);
       return;
     }
 
@@ -572,10 +610,25 @@ class _SettingsAboutPageState extends State<SettingsAboutPage> {
     );
     if (options == null || !mounted) return;
 
-    _stopGenerationIfBusy();
-    setState(() => _busy = true);
+    if (widget.generation?.busy == true) {
+      _showInfoBar('请先停止生成，再重新预览导入。', InfoBarSeverity.warning);
+      return;
+    }
     try {
-      final result = await _backup.importBackup(raw, options: options);
+      final plan = await _backup.prepareImport(raw, options: options);
+      if (!mounted) return;
+      final confirmed = await showDialog<bool>(context: context, builder: (ctx) => ContentDialog(
+        title: const Text('导入预览'),
+        content: SingleChildScrollView(child: Text(plan.summary)),
+        actions: [Button(onPressed: () => Navigator.pop(ctx, false), child: const Text('取消')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('确认导入'))],
+      ));
+      if (confirmed != true || !mounted) return;
+      if (widget.generation?.busy == true) {
+        _showInfoBar('生成状态已变化，请停止后重新预览。', InfoBarSeverity.warning);
+        return;
+      }
+      final result = await _backup.applyImport(plan);
       widget.themeController?.loadFrom(_repo.settings);
       await _loadUsage();
       if (!mounted) return;
@@ -599,16 +652,23 @@ class _SettingsAboutPageState extends State<SettingsAboutPage> {
     } on DataBackupFormatException catch (e) {
       if (!mounted) return;
       _showInfoBar(e.message, InfoBarSeverity.error);
-    } catch (e) {
+    } on DataBackupImportFailure catch (e) {
+      widget.themeController?.loadFrom(_repo.settings);
       if (!mounted) return;
-      _showInfoBar('导入失败：$e', InfoBarSeverity.error);
-    } finally {
-      if (mounted) setState(() => _busy = false);
+      _showInfoBar(e.toString(), InfoBarSeverity.warning);
+      await _loadUsage();
+    } catch (_) {
+      if (!mounted) return;
+      _showInfoBar('导入未完成，请检查本机存储后重新预览。', InfoBarSeverity.error);
     }
   }
 
   Future<void> _onClearData() async {
     if (_busy) return;
+    if (widget.generation?.busy == true) {
+      _showInfoBar('请先停止生成，再清除本地历史及损坏原文。', InfoBarSeverity.warning);
+      return;
+    }
     var choice = _ClearChoice.sessions;
     final confirmed = await showDialog<bool>(
       context: context,
@@ -623,8 +683,8 @@ class _SettingsAboutPageState extends State<SettingsAboutPage> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    '此操作不可撤销。'
-                    '${widget.generation?.busy == true ? ' 检测到进行中的生成，清除前将尝试停止。' : ' 若仍有生成任务，请先停止。'}',
+                    '此操作不可撤销。清除会话或全部数据也将永久销毁损坏历史原文及恢复副本；请先自行保留本机数据。'
+                    ' 若有进行中的生成任务，请先停止再清除。',
                   ),
                   const SizedBox(height: 14),
                   RadioGroup<_ClearChoice>(
@@ -677,7 +737,10 @@ class _SettingsAboutPageState extends State<SettingsAboutPage> {
     );
     if (confirmed != true || !mounted) return;
 
-    _stopGenerationIfBusy();
+    if (widget.generation?.busy == true) {
+      _showInfoBar('请先停止生成，再清除本地历史及损坏原文。', InfoBarSeverity.warning);
+      return;
+    }
     setState(() => _busy = true);
     try {
       final result = await _backup.clearLocalData(choice.flags);
@@ -931,6 +994,13 @@ class _SettingsAboutPageState extends State<SettingsAboutPage> {
                     style: context.settingsText.caption.copyWith(
                       color: tokens.inkSecondary,
                     ),
+                  ),
+                  Text(_backup.historyRecoverySummary),
+                  if (_backup.importRecoverySummary.isNotEmpty) Text(_backup.importRecoverySummary),
+                  const SizedBox(height: 8),
+                  Button(
+                    onPressed: _busy ? null : _onRecoverHistory,
+                    child: const Text('重试恢复历史'),
                   ),
                   const SizedBox(height: 8),
                   Wrap(

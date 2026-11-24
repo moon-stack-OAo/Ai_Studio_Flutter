@@ -33,7 +33,7 @@ class _BackupImportDialogState extends State<BackupImportDialog> {
           Text(
             '将合并提供商、业务 MCP 与外观设置，并用备份中的会话替换本地会话。'
             '\n导入的本地 stdio 配置将禁用，须在 MCP 设置确认命令后启用。'
-            '${widget.generationBusy ? '\n\n检测到进行中的生成，导入前将尝试停止。' : ''}',
+            '${widget.generationBusy ? '\n\n检测到进行中的生成，请先停止生成再导入。' : ''}',
           ),
           if (widget.payload.skills != null) ...[
             const SizedBox(height: 14),

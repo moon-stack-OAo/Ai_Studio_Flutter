@@ -1,3 +1,5 @@
+// ignore: depend_on_referenced_packages
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:core/core.dart';
 import 'package:desktop_fluent/pages/settings/settings_about_page.dart';
 import 'package:desktop_fluent/pages/settings/settings_chat_defaults_page.dart';
@@ -94,6 +96,7 @@ TextBox _keyBox(WidgetTester tester) => tester
     .singleWhere((box) => box.obscureText);
 
 void main() {
+  setUp(() => SharedPreferences.setMockInitialValues({}));
   setUp(() {
     PackageInfo.setMockInitialValues(
       appName: 'AI Studio',

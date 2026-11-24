@@ -2,6 +2,9 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 
+import '../settings/history_snapshot_store.dart';
+import '../settings/asset_reference_guard.dart';
+
 import '../image/image_asset_store.dart';
 import '../image/image_models.dart';
 import '../mcp/mcp_models.dart';
@@ -18,9 +21,25 @@ const Duration kChatStreamingUiMinInterval = Duration(milliseconds: 64);
 class ChatSessionRepository extends ChangeNotifier {
   ChatSessionRepository({
     required ChatSessionStorage storage,
+    AssetReferenceGuard? assetReferences,
     ImageAssetStore? attachmentStore,
   }) : _storage = storage,
-       _attachmentStore = attachmentStore ?? MemoryImageAssetStore();
+       _attachmentStore = attachmentStore ?? MemoryImageAssetStore(),
+       _assetReferences = assetReferences {
+    assetReferences?.register(this, () {
+      if (!_loaded || _loading || writesBlocked || _lastError != null) {
+        throw const HistoryStorageException();
+      }
+      return {
+        for (final s in _sessions)
+          for (final m in s.messages)
+            for (final ref in m.attachments)
+              if (ref.type == ImageRefType.file) ref.src,
+      };
+    });
+  }
+
+  final AssetReferenceGuard? _assetReferences;
 
   final ChatSessionStorage _storage;
   late final ChatSnapshotWriter _writer = ChatSnapshotWriter(_storage.save);
@@ -36,6 +55,110 @@ class ChatSessionRepository extends ChangeNotifier {
 
   DateTime? _lastUiNotifyAt;
   Timer? _pendingUiNotify;
+
+  RecoverableHistoryStorage<ChatStoreSnapshot>? get _recovery =>
+      _storage is RecoverableHistoryStorage<ChatStoreSnapshot>
+      ? _storage as RecoverableHistoryStorage<ChatStoreSnapshot>
+      : null;
+  HistoryRecoveryState get recoveryState =>
+      _recovery?.recoveryState ?? HistoryRecoveryState.healthy;
+  bool get writesBlocked => _recovery?.writesBlocked ?? false;
+  bool _destructive = false;
+  void _assertWritable() {
+    if (_destructive || _loading || writesBlocked) {
+      throw const HistoryStorageException();
+    }
+  }
+
+  int _activeGenerations = 0;
+
+  /// A repository lease excludes recovery even after a completion changed the
+  /// visible status. Always release locally; never rewrite an authoritative journal.
+  Future<T> runGeneration<T>(
+    String sessionId,
+    Future<T> Function() action, {
+    required String Function() itemId,
+  }) async {
+    try {
+      _assertWritable();
+    } catch (_) {
+      _finishUnstarted(sessionId, itemId());
+      notifyListeners();
+      rethrow;
+    }
+    _activeGenerations++;
+    try {
+      return await action();
+    } finally {
+      _activeGenerations--;
+      _finishUnstarted(sessionId, itemId());
+      notifyListeners();
+    }
+  }
+
+  void _finishUnstarted(String sessionId, String? itemId) {
+    final index = _indexOf(sessionId);
+    if (index < 0) return;
+    final session = _sessions[index];
+    _replace(
+      index,
+      session.copyWith(
+        messages: [
+          for (final message in session.messages)
+            if ((itemId == null || message.id == itemId) && message.streaming)
+              message.copyWith(
+                streaming: false,
+                error: true,
+                errorMessage: '生成未完成；请恢复历史后重试。',
+              )
+            else
+              message,
+        ],
+      ),
+    );
+  }
+
+  Future<void> recoverHistory() async {
+    final recovery = _recovery;
+    if (recovery == null || !writesBlocked) return;
+    if (_loading ||
+        _activeGenerations > 0 ||
+        _destructive ||
+        _sessions.any((s) => s.messages.any((m) => m.streaming))) {
+      throw const HistoryStorageException();
+    }
+    _loading = true;
+    notifyListeners();
+    try {
+      await _writer.flush();
+      final snapshot = await recovery.recover();
+      _sessions = [
+        for (final session in snapshot.sessions)
+          session.copyWith(
+            messages: [
+              for (final message in session.messages)
+                if (message.streaming)
+                  message.copyWith(streaming: false, stopped: true)
+                else
+                  message,
+            ],
+          ),
+      ];
+      _activeId = snapshot.activeId;
+      if (_sessions.isEmpty) {
+        final session = _newSession();
+        _sessions = [session];
+        _activeId = session.id;
+      }
+      _lastError = null;
+    } catch (_) {
+      _lastError = '历史恢复失败，原数据已保留。';
+      rethrow;
+    } finally {
+      _loading = false;
+      notifyListeners();
+    }
+  }
 
   bool get isLoaded => _loaded;
   bool get isLoading => _loading;
@@ -114,7 +237,7 @@ class ChatSessionRepository extends ChangeNotifier {
       }
       _loaded = true;
     } catch (e) {
-      _lastError = '加载会话失败：$e';
+      _lastError = '历史读取失败，原数据已保留；请在设置中重试恢复。';
       if (_sessions.isEmpty) {
         final session = _newSession();
         _sessions = [session];
@@ -124,6 +247,22 @@ class ChatSessionRepository extends ChangeNotifier {
     } finally {
       _loading = false;
       notifyListeners();
+    }
+  }
+
+  Future<void> _persistRemoval() async {
+    _destructive = true;
+    try {
+      await _writer.flush();
+      if (_recovery != null) {
+        await _recovery!.replaceHistory(
+          ChatStoreSnapshot(sessions: _sessions, activeId: _activeId),
+        );
+      } else {
+        await _persist();
+      }
+    } finally {
+      _destructive = false;
     }
   }
 
@@ -159,6 +298,7 @@ class ChatSessionRepository extends ChangeNotifier {
   }
 
   Future<ChatSession> createSession({String title = '新对话'}) async {
+    _assertWritable();
     final session = _newSession(title);
     _sessions = [session, ..._sessions];
     _activeId = session.id;
@@ -168,13 +308,15 @@ class ChatSessionRepository extends ChangeNotifier {
   }
 
   Future<void> setActive(String id) async {
-    if (!_sessions.any((s) => s.id == id)) return;
+    _assertWritable();
+    if (id == _activeId || !_sessions.any((s) => s.id == id)) return;
     _activeId = id;
     await _persist();
     notifyListeners();
   }
 
   Future<void> renameSession(String id, String title) async {
+    _assertWritable();
     final index = _indexOf(id);
     if (index < 0) return;
     final t = title.trim().isEmpty ? '新对话' : title.trim();
@@ -184,6 +326,7 @@ class ChatSessionRepository extends ChangeNotifier {
   }
 
   Future<void> setSessionOverrides(String id, ChatOverrides overrides) async {
+    _assertWritable();
     final index = _indexOf(id);
     if (index < 0) return;
     _replace(
@@ -195,10 +338,10 @@ class ChatSessionRepository extends ChangeNotifier {
   }
 
   Future<void> removeSession(String id) async {
+    _assertWritable();
+    _assetReferences?.retainedByOthers(this);
     final doomed = _find(id);
-    if (doomed != null) {
-      await _deleteMessageAssets(doomed.messages);
-    }
+
     _sessions = _sessions.where((s) => s.id != id).toList();
     if (_sessions.isEmpty) {
       final session = _newSession();
@@ -207,27 +350,36 @@ class ChatSessionRepository extends ChangeNotifier {
     } else if (_activeId == id) {
       _activeId = _sessions.first.id;
     }
-    await _persist();
+    await _persistRemoval();
+    if (doomed != null) await _deleteMessageAssets(doomed.messages);
     notifyListeners();
   }
 
   Future<void> clearMessages(String id) async {
+    _assertWritable();
+    _assetReferences?.retainedByOthers(this);
     final index = _indexOf(id);
     if (index < 0) return;
-    await _deleteMessageAssets(_sessions[index].messages);
+    final removedAssets = _sessions[index].messages;
     _replace(
       index,
       _sessions[index].copyWith(messages: const [], updatedAt: _now()),
     );
-    await _persist();
+    await _persistRemoval();
+    await _deleteMessageAssets(removedAssets);
     notifyListeners();
   }
 
   /// 用快照整体替换（导入备份用）；空列表时自动建一条空会话。
   ///
-  /// 导入前清理当前会话附件文件，避免残留。
-  Future<void> replaceAll(ChatStoreSnapshot snapshot) async {
-    await _deleteMessageAssets(_sessions.expand((s) => s.messages).toList());
+  /// 提交成功后清理旧附件，同时使旧恢复点失效。
+  Future<void> replaceAll(
+    ChatStoreSnapshot snapshot, {
+    bool deleteAssets = true,
+  }) async {
+    _assertWritable();
+    _assetReferences?.retainedByOthers(this);
+    final removedAssets = _sessions.expand((s) => s.messages).toList();
     var sessions = List<ChatSession>.from(snapshot.sessions);
     var activeId = snapshot.activeId;
     if (sessions.isEmpty) {
@@ -240,23 +392,61 @@ class ChatSessionRepository extends ChangeNotifier {
     _sessions = sessions;
     _activeId = activeId;
     _loaded = true;
-    await _persist();
+    await _persistRemoval();
+    if (deleteAssets) await _deleteMessageAssets(removedAssets);
     notifyListeners();
   }
 
+  /// Import cleanup runs only after all selected stores have committed.
+  Future<void> cleanupReplacedAssets(List<ChatSession> previous) =>
+      _deleteMessageAssets(previous.expand((s) => s.messages).toList());
+
   /// 清除全部对话会话（保留一条空会话）。幂等。
-  Future<void> clearAllSessions({bool clearAttachmentCache = true}) async {
-    await _deleteMessageAssets(_sessions.expand((s) => s.messages).toList());
-    if (clearAttachmentCache) {
-      try {
-        await _attachmentStore.clearAll();
-      } catch (_) {}
+  Future<void> clearAllSessions({
+    bool clearAttachmentCache = true,
+    bool deleteAssets = true,
+  }) async {
+    if (_loading || _destructive) throw const HistoryStorageException();
+    if (deleteAssets) _assetReferences?.retainedByOthers(this);
+    _destructive = true;
+    try {
+      await _writer.flush();
+
+      final empty = ChatStoreSnapshot(sessions: const [], activeId: '');
+      if (_recovery != null) {
+        await _recovery!.clearHistory(empty);
+      } else {
+        await _storage.save(empty);
+      }
+      if (deleteAssets) {
+        await _deleteMessageAssets(
+          _sessions.expand((s) => s.messages).toList(),
+          retainCurrent: false,
+        );
+        if (clearAttachmentCache) {
+          try {
+            final retained =
+                _assetReferences?.retainedByOthers(this) ?? <String>{};
+            if (retained.isEmpty) {
+              await _attachmentStore.clearAll();
+            } else if (_attachmentStore is SelectiveAssetClear) {
+              await (_attachmentStore as SelectiveAssetClear).clearExcept(
+                retained,
+              );
+            }
+          } catch (_) {}
+        }
+      }
+      final session = _newSession();
+      _sessions = [session];
+      _activeId = session.id;
+      await _persist();
+      _loaded = true;
+      _lastError = null;
+      notifyListeners();
+    } finally {
+      _destructive = false;
     }
-    final session = _newSession();
-    _sessions = [session];
-    _activeId = session.id;
-    await _persist();
-    notifyListeners();
   }
 
   /// 追加消息；首条 user 截 24 字作 title（有附件无文时用「附图」）。
@@ -278,6 +468,7 @@ class ChatSessionRepository extends ChangeNotifier {
     String? toolCallId,
     McpToolCallStatus? toolResultStatus,
   }) async {
+    _assertWritable();
     final index = _indexOf(sessionId);
     if (index < 0) return null;
     final session = _sessions[index];
@@ -316,7 +507,15 @@ class ChatSessionRepository extends ChangeNotifier {
         updatedAt: _now(),
       ),
     );
-    await _persist();
+    try {
+      await _persist();
+    } catch (_) {
+      // This append never handed a task to its caller. Only settle this ID in
+      // memory: save may already have published its authoritative journal.
+      _finishUnstarted(sessionId, item.id);
+      notifyListeners();
+      rethrow;
+    }
     notifyListeners();
     return item;
   }
@@ -342,6 +541,7 @@ class ChatSessionRepository extends ChangeNotifier {
     bool clearToolCallId = false,
     bool persist = true,
   }) async {
+    _assertWritable();
     final index = _indexOf(sessionId);
     if (index < 0) return;
     final session = _sessions[index];
@@ -391,6 +591,7 @@ class ChatSessionRepository extends ChangeNotifier {
     String delta, {
     bool persist = false,
   }) async {
+    _assertWritable();
     final session = _find(sessionId);
     if (session == null) return;
     ChatMessage? msg;
@@ -412,6 +613,7 @@ class ChatSessionRepository extends ChangeNotifier {
 
   /// 标记停止（用户取消）。
   Future<void> markStopped(String sessionId, String messageId) async {
+    _assertWritable();
     await updateMessage(
       sessionId,
       messageId,
@@ -427,6 +629,7 @@ class ChatSessionRepository extends ChangeNotifier {
     String sessionId, {
     String? userMessageId,
   }) async {
+    _assertWritable();
     final index = _indexOf(sessionId);
     if (index < 0) return null;
     final session = _sessions[index];
@@ -454,12 +657,14 @@ class ChatSessionRepository extends ChangeNotifier {
       removedIds.add(msgs[idx + 1].id);
       deleteCount = 2;
     }
+    _assetReferences?.retainedByOthers(this);
     final toDelete = msgs.sublist(idx, idx + deleteCount);
-    await _deleteMessageAssets(toDelete);
+    final removedAssets = toDelete;
     final nextMsgs = List<ChatMessage>.from(msgs)
       ..removeRange(idx, idx + deleteCount);
     _replace(index, session.copyWith(messages: nextMsgs, updatedAt: _now()));
-    await _persist();
+    await _persistRemoval();
+    await _deleteMessageAssets(removedAssets);
     notifyListeners();
     return removedIds;
   }
@@ -471,6 +676,7 @@ class ChatSessionRepository extends ChangeNotifier {
     List<Uint8List> byteList, {
     List<String?>? mimes,
   }) async {
+    _assertWritable();
     final out = <ImageRef>[];
     final limit = byteList.length > maxChatAttachments
         ? maxChatAttachments
@@ -502,10 +708,25 @@ class ChatSessionRepository extends ChangeNotifier {
     }
   }
 
-  Future<void> _deleteMessageAssets(List<ChatMessage> messages) async {
+  Future<void> _deleteMessageAssets(
+    List<ChatMessage> messages, {
+    bool retainCurrent = true,
+  }) async {
+    final retained = retainCurrent
+        ? _sessions
+              .expand((s) => s.messages)
+              .expand((m) => m.attachments)
+              .where((i) => i.type == ImageRefType.file)
+              .map((i) => assetReferenceKey(i.src))
+              .toSet()
+        : <String>{};
+    final others = _assetReferences?.retainedByOthers(this) ?? <String>{};
+    retained.addAll(others);
     for (final m in messages) {
       for (final img in m.attachments) {
-        if (img.type == ImageRefType.file && img.src.isNotEmpty) {
+        if (img.type == ImageRefType.file &&
+            img.src.isNotEmpty &&
+            !retained.contains(assetReferenceKey(img.src))) {
           try {
             await _attachmentStore.delete(img.src);
           } catch (_) {}

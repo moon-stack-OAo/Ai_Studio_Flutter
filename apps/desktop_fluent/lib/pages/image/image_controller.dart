@@ -10,11 +10,18 @@ class ImageController extends ChangeNotifier {
     required ProviderRepository providerRepository,
     required ImageSessionRepository sessionRepository,
     required this.generation,
+    Future<Uint8List?> Function(ImageRef)? readDraftReference,
     AppLogRepository? appLogRepository,
     OpenAiCompatibleImageClient? imageClient,
     SkillRepository? skillRepository,
   }) : _providers = providerRepository,
        _sessions = sessionRepository {
+    _draftGuard = MediaDraftRestoreGuard([
+      providerRepository,
+      sessionRepository,
+      generation,
+    ]);
+    _readDraftReference = readDraftReference ?? readLocalMediaDraftReference;
     _facade = ImageSessionFacade(
       skillRepository: skillRepository,
       providers: providerRepository,
@@ -36,6 +43,8 @@ class ImageController extends ChangeNotifier {
   ImageRef? _referenceImage;
   String _refFileName = 'image.png';
   bool _disposed = false;
+  late final MediaDraftRestoreGuard _draftGuard;
+  late final Future<Uint8List?> Function(ImageRef) _readDraftReference;
 
   static const sizeOptions = ImageSessionFacade.sizeOptions;
   static const aspectOptions = ImageSessionFacade.aspectOptions;
@@ -75,32 +84,39 @@ class ImageController extends ChangeNotifier {
   bool get supportsQuality => _facade.supportsQuality;
 
   void syncParamsToActiveProvider() {
+    _draftGuard.invalidate();
     _facade.syncParamsToActiveProvider(onNotify: notifyListeners);
   }
 
   String get promptAssistMode => hasReferenceImage ? 'img2img' : 'txt2img';
 
   void setPromptDraft(String value) {
+    _draftGuard.invalidate();
     _facade.setPromptDraft(value, onNotify: notifyListeners);
   }
 
   void setN(int value) {
+    _draftGuard.invalidate();
     _facade.setN(value, onNotify: notifyListeners);
   }
 
   void setSize(String value) {
+    _draftGuard.invalidate();
     _facade.setSize(value, onNotify: notifyListeners);
   }
 
   void setAspectRatio(String value) {
+    _draftGuard.invalidate();
     _facade.setAspectRatio(value, onNotify: notifyListeners);
   }
 
   void setQuality(String value) {
+    _draftGuard.invalidate();
     _facade.setQuality(value, onNotify: notifyListeners);
   }
 
   void applyPromptPreset(String prompt) {
+    _draftGuard.invalidate();
     _facade.applyPromptPreset(prompt, onNotify: notifyListeners);
   }
 
@@ -112,65 +128,26 @@ class ImageController extends ChangeNotifier {
       return;
     }
 
-    _facade.setPromptDraft(item.prompt.trim());
-    _facade.setN(item.n);
-    final size = item.size?.trim();
-    if (size != null && size.isNotEmpty) {
-      _facade.setSize(size);
-    }
-    final aspect = item.aspectRatio?.trim();
-    if (aspect != null && aspect.isNotEmpty) {
-      _facade.setAspectRatio(aspect);
-    }
-    final quality = item.quality?.trim();
-    if (quality != null && quality.isNotEmpty) {
-      _facade.setQuality(quality);
-    }
-    _facade.syncParamsToActiveProvider();
-
-    final refs = item.referenceImages;
-    var restored = false;
-    if (refs.isNotEmpty) {
-      for (final ref in refs) {
-        if (ref.type != ImageRefType.file) continue;
-        final path = ref.src.trim();
-        if (path.isEmpty) continue;
-        final file = File(path);
-        if (!await file.exists()) continue;
-        try {
-          final bytes = await file.readAsBytes();
-          if (bytes.isEmpty) continue;
-          if (!_isAcceptedImagePath(path)) continue;
-          _refFileName = _fileNameFromPath(path);
-          _referenceImage = ImageRef(type: ImageRefType.file, src: path);
-          restored = true;
-          break;
-        } catch (_) {
-          continue;
-        }
-      }
-    }
-
-    if (!restored) {
-      if (_referenceImage != null) {
-        _referenceImage = null;
-        _refFileName = 'image.png';
-      }
-      if (refs.isNotEmpty) {
-        _setInfo('原参考图不可用，已仅回填提示词与参数');
-      } else {
-        clearBannerError();
-        clearBannerInfo();
-      }
-    } else {
-      clearBannerError();
-      clearBannerInfo();
-    }
+    final ticket = _draftGuard.begin();
+    final reference = await selectMediaDraftReference(
+      item.referenceImages,
+      read: _readDraftReference,
+      isCurrent: () => _draftGuard.isCurrent(ticket) && !generation.busy,
+    );
+    if (!_draftGuard.isCurrent(ticket) || generation.busy || _disposed) return;
+    _facade.restoreDraftFromItem(item);
+    _referenceImage = reference?.ref;
+    _refFileName = reference?.fileName ?? 'image.png';
+    _bannerError = null;
+    _bannerInfo = reference == null && item.referenceImages.isNotEmpty
+        ? '原参考图不可用，已仅回填提示词与参数'
+        : null;
     notifyListeners();
   }
 
   /// 将已生成结果设为参数区参考图。
   void setReferenceFromItem(ImageRef ref) {
+    _draftGuard.invalidate();
     _referenceImage = ref;
     _refFileName = _fileNameFromRef(ref);
     notifyListeners();
@@ -178,6 +155,7 @@ class ImageController extends ChangeNotifier {
 
   /// 通过系统文件选择器加入参考图。
   Future<void> pickReferenceImage() async {
+    _draftGuard.invalidate();
     try {
       final file = await openFile(acceptedTypeGroups: [_imageTypeGroup]);
       if (file == null) return;
@@ -193,6 +171,7 @@ class ImageController extends ChangeNotifier {
   }
 
   Future<void> setReferenceFromPath(String path, {String? displayName}) async {
+    _draftGuard.invalidate();
     try {
       final trimmed = path.trim();
       if (trimmed.isEmpty) {
@@ -224,6 +203,7 @@ class ImageController extends ChangeNotifier {
   }
 
   void clearReference() {
+    _draftGuard.invalidate();
     if (_referenceImage == null) return;
     _referenceImage = null;
     _refFileName = 'image.png';
@@ -276,17 +256,14 @@ class ImageController extends ChangeNotifier {
     notifyListeners();
   }
 
-  void _setInfo(String? message) {
-    _bannerInfo = message;
-    notifyListeners();
-  }
-
   Future<void> createSession() async {
+    _draftGuard.invalidate();
     await _sessions.createSession();
     clearBannerError();
   }
 
   Future<void> setActiveSession(String id) async {
+    _draftGuard.invalidate();
     if (id == _sessions.activeId) return;
     await _sessions.setActive(id);
     clearBannerError();
@@ -294,12 +271,14 @@ class ImageController extends ChangeNotifier {
   }
 
   Future<void> removeSession(String id) async {
+    _draftGuard.invalidate();
     generation.abortIfSession(id);
     await _sessions.removeSession(id);
     clearBannerError();
   }
 
   Future<void> clearActiveItems() async {
+    _draftGuard.invalidate();
     final sid = _sessions.activeId;
     if (sid.isEmpty) return;
     if (generation.isCurrent(sid)) {
@@ -312,6 +291,7 @@ class ImageController extends ChangeNotifier {
   void stop() => _facade.stop();
 
   Future<void> generate() async {
+    _draftGuard.invalidate();
     final refImage = _referenceImage;
     Uint8List? refBytes;
     if (refImage != null) {
@@ -350,8 +330,14 @@ class ImageController extends ChangeNotifier {
   }
 
   @override
+  void notifyListeners() {
+    if (!_disposed) super.notifyListeners();
+  }
+
+  @override
   void dispose() {
     _disposed = true;
+    _draftGuard.dispose();
     _facade.dispose();
     super.dispose();
   }

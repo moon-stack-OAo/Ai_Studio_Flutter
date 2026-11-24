@@ -2,6 +2,8 @@ import 'package:core/core.dart';
 import 'package:design_material/design_material.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+// ignore: depend_on_referenced_packages
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:mobile_material/pages/settings/settings_about_tab.dart';
 import 'package:mobile_material/pages/settings/settings_chat_defaults_tab.dart';
 import 'package:mobile_material/update/mobile_update_controller.dart';
@@ -25,6 +27,7 @@ class _StatusUpdater extends MobileUpdateController {
 }
 
 void main() {
+  setUp(() => SharedPreferences.setMockInitialValues({}));
   testWidgets('关于页区分更新状态，失败及未检查不显示已是最新', (tester) async {
     final providers = ProviderRepository(storage: MemoryProviderStorage());
     final appearance = AppearanceRepository(storage: MemoryAppearanceStorage());

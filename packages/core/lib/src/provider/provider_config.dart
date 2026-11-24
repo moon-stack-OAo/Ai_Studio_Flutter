@@ -1,8 +1,9 @@
 import 'provider_type.dart';
+import 'model_capabilities.dart';
 
 /// 本机提供商配置（密钥可随实例持有，序列化时由仓库决定是否落盘明文）。
 class ProviderConfig {
-  const ProviderConfig({
+  ProviderConfig({
     required this.id,
     required this.name,
     required this.type,
@@ -13,10 +14,28 @@ class ProviderConfig {
     this.videoModel = '',
     this.enabled = true,
     this.builtin = false,
+    Map<String, ModelCapabilityOverride> modelCapabilityOverrides = const {},
+    this.hasModelCapabilityOverrides = false,
     this.lastTestOk,
     this.lastTestDetail,
     this.lastTestAtMs,
-  });
+  }) : _modelCapabilityOverrides = Map.unmodifiable({
+         for (final entry in modelCapabilityOverrides.entries)
+           if (entry.key.trim().isNotEmpty && !entry.value.isAutomatic)
+             entry.key.trim(): entry.value,
+       });
+
+  final Map<String, ModelCapabilityOverride> _modelCapabilityOverrides;
+  Map<String, ModelCapabilityOverride> get modelCapabilityOverrides =>
+      Map.unmodifiable(_modelCapabilityOverrides);
+
+  /// Retains absent vs explicit empty when importing legacy backups.
+  final bool hasModelCapabilityOverrides;
+  ChatModelCapabilities capabilitiesFor(String modelId) =>
+      resolveChatModelCapabilities(
+        modelId,
+        _modelCapabilityOverrides[modelId.trim()],
+      );
 
   final String id;
   final String name;
@@ -75,8 +94,21 @@ class ProviderConfig {
     String? lastTestDetail,
     int? lastTestAtMs,
     bool clearLastTest = false,
+    Map<String, ModelCapabilityOverride>? modelCapabilityOverrides,
+    bool? hasModelCapabilityOverrides,
   }) {
     return ProviderConfig(
+      modelCapabilityOverrides:
+          ((baseUrl != null && baseUrl.trim() != this.baseUrl.trim()) ||
+              (type != null && type != this.type))
+          ? const {}
+          : (modelCapabilityOverrides ?? this.modelCapabilityOverrides),
+      hasModelCapabilityOverrides:
+          hasModelCapabilityOverrides ??
+          (modelCapabilityOverrides != null ||
+              this.hasModelCapabilityOverrides ||
+              (baseUrl != null && baseUrl.trim() != this.baseUrl.trim()) ||
+              (type != null && type != this.type)),
       id: id ?? this.id,
       name: name ?? this.name,
       type: type ?? this.type,
@@ -88,39 +120,46 @@ class ProviderConfig {
       enabled: enabled ?? this.enabled,
       builtin: builtin ?? this.builtin,
       lastTestOk: clearLastTest ? null : (lastTestOk ?? this.lastTestOk),
-      lastTestDetail:
-          clearLastTest ? null : (lastTestDetail ?? this.lastTestDetail),
+      lastTestDetail: clearLastTest
+          ? null
+          : (lastTestDetail ?? this.lastTestDetail),
       lastTestAtMs: clearLastTest ? null : (lastTestAtMs ?? this.lastTestAtMs),
     );
   }
 
   /// 元数据 JSON（不含 apiKey）。
   Map<String, dynamic> toJsonMeta() => {
-        'id': id,
-        'name': name,
-        'type': type.wireName,
-        'baseUrl': baseUrl,
-        'chatModel': chatModel,
-        'imageModel': imageModel,
-        'videoModel': videoModel,
-        'enabled': enabled,
-        'builtin': builtin,
-        if (lastTestOk != null) 'lastTestOk': lastTestOk,
-        if (lastTestDetail != null) 'lastTestDetail': lastTestDetail,
-        if (lastTestAtMs != null) 'lastTestAtMs': lastTestAtMs,
-      };
+    if (hasModelCapabilityOverrides || _modelCapabilityOverrides.isNotEmpty)
+      'modelCapabilityOverrides': {
+        for (final e in _modelCapabilityOverrides.entries)
+          if (!e.value.isAutomatic) e.key: e.value.toJson(),
+      },
+    'id': id,
+    'name': name,
+    'type': type.wireName,
+    'baseUrl': baseUrl,
+    'chatModel': chatModel,
+    'imageModel': imageModel,
+    'videoModel': videoModel,
+    'enabled': enabled,
+    'builtin': builtin,
+    if (lastTestOk != null) 'lastTestOk': lastTestOk,
+    if (lastTestDetail != null) 'lastTestDetail': lastTestDetail,
+    if (lastTestAtMs != null) 'lastTestAtMs': lastTestAtMs,
+  };
 
   /// 完整 JSON（含 apiKey，仅内存/测试用；禁止打日志）。
-  Map<String, dynamic> toJson() => {
-        ...toJsonMeta(),
-        'apiKey': apiKey,
-      };
+  Map<String, dynamic> toJson() => {...toJsonMeta(), 'apiKey': apiKey};
 
   factory ProviderConfig.fromJson(
     Map<String, dynamic> json, {
     String apiKey = '',
   }) {
     return ProviderConfig(
+      modelCapabilityOverrides: decodeModelCapabilityOverrides(
+        json['modelCapabilityOverrides'],
+      ),
+      hasModelCapabilityOverrides: json.containsKey('modelCapabilityOverrides'),
       id: (json['id'] as String?)?.trim().isNotEmpty == true
           ? (json['id'] as String).trim()
           : 'provider_unknown',
@@ -131,9 +170,7 @@ class ProviderConfig {
         (json['type'] as String?) ?? (json['provider'] as String?),
       ),
       baseUrl: (json['baseUrl'] as String?)?.trim() ?? '',
-      apiKey: apiKey.isNotEmpty
-          ? apiKey
-          : ((json['apiKey'] as String?) ?? ''),
+      apiKey: apiKey.isNotEmpty ? apiKey : ((json['apiKey'] as String?) ?? ''),
       chatModel: (json['chatModel'] as String?)?.trim() ?? '',
       imageModel: (json['imageModel'] as String?)?.trim() ?? '',
       videoModel: (json['videoModel'] as String?)?.trim() ?? '',

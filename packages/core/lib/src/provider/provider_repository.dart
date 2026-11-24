@@ -19,7 +19,7 @@ class ProviderRepository extends ChangeNotifier {
     required this._storage,
     ProviderConnectionTester? connectionTester,
   }) : connectionTester =
-            connectionTester ?? OpenAiCompatibleConnectionTester();
+           connectionTester ?? OpenAiCompatibleConnectionTester();
 
   final ProviderStorage _storage;
   final ProviderConnectionTester connectionTester;
@@ -30,6 +30,7 @@ class ProviderRepository extends ChangeNotifier {
   bool _loading = false;
   String? _lastError;
 
+  bool get hasPendingSecretWrites => _storage is SecureProviderStorage && _storage.hasPendingWrites;
   bool get isLoaded => _loaded;
   bool get isLoading => _loading;
   String? get lastError => _lastError;
@@ -47,16 +48,13 @@ class ProviderRepository extends ChangeNotifier {
   }
 
   /// 是否存在任一可对话提供商（空态判断）。
-  bool get hasConfiguredChatProvider =>
-      _providers.any((p) => p.canChat);
+  bool get hasConfiguredChatProvider => _providers.any((p) => p.canChat);
 
   /// 是否存在任一可生图提供商（空态判断）。
-  bool get hasConfiguredImageProvider =>
-      _providers.any((p) => p.canImage);
+  bool get hasConfiguredImageProvider => _providers.any((p) => p.canImage);
 
   /// 是否存在任一可生视频提供商（空态判断；无 videoModel 视为不使用）。
-  bool get hasConfiguredVideoProvider =>
-      _providers.any((p) => p.canVideo);
+  bool get hasConfiguredVideoProvider => _providers.any((p) => p.canVideo);
 
   /// 按能力列出可用提供商（`canChat` / `canImage` / `canVideo`）。
   ///
@@ -77,9 +75,7 @@ class ProviderRepository extends ChangeNotifier {
       case ModelKind.video:
         return p.canVideo;
       case ModelKind.other:
-        return p.enabled &&
-            p.baseUrl.trim().isNotEmpty &&
-            p.hasApiKey;
+        return p.enabled && p.baseUrl.trim().isNotEmpty && p.hasApiKey;
     }
   }
 
@@ -129,6 +125,7 @@ class ProviderRepository extends ChangeNotifier {
   ProviderConfig? providerById(String id) => _findById(id);
 
   Future<void> load() async {
+    if (hasPendingSecretWrites) throw StateError('安全存储仍在处理中');
     if (_loading) return;
     _loading = true;
     _lastError = null;
@@ -185,8 +182,7 @@ class ProviderRepository extends ChangeNotifier {
     });
   }
 
-  /// 测试/导入等需要等落盘完成时调用。
-  @visibleForTesting
+  /// 导入及测试需要等待当前持久化队列时调用；错误见 lastError。
   Future<void> waitForPersist() async {
     await (_persistChain ?? Future<void>.value());
   }
@@ -281,7 +277,14 @@ class ProviderRepository extends ChangeNotifier {
     } else {
       final list = List<ProviderConfig>.from(_providers);
       // 内置标记不可被表单抹掉
-      final merged = config.copyWith(builtin: _providers[index].builtin);
+      final previous = _providers[index];
+      final backendChanged =
+          previous.baseUrl.trim() != config.baseUrl.trim() ||
+          previous.type != config.type;
+      final merged = config.copyWith(
+        builtin: previous.builtin,
+        modelCapabilityOverrides: backendChanged ? const {} : null,
+      );
       list[index] = merged;
       _providers = list;
     }
@@ -326,11 +329,25 @@ class ProviderRepository extends ChangeNotifier {
     } else if (!providers.any((p) => p.id == activeId)) {
       activeId = providers.first.id;
     }
-    _providers = providers;
-    _activeProviderId = activeId;
-    _loaded = true;
-    _commitMemory();
-    await waitForPersist();
+    final snapshotToSave = ProviderStoreSnapshot(
+      providers: List.unmodifiable(providers), activeProviderId: activeId,
+    );
+    final task = (_persistChain ?? Future<void>.value()).then((_) async {
+      try {
+        await _storage.save(snapshotToSave);
+        _providers = providers;
+        _activeProviderId = activeId;
+        _loaded = true;
+        _lastError = null;
+        notifyListeners();
+      } catch (_) {
+        _lastError = '提供商保存未完成，请检查存储后重试';
+        notifyListeners();
+        throw StateError('提供商保存未完成');
+      }
+    });
+    _persistChain = task.then<void>((_) {}, onError: (Object _, StackTrace _) {});
+    await task;
   }
 
   ProviderConfig? _findById(String id) {

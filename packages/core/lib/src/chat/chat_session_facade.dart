@@ -159,13 +159,15 @@ class ChatSessionFacade {
   /// 当前活跃对话模型是否支持视觉（启发式）。
   bool get activeChatSupportsVision {
     final model = _providers.activeChatCredentials?.chatModel;
-    return supportsChatVision(model);
+    return _providers.activeProvider?.capabilitiesFor(model ?? '').vision ??
+        false;
   }
 
   /// 当前活跃对话模型是否支持 tools（启发式）。
   bool get activeChatSupportsTools {
     final model = _providers.activeChatCredentials?.chatModel;
-    return supportsChatTools(model);
+    return _providers.activeProvider?.capabilitiesFor(model ?? '').tools ??
+        false;
   }
 
   /// 拉取对话模型列表（仅 [ProviderConfig.canChat]）。
@@ -216,8 +218,11 @@ class ChatSessionFacade {
       return;
     }
 
+    final capabilities = _providers
+        .providerById(creds.providerId)!
+        .capabilitiesFor(creds.chatModel);
     if (hasAtt) {
-      if (!supportsChatVision(creds.chatModel)) {
+      if (!capabilities.vision) {
         onBanner?.call('当前模型不支持图片，请更换支持视觉的对话模型');
         return;
       }
@@ -237,8 +242,7 @@ class ChatSessionFacade {
       }
     }
 
-    var session = _sessions.activeSession;
-    session ??= await _sessions.createSession();
+    final session = _sessions.activeSession ?? await _sessions.createSession();
     final sessionId = session.id;
 
     if (isGenerationBlocked(
@@ -286,297 +290,302 @@ class ChatSessionFacade {
     );
     if (assistantMsg == null) return;
 
-    final defaults = _chatDefaults.defaults;
-    final historyForApi = [...historyBefore, userMsg];
-    final trimmed = trimChatMessages(
-      historyForApi,
-      enabled: defaults.contextTrimEnabled,
-      maxTurns: defaults.contextMaxTurns,
-      maxCharsEnabled: defaults.contextMaxCharsEnabled,
-      maxChars: defaults.contextMaxChars,
-    );
-    final systemPrompt = composeChatSystemPrompt(
-      session.overrides.systemPrompt ?? defaults.systemPrompt,
-      appliedSkills,
-    );
-
-    final attachmentDataUrls = await _collectAttachmentDataUrls(
-      trimmed.messages,
-    );
-    var apiMessages = buildApiMessages(
-      history: trimmed.messages,
-      systemPrompt: systemPrompt,
-      attachmentDataUrls: attachmentDataUrls,
-    );
-    final temperature = session.overrides.temperature ?? defaults.temperature;
-    final maxTokens = defaults.maxTokens > 0 ? defaults.maxTokens : null;
-
-    final openaiTools = _resolveOpenAiTools(chatModel);
-    final mcpActive = openaiTools != null && openaiTools.isNotEmpty;
-
-    if (_disposed) {
-      await _sessions.markStopped(sessionId, assistantMsg.id);
-      return;
-    }
-    final streamClient = _createHttpClient();
-    ChatDeltaBatcher? batch;
-    var cancelled = false;
     var currentAssistantId = assistantMsg.id;
-    Future<void> checkpoint = Future.value();
-    Object? checkpointError;
-    final checkpointClock = Stopwatch()..start();
-    void cancelStream() {
-      if (cancelled) return;
-      cancelled = true;
-      batch?.close();
-      // 即便底层 close 未及时结束读取，也立即封口，后续 delta 会被拒绝。
-      checkpoint = _sessions.updateMessage(
-        sessionId,
-        currentAssistantId,
-        streaming: false,
-        stopped: true,
-      ).catchError((Object error) {
-        checkpointError = error;
-      });
-      try {
-        streamClient.close();
-      } catch (_) {}
-      _closeMcpSessions();
-    }
-    _cancelStream = cancelStream;
-    // abort 时关闭 chat client，并关闭进行中的 MCP sessions。
-    final token = generation.begin(sessionId, cancelStream);
-    if (!_disposed) onNotify();
+    await _sessions.runGeneration(sessionId, () async {
+      final defaults = _chatDefaults.defaults;
+      final historyForApi = [...historyBefore, userMsg];
+      final trimmed = trimChatMessages(
+        historyForApi,
+        enabled: defaults.contextTrimEnabled,
+        maxTurns: defaults.contextMaxTurns,
+        maxCharsEnabled: defaults.contextMaxCharsEnabled,
+        maxChars: defaults.contextMaxChars,
+      );
+      final systemPrompt = composeChatSystemPrompt(
+        session.overrides.systemPrompt ?? defaults.systemPrompt,
+        appliedSkills,
+      );
 
-    final sw = Stopwatch()..start();
-    var aborted = false;
-    var errored = false;
+      final attachmentDataUrls = await _collectAttachmentDataUrls(
+        trimmed.messages,
+      );
+      var apiMessages = buildApiMessages(
+        history: trimmed.messages,
+        systemPrompt: systemPrompt,
+        attachmentDataUrls: attachmentDataUrls,
+      );
+      final temperature = session.overrides.temperature ?? defaults.temperature;
+      final maxTokens = defaults.maxTokens > 0 ? defaults.maxTokens : null;
 
-    try {
-      var round = 0;
-      var totalToolCalls = 0;
-      var workingMessages = List<Map<String, dynamic>>.from(apiMessages);
+      final openaiTools = _resolveOpenAiTools(capabilities.tools);
+      final mcpActive = openaiTools != null && openaiTools.isNotEmpty;
 
-      while (true) {
-        if (cancelled || !_isGenCurrent(sessionId)) {
-          aborted = true;
-          break;
-        }
-
-        final roundAssistantId = currentAssistantId;
-        batch = ChatDeltaBatcher(
-          interval: kChatStreamingUiMinInterval,
-          onFlush: (content) {
-            final persist =
-                checkpointClock.elapsed >= const Duration(seconds: 2);
-            if (persist) checkpointClock.reset();
-            final update = _sessions.updateMessage(
+      if (_disposed) {
+        await _sessions.markStopped(sessionId, assistantMsg.id);
+        return;
+      }
+      final streamClient = _createHttpClient();
+      ChatDeltaBatcher? batch;
+      var cancelled = false;
+      Future<void> checkpoint = Future.value();
+      Object? checkpointError;
+      final checkpointClock = Stopwatch()..start();
+      void cancelStream() {
+        if (cancelled) return;
+        cancelled = true;
+        batch?.close();
+        // 即便底层 close 未及时结束读取，也立即封口，后续 delta 会被拒绝。
+        checkpoint = _sessions
+            .updateMessage(
               sessionId,
-              roundAssistantId,
-              content: content,
-              streaming: true,
-              persist: persist,
-            );
-            final handled = update.catchError((Object error) {
+              currentAssistantId,
+              streaming: false,
+              stopped: true,
+            )
+            .catchError((Object error) {
               checkpointError = error;
             });
-            if (persist) checkpoint = handled;
-          },
-        );
-        final result = await _chatClient.streamChatWithCredentials(
-          creds,
-          messages: workingMessages,
-          temperature: temperature,
-          maxTokens: maxTokens,
-          tools: openaiTools,
-          toolChoice: mcpActive ? 'auto' : null,
-          timeout: defaults.apiTimeout,
-          client: streamClient,
-          onContentDelta: batch.add,
-        );
-        batch.close();
-        await checkpoint;
+        try {
+          streamClient.close();
+        } catch (_) {}
+        _closeMcpSessions();
+      }
 
-        if (cancelled || !_isGenCurrent(sessionId)) {
-          aborted = true;
-          break;
-        }
-        if (checkpointError != null) throw checkpointError!;
+      _cancelStream = cancelStream;
+      // abort 时关闭 chat client，并关闭进行中的 MCP sessions。
+      final token = generation.begin(sessionId, cancelStream);
+      if (!_disposed) onNotify();
 
-        if (!mcpActive || !result.hasToolCalls) {
+      final sw = Stopwatch()..start();
+      var aborted = false;
+      var errored = false;
+
+      try {
+        var round = 0;
+        var totalToolCalls = 0;
+        var workingMessages = List<Map<String, dynamic>>.from(apiMessages);
+
+        while (true) {
+          if (cancelled || !_isGenCurrent(sessionId)) {
+            aborted = true;
+            break;
+          }
+
+          final roundAssistantId = currentAssistantId;
+          batch = ChatDeltaBatcher(
+            interval: kChatStreamingUiMinInterval,
+            onFlush: (content) {
+              final persist =
+                  checkpointClock.elapsed >= const Duration(seconds: 2);
+              if (persist) checkpointClock.reset();
+              final update = _sessions.updateMessage(
+                sessionId,
+                roundAssistantId,
+                content: content,
+                streaming: true,
+                persist: persist,
+              );
+              final handled = update.catchError((Object error) {
+                checkpointError = error;
+              });
+              if (persist) checkpoint = handled;
+            },
+          );
+          final result = await _chatClient.streamChatWithCredentials(
+            creds,
+            messages: workingMessages,
+            temperature: temperature,
+            maxTokens: maxTokens,
+            tools: openaiTools,
+            toolChoice: mcpActive ? 'auto' : null,
+            timeout: defaults.apiTimeout,
+            client: streamClient,
+            onContentDelta: batch.add,
+          );
+          batch.close();
+          await checkpoint;
+
+          if (cancelled || !_isGenCurrent(sessionId)) {
+            aborted = true;
+            break;
+          }
+          if (checkpointError != null) throw checkpointError!;
+
+          if (!mcpActive || !result.hasToolCalls) {
+            await _sessions.updateMessage(
+              sessionId,
+              currentAssistantId,
+              content: result.content,
+              streaming: false,
+              stopped: false,
+              error: false,
+              clearErrorMessage: true,
+              model: chatModel,
+              latencyMs: sw.elapsedMilliseconds,
+              persist: true,
+            );
+            break;
+          }
+
+          // 有 tool_calls：落盘 assistant（含 toolCalls）→ 编排 → 回灌 → 新助手气泡。
           await _sessions.updateMessage(
             sessionId,
             currentAssistantId,
             content: result.content,
+            toolCalls: result.toolCalls,
             streaming: false,
             stopped: false,
             error: false,
             clearErrorMessage: true,
             model: chatModel,
-            latencyMs: sw.elapsedMilliseconds,
             persist: true,
           );
-          break;
-        }
 
-        // 有 tool_calls：落盘 assistant（含 toolCalls）→ 编排 → 回灌 → 新助手气泡。
-        await _sessions.updateMessage(
-          sessionId,
-          currentAssistantId,
-          content: result.content,
-          toolCalls: result.toolCalls,
-          streaming: false,
-          stopped: false,
-          error: false,
-          clearErrorMessage: true,
-          model: chatModel,
-          persist: true,
-        );
+          round++;
+          if (round > maxMcpToolRounds || totalToolCalls >= maxMcpToolRounds) {
+            await _sessions.appendMessage(
+              sessionId,
+              role: ChatRole.assistant,
+              content: '已达本回合工具调用上限，已停止继续调用。',
+              model: chatModel,
+            );
+            break;
+          }
 
-        round++;
-        if (round > maxMcpToolRounds || totalToolCalls >= maxMcpToolRounds) {
-          await _sessions.appendMessage(
-            sessionId,
-            role: ChatRole.assistant,
-            content: '已达本回合工具调用上限，已停止继续调用。',
-            model: chatModel,
-          );
-          break;
-        }
+          final requests = _buildToolRequests(result.toolCalls);
+          if (requests.isEmpty) {
+            break;
+          }
 
-        final requests = _buildToolRequests(result.toolCalls);
-        if (requests.isEmpty) {
-          break;
-        }
-
-        final remaining = maxMcpToolRounds - totalToolCalls;
-        final orchestrator = _resolveOrchestrator(sessionId);
-        final callResults = await orchestrator.runRound(
-          calls: requests,
-          prompter: _toolAuthPrompter!,
-          onTrace: (trace) {
-            if (!_disposed) _onToolTrace?.call(trace);
-          },
-          isCancelled: () => cancelled || !_isGenCurrent(sessionId),
-          options: ToolCallOrchestratorOptions(
-            maxRounds: remaining,
-            serialCalls: true,
-          ),
-        );
-        totalToolCalls += callResults
-            .where((r) => r.status == McpToolCallStatus.success)
-            .length;
-
-        if (cancelled || !_isGenCurrent(sessionId)) {
-          aborted = true;
-          break;
-        }
-
-        // 回灌 role=tool 消息到会话与 API 轨迹。
-        workingMessages = [
-          ...workingMessages,
-          {
-            'role': 'assistant',
-            'content': result.content,
-            'tool_calls': result.toolCalls.map((t) => t.toApiJson()).toList(),
-          },
-        ];
-
-        for (final tr in callResults) {
-          final content = tr.content.isEmpty
-              ? (tr.isError ? '工具调用失败' : '')
-              : tr.content;
-          await _sessions.appendMessage(
-            sessionId,
-            role: ChatRole.tool,
-            content: content,
-            toolCallId: tr.toolCallId,
-            toolResultStatus: tr.status,
-          );
-          workingMessages.add({
-            'role': 'tool',
-            'tool_call_id': tr.toolCallId,
-            'content': content,
-          });
-          _logToolResult(tr);
-        }
-
-        if (!_disposed) onNotify();
-
-        // 下一轮助手气泡。
-        final next = await _sessions.appendMessage(
-          sessionId,
-          role: ChatRole.assistant,
-          content: '',
-          streaming: true,
-          model: chatModel,
-        );
-        if (next == null) break;
-        currentAssistantId = next.id;
-      }
-    } on ChatAbortException {
-      aborted = true;
-    } catch (e) {
-      batch?.close();
-      if (cancelled || isAbortLike(e)) {
-        aborted = true;
-      } else {
-        errored = true;
-        final msg = toChatErrorMessage(e, '请求失败');
-        await _sessions.updateMessage(
-          sessionId,
-          currentAssistantId,
-          streaming: false,
-          error: true,
-          errorMessage: msg,
-          model: chatModel,
-          latencyMs: sw.elapsedMilliseconds,
-          persist: true,
-        );
-        if (!_disposed && bannerOnStreamError) {
-          onBanner?.call(msg);
-        }
-        final logs = _appLogs;
-        if (logs != null) {
-          unawaited(
-            logs.append(
-              level: AppLogLevel.error,
-              source: AppLogSources.chat,
-              message: msg,
+          final remaining = maxMcpToolRounds - totalToolCalls;
+          final orchestrator = _resolveOrchestrator(sessionId);
+          final callResults = await orchestrator.runRound(
+            calls: requests,
+            prompter: _toolAuthPrompter!,
+            onTrace: (trace) {
+              if (!_disposed) _onToolTrace?.call(trace);
+            },
+            isCancelled: () => cancelled || !_isGenCurrent(sessionId),
+            options: ToolCallOrchestratorOptions(
+              maxRounds: remaining,
+              serialCalls: true,
             ),
           );
+          totalToolCalls += callResults
+              .where((r) => r.status == McpToolCallStatus.success)
+              .length;
+
+          if (cancelled || !_isGenCurrent(sessionId)) {
+            aborted = true;
+            break;
+          }
+
+          // 回灌 role=tool 消息到会话与 API 轨迹。
+          workingMessages = [
+            ...workingMessages,
+            {
+              'role': 'assistant',
+              'content': result.content,
+              'tool_calls': result.toolCalls.map((t) => t.toApiJson()).toList(),
+            },
+          ];
+
+          for (final tr in callResults) {
+            final content = tr.content.isEmpty
+                ? (tr.isError ? '工具调用失败' : '')
+                : tr.content;
+            await _sessions.appendMessage(
+              sessionId,
+              role: ChatRole.tool,
+              content: content,
+              toolCallId: tr.toolCallId,
+              toolResultStatus: tr.status,
+            );
+            workingMessages.add({
+              'role': 'tool',
+              'tool_call_id': tr.toolCallId,
+              'content': content,
+            });
+            _logToolResult(tr);
+          }
+
+          if (!_disposed) onNotify();
+
+          // 下一轮助手气泡。
+          final next = await _sessions.appendMessage(
+            sessionId,
+            role: ChatRole.assistant,
+            content: '',
+            streaming: true,
+            model: chatModel,
+          );
+          if (next == null) break;
+          currentAssistantId = next.id;
         }
-      }
-    } finally {
-      batch?.close();
-      try {
-        await checkpoint;
-        if (aborted && !errored) {
+      } on ChatAbortException {
+        aborted = true;
+      } catch (e) {
+        batch?.close();
+        if (cancelled || isAbortLike(e)) {
+          aborted = true;
+        } else {
+          errored = true;
+          final msg = toChatErrorMessage(e, '请求失败');
           await _sessions.updateMessage(
             sessionId,
             currentAssistantId,
             streaming: false,
-            stopped: true,
+            error: true,
+            errorMessage: msg,
             model: chatModel,
             latencyMs: sw.elapsedMilliseconds,
             persist: true,
           );
+          if (!_disposed && bannerOnStreamError) {
+            onBanner?.call(msg);
+          }
+          final logs = _appLogs;
+          if (logs != null) {
+            unawaited(
+              logs.append(
+                level: AppLogLevel.error,
+                source: AppLogSources.chat,
+                message: msg,
+              ),
+            );
+          }
         }
       } finally {
-        if (identical(_cancelStream, cancelStream)) _cancelStream = null;
-        generation.end(sessionId, token);
-        _closeMcpSessions();
+        batch?.close();
         try {
-          streamClient.close();
-        } catch (_) {}
-        if (!_disposed) onNotify();
+          await checkpoint;
+          if (aborted && !errored) {
+            await _sessions.updateMessage(
+              sessionId,
+              currentAssistantId,
+              streaming: false,
+              stopped: true,
+              model: chatModel,
+              latencyMs: sw.elapsedMilliseconds,
+              persist: true,
+            );
+          }
+        } finally {
+          if (identical(_cancelStream, cancelStream)) _cancelStream = null;
+          generation.end(sessionId, token);
+          _closeMcpSessions();
+          try {
+            streamClient.close();
+          } catch (_) {}
+          if (!_disposed) onNotify();
+        }
       }
-    }
+    }, itemId: () => currentAssistantId);
   }
 
-  List<Map<String, dynamic>>? _resolveOpenAiTools(String chatModel) {
+  List<Map<String, dynamic>>? _resolveOpenAiTools(bool supportsTools) {
     if (!isMcpWiringEnabled) return null;
-    if (!supportsChatTools(chatModel)) return null;
+    if (!supportsTools) return null;
     final repo = _mcpServers!;
     final tools = repo.exposedTools;
     if (tools.isEmpty) return null;

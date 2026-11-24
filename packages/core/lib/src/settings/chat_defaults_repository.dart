@@ -15,6 +15,7 @@ class ChatDefaultsRepository extends ChangeNotifier {
   bool _loading = false;
   String? _lastError;
   Future<void> _pendingOperation = Future<void>.value();
+  Future<void> waitForPersist() => _pendingOperation;
 
   bool get isLoaded => _loaded;
   bool get isLoading => _loading;

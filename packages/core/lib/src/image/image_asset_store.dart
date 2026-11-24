@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
+import '../settings/asset_reference_guard.dart';
+
 /// 生图二进制落盘抽象（桌面用 path_provider 文件实现；测试用内存）。
 abstract class ImageAssetStore {
   /// 保存 PNG 字节，返回可供 [ImageRef] 使用的本地路径或稳定 id。
@@ -20,7 +22,7 @@ abstract class ImageAssetStore {
 }
 
 /// 内存实现：路径形如 `memory://{id}`。
-class MemoryImageAssetStore implements ImageAssetStore {
+class MemoryImageAssetStore implements ImageAssetStore, SelectiveAssetClear {
   final Map<String, Uint8List> _map = {};
 
   Map<String, Uint8List> get entries => Map.unmodifiable(_map);
@@ -43,6 +45,11 @@ class MemoryImageAssetStore implements ImageAssetStore {
   @override
   Future<void> clearAll() async {
     _map.clear();
+  }
+
+  @override
+  Future<void> clearExcept(Set<String> retained) async {
+    _map.removeWhere((key, _) => !retained.contains(key));
   }
 
   @override

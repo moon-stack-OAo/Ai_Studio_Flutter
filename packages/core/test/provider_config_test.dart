@@ -4,7 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   group('ProviderConfig', () {
     test('round-trip meta json without apiKey', () {
-      const original = ProviderConfig(
+      final original = ProviderConfig(
         id: 'p1',
         name: 'Demo',
         type: ProviderType.openaiCompatible,
@@ -34,7 +34,7 @@ void main() {
     });
 
     test('maskedApiKey never exposes full secret', () {
-      const p = ProviderConfig(
+      final p = ProviderConfig(
         id: 'p1',
         name: 'Demo',
         type: ProviderType.openai,
@@ -46,7 +46,7 @@ void main() {
     });
 
     test('canImage requires url + key + imageModel', () {
-      const base = ProviderConfig(
+      final base = ProviderConfig(
         id: 'p',
         name: 't',
         type: ProviderType.openai,
@@ -62,7 +62,7 @@ void main() {
     });
 
     test('canChat requires url + key + chatModel', () {
-      const ready = ProviderConfig(
+      final ready = ProviderConfig(
         id: 'p1',
         name: 'Demo',
         type: ProviderType.openai,

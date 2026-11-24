@@ -24,7 +24,7 @@ abstract class McpServerStorage {
 /// 内存存储（测试默认）。
 class MemoryMcpServerStorage implements McpServerStorage {
   MemoryMcpServerStorage([List<McpServerConfig>? initial])
-      : _servers = List<McpServerConfig>.from(initial ?? const []);
+    : _servers = List<McpServerConfig>.from(initial ?? const []);
 
   List<McpServerConfig> _servers;
 
@@ -44,14 +44,16 @@ class MemoryMcpServerStorage implements McpServerStorage {
 /// 对齐 [SecureProviderStorage] 的「prefs 元数据 + SecretStore 密钥」模式。
 class PrefsMcpServerStorage implements McpServerStorage {
   PrefsMcpServerStorage({SharedPreferences? prefs, SecretStore? secretStore})
-      : _prefsOverride = prefs,
-        _secrets = secretStore ?? FlutterSecureSecretStore();
+    : _prefsOverride = prefs,
+      _secrets = GuardedSecretStore(secretStore ?? FlutterSecureSecretStore());
 
   static const prefsKey = 'core.mcp_servers.v1';
 
   final SharedPreferences? _prefsOverride;
   final SecretStore _secrets;
   SharedPreferences? _prefs;
+  bool _saving = false;
+  bool get hasPendingWrites => _saving || (_secrets as GuardedSecretStore).isPending;
 
   Future<SharedPreferences> _ensurePrefs() async {
     return _prefs ??= _prefsOverride ?? await SharedPreferences.getInstance();
@@ -59,6 +61,7 @@ class PrefsMcpServerStorage implements McpServerStorage {
 
   @override
   Future<McpServerStoreSnapshot> load() async {
+    if (hasPendingWrites) throw StateError('安全存储仍在处理中');
     final prefs = await _ensurePrefs();
     final raw = prefs.getString(prefsKey);
     if (raw == null || raw.isEmpty) {
@@ -113,6 +116,9 @@ class PrefsMcpServerStorage implements McpServerStorage {
 
   @override
   Future<void> save(McpServerStoreSnapshot snapshot) async {
+    if (hasPendingWrites) throw StateError('安全存储仍在处理中');
+    _saving = true;
+    try {
     final prefs = await _ensurePrefs();
     final previous = prefs.getString(prefsKey);
     final oldEnvironmentIds = <String>{};
@@ -142,6 +148,9 @@ class PrefsMcpServerStorage implements McpServerStorage {
     for (final id in oldEnvironmentIds.difference(environmentIds)) {
       await _secrets.delete(mcpEnvironmentSecretKey(id));
     }
+    } finally {
+      _saving = false;
+    }
   }
 }
 
@@ -150,16 +159,140 @@ class PrefsMcpServerStorage implements McpServerStorage {
 /// 生产： [PrefsMcpServerStorage] + [SecretStore]；测试可用 [MemoryMcpServerStorage]。
 class McpServerRepository extends ChangeNotifier {
   McpServerRepository({required this._storage, SecretStore? secretStore})
-      : _secrets = secretStore;
+    : _secrets = secretStore == null ? null : GuardedSecretStore(secretStore);
 
   final McpServerStorage _storage;
   final SecretStore? _secrets;
+  bool get hasPendingSecretWrites => (_secrets is GuardedSecretStore && _secrets.isPending) || (_storage is PrefsMcpServerStorage && _storage.hasPendingWrites);
   final Map<String, int> _secretRevisions = {};
+  final Map<String, Object> _probeTickets = {};
+  final Map<String, int> _probeMutations = {};
+  int _allProbeMutations = 0;
+
+  Future<void> _withProbeMutation(
+    String? id,
+    Future<void> Function() action,
+  ) async {
+    if (id == null) {
+      _allProbeMutations++;
+      _probeTickets.clear();
+    } else {
+      _probeMutations[id] = (_probeMutations[id] ?? 0) + 1;
+      _probeTickets.remove(id);
+    }
+    try {
+      await action();
+    } finally {
+      if (id == null) {
+        _allProbeMutations--;
+        _probeTickets.clear();
+      } else {
+        final count = _probeMutations[id]! - 1;
+        if (count == 0) {
+          _probeMutations.remove(id);
+        } else {
+          _probeMutations[id] = count;
+        }
+        _probeTickets.remove(id);
+      }
+    }
+  }
+
+  String _probeConfig(McpServerConfig server) => jsonEncode([
+    server.displayName,
+    mcpAuthorizationFingerprint(server),
+    server.stdioApproval,
+    server.callTimeoutSeconds,
+  ]);
+
+  /// Repository-scoped ticket: shared across service/UI instances.
+  Object? beginProbe(String id) {
+    if (_allProbeMutations > 0 ||
+        _probeMutations.containsKey(id) ||
+        findById(id) == null) {
+      return null;
+    }
+    final ticket = Object();
+    _probeTickets[id] = ticket;
+    return ticket;
+  }
+
+  bool isProbeCurrent(String id, Object ticket) =>
+      identical(_probeTickets[id], ticket) && findById(id) != null;
+
+  /// Patch only probe metadata, never credentials, command approval or policies.
+  /// Unlike ordinary optimistic CRUD, completion awaits and propagates storage
+  /// failure. A failed write must not leave an in-memory ready result.
+  Future<bool> persistProbe(
+    String id,
+    Object ticket, {
+    required McpProbeStatus status,
+    List<McpToolDescriptor>? tools,
+    int? atMs,
+    String? error,
+  }) async {
+    var applied = false;
+    final task = (_persistChain ?? Future<void>.value()).then((_) async {
+      if (!isProbeCurrent(id, ticket)) return;
+      final current = findById(id)!;
+      final next = current.copyWith(
+        probeStatus: status,
+        toolsCache: tools == null ? null : List.unmodifiable(tools),
+        lastProbeAtMs: atMs,
+        lastError: error,
+        clearLastError: error == null,
+      );
+      try {
+        await _storage.save(
+          McpServerStoreSnapshot(
+            servers: [
+              for (final s in _servers)
+                if (s.id == id) next else s,
+            ],
+          ),
+        );
+        applied = isProbeCurrent(id, ticket);
+        if (applied) {
+          _servers = [
+            for (final s in _servers)
+              if (s.id == id) next else s,
+          ];
+          _lastError = null;
+          notifyListeners();
+        }
+      } catch (e) {
+        if (isProbeCurrent(id, ticket)) {
+          _servers = [
+            for (final s in _servers)
+              if (s.id == id)
+                current.copyWith(
+                  probeStatus: McpProbeStatus.error,
+                  lastError: '探测状态保存失败',
+                )
+              else
+                s,
+          ];
+        }
+        _lastError = '探测状态保存失败';
+        notifyListeners();
+        rethrow;
+      }
+    });
+    // Keep the queue usable; the caller still receives this task's failure.
+    _persistChain = task.then<void>(
+      (_) {},
+      onError: (Object _, StackTrace _) {},
+    );
+    await task;
+    return applied;
+  }
 
   int secretRevision(String id) => _secretRevisions[id] ?? 0;
 
-  void _secretChanged(String id) =>
-      _secretRevisions[id] = secretRevision(id) + 1;
+  void _secretChanged(String id) {
+    _probeTickets.remove(id);
+    _secretRevisions[id] = secretRevision(id) + 1;
+  }
 
   List<McpServerConfig> _servers = const [];
   bool _loaded = false;
@@ -174,9 +307,9 @@ class McpServerRepository extends ChangeNotifier {
 
   /// 已启用且可向模型暴露 tools 的 Server。
   List<McpServerConfig> get enabledServers => [
-        for (final s in _servers)
-          if (s.canExposeTools) s,
-      ];
+    for (final s in _servers)
+      if (s.canExposeTools) s,
+  ];
 
   /// 汇总已启用 Server 的 tools 缓存（供 chat 请求附带 tools[]）。
   List<McpToolDescriptor> get exposedTools {
@@ -195,7 +328,9 @@ class McpServerRepository extends ChangeNotifier {
   }
 
   Future<void> load() async {
+    if (hasPendingSecretWrites) throw StateError('安全存储仍在处理中');
     if (_loading) return;
+    _probeTickets.clear();
     _loading = true;
     _lastError = null;
     notifyListeners();
@@ -237,7 +372,7 @@ class McpServerRepository extends ChangeNotifier {
     });
   }
 
-  @visibleForTesting
+  /// 等待当前持久化队列；错误见 lastError。
   Future<void> waitForPersist() async {
     await (_persistChain ?? Future<void>.value());
   }
@@ -301,7 +436,8 @@ class McpServerRepository extends ChangeNotifier {
     final i = _servers.indexWhere((s) => s.id == server.id);
     if (i < 0) return;
     if (server.transport == McpTransport.stdio) {
-      final approved = stdioConfirmed ||
+      final approved =
+          stdioConfirmed ||
           (_servers[i].isStdioApproved &&
               mcpStdioFingerprint(_servers[i]) == mcpStdioFingerprint(server));
       server = server.copyWith(
@@ -311,6 +447,9 @@ class McpServerRepository extends ChangeNotifier {
       );
     } else {
       server = server.copyWith(clearStdioApproval: true);
+    }
+    if (_probeConfig(_servers[i]) != _probeConfig(server)) {
+      _probeTickets.remove(server.id);
     }
     final next = List<McpServerConfig>.from(_servers);
     next[i] = server;
@@ -367,24 +506,26 @@ class McpServerRepository extends ChangeNotifier {
   }
 
   /// 写入/更新 Bearer 明文到 SecretStore；配置侧只保留 ref。
-  Future<void> writeBearerSecret(String serverId, String token) async {
-    final s = findById(serverId);
-    if (s == null) return;
-    final ref = s.authSecretRef?.trim().isNotEmpty == true
-        ? s.authSecretRef!.trim()
-        : _secretKeyFor(serverId);
-    if (_secrets != null) {
-      await _secrets.write(ref, token);
-    }
-    _secretChanged(serverId);
-    if (s.authSecretRef != ref || s.authKind != McpAuthKind.bearer) {
-      await update(
-        s.copyWith(authKind: McpAuthKind.bearer, authSecretRef: ref),
-      );
-    } else {
-      _commitMemory();
-    }
-  }
+  Future<void> writeBearerSecret(String serverId, String token) =>
+      _withProbeMutation(serverId, () async {
+        final s = findById(serverId);
+        if (s == null) return;
+        final ref = s.authSecretRef?.trim().isNotEmpty == true
+            ? s.authSecretRef!.trim()
+            : _secretKeyFor(serverId);
+        _secretChanged(serverId);
+        if (_secrets != null) {
+          await _secrets.write(ref, token);
+        }
+        _probeTickets.remove(serverId);
+        if (s.authSecretRef != ref || s.authKind != McpAuthKind.bearer) {
+          await update(
+            s.copyWith(authKind: McpAuthKind.bearer, authSecretRef: ref),
+          );
+        } else {
+          _commitMemory();
+        }
+      });
 
   /// 是否已有 Bearer 明文（不回显内容；供 UI 掩码占位）。
   Future<bool> hasBearerSecret(String serverId) async {
@@ -407,22 +548,24 @@ class McpServerRepository extends ChangeNotifier {
   }
 
   /// 清除 Bearer 密钥并改为 none（SET-MCP 鉴权切换）。
-  Future<void> clearBearerSecret(String serverId) async {
-    final s = findById(serverId);
-    if (s == null) return;
-    _secretChanged(serverId);
-    final ref = s.authSecretRef;
-    if (ref != null && ref.isNotEmpty && _secrets != null) {
-      await _secrets.delete(ref);
-    }
-    if (s.authKind != McpAuthKind.none || s.authSecretRef != null) {
-      await update(
-        s.copyWith(authKind: McpAuthKind.none, clearAuthSecretRef: true),
-      );
-    }
-  }
+  Future<void> clearBearerSecret(String serverId) =>
+      _withProbeMutation(serverId, () async {
+        final s = findById(serverId);
+        if (s == null) return;
+        _secretChanged(serverId);
+        final ref = s.authSecretRef;
+        if (ref != null && ref.isNotEmpty && _secrets != null) {
+          await _secrets.delete(ref);
+        }
+        if (s.authKind != McpAuthKind.none || s.authSecretRef != null) {
+          await update(
+            s.copyWith(authKind: McpAuthKind.none, clearAuthSecretRef: true),
+          );
+        }
+      });
 
-  Future<void> delete(String id) async {
+  Future<void> delete(String id) => _withProbeMutation(id, () async {
+    _probeTickets.remove(id);
     final s = findById(id);
     if (s == null) return;
     await waitForPersist();
@@ -437,32 +580,51 @@ class McpServerRepository extends ChangeNotifier {
     _commitMemory();
     await waitForPersist();
     await _secrets?.delete(mcpEnvironmentSecretKey(id));
-  }
+  });
 
   /// 整体替换 Server 列表（导入备份用）；不自动迁移密钥。
-  Future<void> replaceAll(List<McpServerConfig> servers) async {
-    _servers = [
+  Future<void> replaceAll(List<McpServerConfig> servers, {
+    Set<String>? importedIds,
+  }) async {
+    if (hasPendingSecretWrites) throw StateError('安全存储仍在处理中');
+    _probeTickets.clear();
+    final next = [
       for (final s in servers)
-        s.transport == McpTransport.stdio
-            ? s.copyWith(enabled: false, clearStdioApproval: true)
-            : s.copyWith(clearStdioApproval: true),
+        if (importedIds != null && !importedIds.contains(s.id)) s
+        else if (s.transport == McpTransport.stdio)
+          s.copyWith(enabled: false, clearStdioApproval: true)
+        else s.copyWith(clearStdioApproval: true),
     ];
-    _commitMemory();
-    await waitForPersist();
+    final task = (_persistChain ?? Future<void>.value()).then((_) async {
+      try {
+        await _storage.save(McpServerStoreSnapshot(servers: next));
+        _servers = next;
+        _lastError = null;
+        notifyListeners();
+      } catch (_) {
+        _lastError = 'MCP 保存未完成';
+        notifyListeners();
+        throw StateError('MCP 保存未完成');
+      }
+    });
+    _persistChain = task.then<void>((_) {}, onError: (Object _, StackTrace _) {});
+    await task;
   }
 
   /// 清空全部 Server 元数据并删除对应 SecretStore 条目（SET-DATA 清提供商/全部）。
-  Future<void> clearAllServers() async {
+  Future<void> clearAllServers() => _withProbeMutation(null, () async {
     await clearAllSecrets();
     _servers = const [];
     _commitMemory();
     await waitForPersist();
-  }
+  });
 
   /// 清密钥引用对应的 SecretStore 条目（对齐 SET-DATA 清密钥）。
   ///
   /// 保留 Server 元数据与 `authSecretRef`；[hasBearerSecret] 将为 false。
-  Future<void> clearAllSecrets() async {
+  Future<void> clearAllSecrets() => _withProbeMutation(null, () async {
+    if (hasPendingSecretWrites) throw StateError('安全存储仍在处理中');
+    _probeTickets.clear();
     await waitForPersist();
     for (final s in _servers) {
       _secretChanged(s.id);
@@ -485,7 +647,7 @@ class McpServerRepository extends ChangeNotifier {
     for (final id in ids) {
       await _secrets?.delete(mcpEnvironmentSecretKey(id));
     }
-  }
+  });
 
   static String _secretKeyFor(String serverId) => 'core.mcp.secret.$serverId';
 }

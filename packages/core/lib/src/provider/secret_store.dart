@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
@@ -12,6 +14,43 @@ abstract class SecretStore {
   Future<void> delete(String key);
 
   Future<bool> containsKey(String key);
+}
+
+/// Bounded callers do not cancel platform operations. A shared barrier rejects
+/// reads and mutations until the actual operation settles, including after timeout.
+class GuardedSecretStore implements SecretStore {
+  factory GuardedSecretStore(SecretStore store) {
+    if (store is GuardedSecretStore) return store;
+    return _instances[store] ??= GuardedSecretStore._(store);
+  }
+  GuardedSecretStore._(this._store);
+  static final Expando<GuardedSecretStore> _instances = Expando();
+  final SecretStore _store;
+  Future<Object?>? _pending;
+  bool get isPending => _pending != null;
+  Future<T> _run<T>(Future<T> Function() action) async {
+    if (isPending) throw StateError('安全存储仍在处理中，请稍后重试');
+    final pending = Future<T>.sync(action);
+    _pending = pending;
+    unawaited(pending.then<void>((_) {
+      if (identical(_pending, pending)) _pending = null;
+    }, onError: (Object _, StackTrace _) {
+      if (identical(_pending, pending)) _pending = null;
+    }));
+    try {
+      return await pending.timeout(const Duration(seconds: 8));
+    } catch (_) {
+      throw StateError('安全存储操作未确认完成，请稍后重试');
+    }
+  }
+  @override
+  Future<String?> read(String key) => _run(() => _store.read(key));
+  @override
+  Future<void> write(String key, String value) => _run(() => _store.write(key, value));
+  @override
+  Future<void> delete(String key) => _run(() => _store.delete(key));
+  @override
+  Future<bool> containsKey(String key) => _run(() => _store.containsKey(key));
 }
 
 /// 基于 [FlutterSecureStorage] 的生产实现。

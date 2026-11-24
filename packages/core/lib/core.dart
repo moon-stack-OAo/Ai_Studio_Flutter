@@ -17,6 +17,7 @@ export 'src/image/image_asset_store.dart';
 export 'src/image/image_client.dart';
 export 'src/image/image_models.dart';
 export 'src/image/image_quality.dart';
+export 'src/image/media_draft_restore.dart';
 export 'src/image/image_session_facade.dart';
 export 'src/image/image_session_repository.dart';
 export 'src/image/image_session_storage.dart';
@@ -35,6 +36,7 @@ export 'src/mcp/mcp_config_import.dart';
 export 'src/mcp/mcp_errors.dart';
 export 'src/mcp/mcp_models.dart';
 export 'src/mcp/mcp_openai_tools.dart';
+export 'src/mcp/mcp_probe_service.dart';
 export 'src/mcp/mcp_sanitize.dart';
 export 'src/mcp/mcp_server_repository.dart';
 export 'src/mcp/mcp_tool_policy.dart';
@@ -96,3 +98,9 @@ export 'src/video/video_poster_store.dart';
 export 'src/video/video_resume.dart';
 export 'src/video/video_session_repository.dart';
 export 'src/video/video_session_storage.dart';
+
+export 'src/settings/history_snapshot_store.dart';
+export 'src/settings/file_history_snapshot_store.dart';
+export 'src/settings/asset_reference_guard.dart';
+
+export 'src/provider/model_capabilities.dart';

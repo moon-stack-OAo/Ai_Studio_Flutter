@@ -251,6 +251,22 @@ class VideoJobFacade {
     if (changed) onNotify?.call();
   }
 
+  /// Restore historical parameters without submitting a generation.
+  void restoreDraftFromItem(VideoItem item) {
+    setPromptDraft(item.prompt.trim());
+    if (item.duration != null && item.duration! > 0) {
+      setDuration(item.duration!);
+    }
+    if (item.size?.trim().isNotEmpty == true) setSize(item.size!.trim());
+    if (item.aspectRatio?.trim().isNotEmpty == true) {
+      setAspectRatio(item.aspectRatio!.trim());
+    }
+    if (item.resolution?.trim().isNotEmpty == true) {
+      setResolution(item.resolution!.trim());
+    }
+    syncParamsToActiveProvider();
+  }
+
   /// 拉取生视频模型列表（仅 [ProviderConfig.canVideo]）。
   Future<List<ProviderModelInfo>> loadVideoModels({
     bool force = false,
@@ -425,90 +441,93 @@ class VideoJobFacade {
     onInfo?.call('正在重新加载视频…');
     onNotify();
 
-    final httpClient = _createHttpClient();
-    var cancelled = false;
-    final token = generation.begin(sessionId, () {
-      cancelled = true;
+    await _sessions.runGeneration(sessionId, () async {
+      final httpClient = _createHttpClient();
+      var cancelled = false;
+      final token = generation.begin(sessionId, () {
+        cancelled = true;
+        try {
+          httpClient.close();
+        } catch (_) {}
+      });
+
       try {
-        httpClient.close();
-      } catch (_) {}
-    });
-
-    try {
-      final src = remote.isNotEmpty
-          ? remote
-          : (jobId.isNotEmpty ? '/videos/$jobId/content' : '');
-      if (src.isEmpty) {
-        onBanner?.call('无法重新加载，请重新生成');
-        return;
-      }
-      final out = await _videoClient.materialize(
-        VideoJob(
-          jobId: jobId,
-          status: VideoJobWireStatus.completed,
-          videoUrl: src,
-          remoteVideoUrl: remote.isEmpty ? null : remote,
-        ),
-        baseUrl: provider.baseUrl,
-        apiKey: provider.apiKey,
-        providerType: provider.type,
-        assetStore: _sessions.assetStore,
-        materializeId: item.id,
-        client: httpClient,
-      );
-      if (cancelled || _disposed) return;
-
-      final playable = resolvePlayableVideoPath(out);
-      final nextRemote = pickRemoteVideoUrl(out, item);
-      if (playable.isNotEmpty && !out.needsMaterialize) {
-        final poster = (out.posterUrl ?? item.posterUrl)?.trim();
-        await _sessions.completeItem(
-          sessionId,
-          item.id,
-          videoUrl: playable,
-          remoteVideoUrl: nextRemote.isEmpty ? null : nextRemote,
-          localPath:
-              out.localPath ?? (playable.startsWith('http') ? null : playable),
-          posterUrl: (poster != null && poster.isNotEmpty) ? poster : null,
-          posterLocalPath: item.posterLocalPath,
-          needsMaterialize: false,
+        final src = remote.isNotEmpty
+            ? remote
+            : (jobId.isNotEmpty ? '/videos/$jobId/content' : '');
+        if (src.isEmpty) {
+          onBanner?.call('无法重新加载，请重新生成');
+          return;
+        }
+        final out = await _videoClient.materialize(
+          VideoJob(
+            jobId: jobId,
+            status: VideoJobWireStatus.completed,
+            videoUrl: src,
+            remoteVideoUrl: remote.isEmpty ? null : remote,
+          ),
+          baseUrl: provider.baseUrl,
+          apiKey: provider.apiKey,
+          providerType: provider.type,
+          assetStore: _sessions.assetStore,
+          materializeId: item.id,
+          client: httpClient,
         );
-        onInfo?.call('视频已重新加载');
-      } else {
-        final err = (out.errorMessage?.trim().isNotEmpty == true)
-            ? out.errorMessage!
-            : '重新加载失败，请重新生成';
-        final nextJobId = (out.jobId.isNotEmpty ? out.jobId : jobId).trim();
+        if (cancelled || _disposed) return;
+
+        final playable = resolvePlayableVideoPath(out);
+        final nextRemote = pickRemoteVideoUrl(out, item);
+        if (playable.isNotEmpty && !out.needsMaterialize) {
+          final poster = (out.posterUrl ?? item.posterUrl)?.trim();
+          await _sessions.completeItem(
+            sessionId,
+            item.id,
+            videoUrl: playable,
+            remoteVideoUrl: nextRemote.isEmpty ? null : nextRemote,
+            localPath:
+                out.localPath ??
+                (playable.startsWith('http') ? null : playable),
+            posterUrl: (poster != null && poster.isNotEmpty) ? poster : null,
+            posterLocalPath: item.posterLocalPath,
+            needsMaterialize: false,
+          );
+          onInfo?.call('视频已重新加载');
+        } else {
+          final err = (out.errorMessage?.trim().isNotEmpty == true)
+              ? out.errorMessage!
+              : '重新加载失败，请重新生成';
+          final nextJobId = (out.jobId.isNotEmpty ? out.jobId : jobId).trim();
+          await _sessions.markNeedsMaterialize(
+            sessionId,
+            item.id,
+            errorMessage: err,
+            remoteVideoUrl: nextRemote.isEmpty ? null : nextRemote,
+            jobId: nextJobId.isNotEmpty ? nextJobId : null,
+          );
+          _logError(err);
+          onBanner?.call(err);
+        }
+      } catch (e) {
+        if (isAbortLike(e) || e is ChatAbortException || cancelled) return;
+        final err = toChatErrorMessage(e, '重新加载失败');
         await _sessions.markNeedsMaterialize(
           sessionId,
           item.id,
           errorMessage: err,
-          remoteVideoUrl: nextRemote.isEmpty ? null : nextRemote,
-          jobId: nextJobId.isNotEmpty ? nextJobId : null,
+          remoteVideoUrl: remote.isEmpty ? null : remote,
+          jobId: jobId.isNotEmpty ? jobId : null,
         );
         _logError(err);
         onBanner?.call(err);
+      } finally {
+        _reloadingIds.remove(item.id);
+        generation.end(sessionId, token);
+        try {
+          httpClient.close();
+        } catch (_) {}
+        onNotify();
       }
-    } catch (e) {
-      if (isAbortLike(e) || e is ChatAbortException || cancelled) return;
-      final err = toChatErrorMessage(e, '重新加载失败');
-      await _sessions.markNeedsMaterialize(
-        sessionId,
-        item.id,
-        errorMessage: err,
-        remoteVideoUrl: remote.isEmpty ? null : remote,
-        jobId: jobId.isNotEmpty ? jobId : null,
-      );
-      _logError(err);
-      onBanner?.call(err);
-    } finally {
-      _reloadingIds.remove(item.id);
-      generation.end(sessionId, token);
-      try {
-        httpClient.close();
-      } catch (_) {}
-      onNotify();
-    }
+    }, itemId: item.id);
   }
 
   ProviderConfig? _resolveProviderForItem(VideoItem item) {
@@ -630,128 +649,131 @@ class VideoJobFacade {
       referenceImages: persistedRefs,
       refPreview: refPreview,
     );
-    if (pending == null || _disposed) return;
+    if (pending == null) return;
 
-    final httpClient = _createHttpClient();
-    var cancelled = false;
-    _manualCancel = false;
-    final token = generation.begin(sessionId, () {
-      cancelled = true;
+    await _sessions.runGeneration(sessionId, () async {
+      if (_disposed) return;
+      final httpClient = _createHttpClient();
+      var cancelled = false;
+      _manualCancel = false;
+      final token = generation.begin(sessionId, () {
+        cancelled = true;
+        try {
+          httpClient.close();
+        } catch (_) {}
+      });
+      onNotify();
+
       try {
-        httpClient.close();
-      } catch (_) {}
-    });
-    onNotify();
+        final job = await _videoClient.generate(
+          baseUrl: creds.baseUrl,
+          apiKey: creds.apiKey,
+          model: creds.videoModel,
+          prompt: finalPrompt,
+          providerType: creds.type,
+          mode: mode,
+          imageBytes: refBytes,
+          imageFileName: effectiveRefName,
+          duration: effectiveDuration,
+          size: passSize ? effectiveSize : null,
+          aspectRatio: passAspect ? useAspect : null,
+          resolution: passResolution,
+          assetStore: _sessions.assetStore,
+          materializeId: pending.id,
+          client: httpClient,
+          isCancelled: () => cancelled || _manualCancel,
+          onProgress: (j) {
+            final early = earlyPlayableVideoPath(j);
+            final live = _sessions.sessions
+                .where((s) => s.id == sessionId)
+                .expand((s) => s.items)
+                .where((i) => i.id == pending.id)
+                .firstOrNull;
+            final earlyUrl = early.isEmpty ? null : early;
+            final remote =
+                early.isNotEmpty &&
+                    RegExp(r'^https?://', caseSensitive: false).hasMatch(early)
+                ? early
+                : j.remoteVideoUrl;
+            unawaited(
+              _sessions.updateItem(
+                sessionId,
+                pending.id,
+                status: VideoItemStatus.loading,
+                progress: j.progress,
+                jobId: j.jobId.isNotEmpty ? j.jobId : null,
+                videoUrl: earlyUrl != null && earlyUrl != live?.videoUrl
+                    ? earlyUrl
+                    : null,
+                remoteVideoUrl: remote != null && remote != live?.remoteVideoUrl
+                    ? remote
+                    : null,
+                persist: j.jobId.isNotEmpty || early.isNotEmpty,
+              ),
+            );
+            onNotify();
+          },
+        );
 
-    try {
-      final job = await _videoClient.generate(
-        baseUrl: creds.baseUrl,
-        apiKey: creds.apiKey,
-        model: creds.videoModel,
-        prompt: finalPrompt,
-        providerType: creds.type,
-        mode: mode,
-        imageBytes: refBytes,
-        imageFileName: effectiveRefName,
-        duration: effectiveDuration,
-        size: passSize ? effectiveSize : null,
-        aspectRatio: passAspect ? useAspect : null,
-        resolution: passResolution,
-        assetStore: _sessions.assetStore,
-        materializeId: pending.id,
-        client: httpClient,
-        isCancelled: () => cancelled || _manualCancel,
-        onProgress: (j) {
-          final early = earlyPlayableVideoPath(j);
-          final live = _sessions.sessions
-              .where((s) => s.id == sessionId)
-              .expand((s) => s.items)
-              .where((i) => i.id == pending.id)
-              .firstOrNull;
-          final earlyUrl = early.isEmpty ? null : early;
-          final remote =
-              early.isNotEmpty &&
-                  RegExp(r'^https?://', caseSensitive: false).hasMatch(early)
-              ? early
-              : j.remoteVideoUrl;
-          unawaited(
-            _sessions.updateItem(
-              sessionId,
-              pending.id,
-              status: VideoItemStatus.loading,
-              progress: j.progress,
-              jobId: j.jobId.isNotEmpty ? j.jobId : null,
-              videoUrl: earlyUrl != null && earlyUrl != live?.videoUrl
-                  ? earlyUrl
-                  : null,
-              remoteVideoUrl: remote != null && remote != live?.remoteVideoUrl
-                  ? remote
-                  : null,
-              persist: j.jobId.isNotEmpty || early.isNotEmpty,
-            ),
-          );
-          onNotify();
-        },
-      );
-
-      await applyVideoJobCompletion(
-        repository: _sessions,
-        sessionId: sessionId,
-        item: pending,
-        job: job,
-      );
-      final live = _sessions.sessions
-          .where((s) => s.id == sessionId)
-          .expand((s) => s.items)
-          .where((i) => i.id == pending.id)
-          .firstOrNull;
-      if (live?.status == VideoItemStatus.error) {
-        final msg = live?.errorMessage ?? job.errorMessage ?? '视频生成失败';
-        if (bannerOnJobError) {
-          onBanner?.call(msg);
-        }
-        _logError(msg);
-      }
-    } on ChatAbortException {
-      await _onAbort(sessionId, pending.id, onInfo: onInfo);
-    } on VideoJobTimeoutException catch (e) {
-      await _sessions.markPendingResume(
-        sessionId,
-        pending.id,
-        errorMessage: e.message,
-      );
-      onInfo?.call(e.message);
-    } catch (e) {
-      if (isAbortLike(e) || cancelled || _manualCancel) {
-        await _onAbort(sessionId, pending.id, onInfo: onInfo);
-      } else {
-        final msg = toChatErrorMessage(e, '生成失败');
-        final live = _sessions.activeSession?.items
+        await applyVideoJobCompletion(
+          repository: _sessions,
+          sessionId: sessionId,
+          item: pending,
+          job: job,
+        );
+        final live = _sessions.sessions
+            .where((s) => s.id == sessionId)
+            .expand((s) => s.items)
             .where((i) => i.id == pending.id)
             .firstOrNull;
-        final jid = live?.jobId?.trim() ?? '';
-        if (jid.isNotEmpty) {
-          await _sessions.markPendingResume(
-            sessionId,
-            pending.id,
-            errorMessage: msg,
-          );
-          onInfo?.call('任务已创建，可稍后恢复轮询');
-        } else {
-          await _sessions.failItem(sessionId, pending.id, msg);
+        if (live?.status == VideoItemStatus.error) {
+          final msg = live?.errorMessage ?? job.errorMessage ?? '视频生成失败';
           if (bannerOnJobError) {
             onBanner?.call(msg);
           }
+          _logError(msg);
         }
-        _logError(msg);
+      } on ChatAbortException {
+        await _onAbort(sessionId, pending.id, onInfo: onInfo);
+      } on VideoJobTimeoutException catch (e) {
+        await _sessions.markPendingResume(
+          sessionId,
+          pending.id,
+          errorMessage: e.message,
+        );
+        onInfo?.call(e.message);
+      } catch (e) {
+        if (isAbortLike(e) || cancelled || _manualCancel) {
+          await _onAbort(sessionId, pending.id, onInfo: onInfo);
+        } else {
+          final msg = toChatErrorMessage(e, '生成失败');
+          final live = _sessions.activeSession?.items
+              .where((i) => i.id == pending.id)
+              .firstOrNull;
+          final jid = live?.jobId?.trim() ?? '';
+          if (jid.isNotEmpty) {
+            await _sessions.markPendingResume(
+              sessionId,
+              pending.id,
+              errorMessage: msg,
+            );
+            onInfo?.call('任务已创建，可稍后恢复轮询');
+          } else {
+            await _sessions.failItem(sessionId, pending.id, msg);
+            if (bannerOnJobError) {
+              onBanner?.call(msg);
+            }
+          }
+          _logError(msg);
+        }
+      } finally {
+        generation.end(sessionId, token);
+        try {
+          httpClient.close();
+        } catch (_) {}
+        onNotify();
       }
-    } finally {
-      generation.end(sessionId, token);
-      try {
-        httpClient.close();
-      } catch (_) {}
-      onNotify();
-    }
+    }, itemId: pending.id);
   }
 
   Future<void> _runResumeAll({
@@ -772,54 +794,63 @@ class VideoJobFacade {
             .firstOrNull ??
         pending.first.sessionId;
 
-    final httpClient = _createHttpClient();
-    var cancelled = false;
-    final token = generation.begin(bindSessionId, () {
-      cancelled = true;
-      try {
-        httpClient.close();
-      } catch (_) {}
-    });
-    _manualCancel = false;
-    onNotify();
+    await _sessions.runGeneration(
+      bindSessionId,
+      () async {
+        final httpClient = _createHttpClient();
+        var cancelled = false;
+        final token = generation.begin(bindSessionId, () {
+          cancelled = true;
+          try {
+            httpClient.close();
+          } catch (_) {}
+        });
+        _manualCancel = false;
+        onNotify();
 
-    try {
-      final results = await resumePendingJobs(
-        repository: _sessions,
-        client: _videoClient,
-        resolveProvider: defaultVideoProviderResolver(
-          providers: () => _providers.providers,
-          activeProvider: () => _providers.activeProvider,
-        ),
-        isCancelled: () => cancelled || _manualCancel,
-        httpClient: httpClient,
-        onProgress: (sessionId, itemId, job) {
+        try {
+          final results = await resumePendingJobs(
+            repository: _sessions,
+            client: _videoClient,
+            resolveProvider: defaultVideoProviderResolver(
+              providers: () => _providers.providers,
+              activeProvider: () => _providers.activeProvider,
+            ),
+            isCancelled: () => cancelled || _manualCancel,
+            httpClient: httpClient,
+            onProgress: (sessionId, itemId, job) {
+              onNotify();
+            },
+          );
+          final failed = results.where((r) => r.error != null).length;
+          final ok = results.where((r) => r.error == null).length;
+          if (ok > 0 && failed == 0) {
+            onInfo?.call('已恢复 $ok 个任务');
+          } else if (ok > 0) {
+            onInfo?.call('已恢复 $ok 个，失败 $failed 个');
+          } else {
+            onInfo?.call(null);
+          }
+        } catch (e) {
+          if (!isAbortLike(e) && e is! ChatAbortException) {
+            final msg = toChatErrorMessage(e, '恢复任务失败');
+            onBanner?.call(msg);
+            _logError(msg);
+          }
+          onInfo?.call(null);
+        } finally {
+          generation.end(bindSessionId, token);
+          try {
+            httpClient.close();
+          } catch (_) {}
           onNotify();
-        },
-      );
-      final failed = results.where((r) => r.error != null).length;
-      final ok = results.where((r) => r.error == null).length;
-      if (ok > 0 && failed == 0) {
-        onInfo?.call('已恢复 $ok 个任务');
-      } else if (ok > 0) {
-        onInfo?.call('已恢复 $ok 个，失败 $failed 个');
-      } else {
-        onInfo?.call(null);
-      }
-    } catch (e) {
-      if (!isAbortLike(e) && e is! ChatAbortException) {
-        final msg = toChatErrorMessage(e, '恢复任务失败');
-        onBanner?.call(msg);
-        _logError(msg);
-      }
-      onInfo?.call(null);
-    } finally {
-      generation.end(bindSessionId, token);
-      try {
-        httpClient.close();
-      } catch (_) {}
-      onNotify();
-    }
+        }
+      },
+      items: [
+        for (final entry in pending)
+          (sessionId: entry.sessionId, itemId: entry.item.id),
+      ],
+    );
   }
 
   Future<void> _onAbort(

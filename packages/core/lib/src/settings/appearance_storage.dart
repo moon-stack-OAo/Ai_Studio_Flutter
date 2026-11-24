@@ -46,10 +46,13 @@ class PrefsAppearanceStorage implements AppearanceStorage {
   @override
   Future<void> save(AppearanceSettings settings) async {
     final prefs = await _ensurePrefs();
-    await prefs.setString(
+    if (!await prefs.setString(
       prefsKey,
       jsonEncode(settings.sanitized().toJson()),
-    );
+    )) {
+      try { await prefs.reload(); } catch (_) {}
+      throw StateError('外观保存失败');
+    }
   }
 }
 

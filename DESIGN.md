@@ -407,14 +407,14 @@ Flutter 落点：`packages/design_fluent` 与 `packages/design_material` 的 `Th
 - **目标**：用户在对话 Composer 附加图片，随用户气泡展示缩略并可灯箱回看；多模态请求按活跃提供商能力发送（不支持则禁用入口并提示）。
 - **与 `IMG-TURN-REF` 区分**：生图/生视频回合参考图仍走 `*-TURN-REF`；对话附图是 **CHAT 消息资产**，不得 silently 复用生图时间线组件换皮。
 - **数量 / MIME / 大小**：每条用户消息最多 **4** 张；`png` / `jpeg` / `jpg` / `webp`；单张解码前原始字节 ≤ **4 MiB**（超限拒绝并提示）；发送前可按实现缩放/压 JPEG 以控上下文。
-- **可发送条件**：活跃 `chatModel` 判定支持视觉（启发式，见下）时启用附件入口；**有图时允许正文为空**；不支持时入口禁用 + 短说明（不本地暂存后盲发）。
-- **视觉模型启发式（最小）**：`chatModel` id 含（大小写不敏感）`vision` / `gpt-4o` / `gpt-4.1` / `gpt-5` / `o1` / `o3` / `o4` / `gemini` / `claude-3` / `claude-4` / `claude-sonnet` / `claude-opus` / `llava` / `grok` 等 → 允许；其余默认不允许（后续可加提供商级开关，首版不做）。
+- **可发送条件**：活跃提供商的 `chatModel` 判定支持视觉（模型级覆盖优先，其次启发式，见下）时启用附件入口；**有图时允许正文为空**；不支持时入口禁用 + 短说明（不本地暂存后盲发）。
+- **视觉模型启发式（最小）**：`chatModel` id 含（大小写不敏感）`vision` / `gpt-4o` / `gpt-4.1` / `gpt-5` / `o1` / `o3` / `o4` / `gemini` / `claude-3` / `claude-4` / `claude-sonnet` / `claude-opus` / `llava` / `grok` 等 → 允许；其余默认不允许。双端提供商编辑页可对当前对话模型分别设置「图片输入 / 工具调用」为自动 / 支持 / 不支持；覆盖按提供商 id + 大小写敏感的模型 id（仅 trim）保存，不覆盖模型种类。更换 Base URL / 类型清空覆盖，改名 / Key 或刷新模型列表保留；切换模型保留各自值。「不支持」阻断附图或不提交 tools / 不执行 unsolicited tool_calls；「支持」不绕过 MIME / 数量 / 大小、URL 安全、MCP 授权与请求限制。备份携带非密钥能力元数据；旧备份缺字段只在同后端保留本地值，显式空映射清除，带映射的导入应用其自身值。
 - **协议**：OpenAI 兼容 chat completions：`content` 为 parts 数组（`text` + `image_url`，本地图转 `data:` URL）；无附件时仍发纯 string，兼容旧路径。
 - **写入**：提交时落盘（目录与生图 `image_cache` **分轨**，如 `chat_image_cache/`；id 前缀 `chat_`）；`ChatMessage.attachments: List<ImageRef>`；旧 JSON 无字段 → 空列表。
 - **布局**：用户气泡内缩略 + 正文（无图则仅文本）；点击缩略进灯箱，角标 **「附图」**（可扩 `ImageLightboxSource.attachment`）。
 - **生命周期**：删会话 / 清空消息 / 撤回含附图的用户末条 / `SET-DATA` 一并删盘；备份导出 omit 本地 file 字节（对齐生图/视频）。
 - **包边界**：协议与落盘进 `packages/core`；Fluent / Material **分端** Composer 与气泡 Widget。
-- **本期不做**：助手气泡附图、图生对话工作流编排、跨会话图库、提供商级「强制允许附图」开关。
+- **本期不做**：助手气泡附图、图生对话工作流编排、跨会话图库、覆盖整个提供商所有模型的「强制允许附图」开关（仅做上述单模型能力覆盖）。
 
 ---
 
@@ -445,6 +445,7 @@ Flutter 落点：`packages/design_fluent` 与 `packages/design_material` 的 `Th
 - 将 `prompt` 写入 Composer 草稿，并将该回合 `referenceImages`（若有且文件仍可读）恢复为当前参考图；**一并回填**数量 / 尺寸或比例 / 质量（item 上有则写入 facade，并 `syncParamsToActiveProvider`）。
 - **不**自动提交；用户确认后再点生成。生成中（全局 busy）按钮禁用；点按可提示「当前有任务进行中」。
 - 原参考图不可读时：仅回填提示词与参数，并短提示说明。
+- 生图/视频「重新填写」仅恢复可读本地 file / 本地 b64（沿用图片 MIME/大小校验）；不自动下载历史 URL，明确点选「作参考」不受此限制。读取期间发生草稿/参数/参考图编辑、会话或提供商变化、新回填、生成或页面销毁时，旧结果不得覆盖当前输入。
 
 **`IMG-PROMPT` 辅助 · AI 润色（已落地）**
 
@@ -527,6 +528,10 @@ Flutter 落点：`packages/design_fluent` 与 `packages/design_material` 的 `Th
 | `SET-MCP`            | **业务 MCP Server 配置**（P6）                                       | `F-McpList`：列表 + 右侧/子弹表单；可放在设置侧栏「提供商」旁分区或子页（不另开主导航）                                          | `M-McpList`：设置内入口 → 列表/表单 sheet 或子页                                       | 空 / 有项 / 探测中 / 错误                                 |
 | `SET-MCP-EDIT`       | Server 编辑：传输（http/stdio）、URL 或 command/args、启用、鉴权、策略覆盖、拉 tools | `F-McpForm`：分区表单 + 测试连接 + tools 表；**stdio 表单项仅桌面**                                           | `M-McpForm`：BottomSheet / 子页；底栏保存；**仅 HTTP**                              | 未探测 / 探测中 / tools 已缓存 / 失败；stdio 未确认              |
 | `SET-MCP-POLICY`     | Server 默认授权 + 按 tool 覆盖                                        | 表单「默认授权」下拉 + 表内按 tool 覆盖                                                                     | 同语义；触控友好                                                                  | deny / confirm_always / confirm_once / auto_allow |
+
+**历史损坏保护（`SET-DATA`）**：对话/生图/生视频历史采用应用支持目录内按 scope/会话 ID 安全编码的不可变 revision 文件、小型 commit manifest 与独立 activeId，区分无数据、损坏与读取失败；结构异常（含单条异常）不静默丢弃或覆盖，先隔离原件再尝试上一有效快照。保护副本写入失败即锁定该类历史写入；双端关于页展示安全状态并提供「重试恢复历史」，生成忙时不可替换活跃数据。恢复副本仅用于故障恢复，不改变历史容量策略；普通写入维护上一有效快照，明确删除/整体替换先使旧恢复点失效，主数据提交成功后才清理相关文件。明确清空同时移除隔离/恢复副本，失败时保留待续清标记以防旧历史复活；隔离槽已有不同原件时停止覆盖，需用户保留本机数据后明确清除。此机制不替代完整备份或媒体迁移，保留现有历史容量上限，不提供无限历史或分页。旧 prefs 仅在首次迁移读取，新提交读回验证成功后清旧数据；迁移完成后不自动回退或双写旧 prefs，不支持无损降级。schema 1 备份仅元数据、不含媒体二进制；不承诺多文件原子事务或绝对 fsync 持久性。
+
+**可靠导入（`SET-DATA`）**：应用前先校验已知结构、ID 与地址并预览实际保留数量、截断及跳过项；确认期间本机状态变化需重新预览。按 store 顺序写入，失败明确区分已完成、结果未知及未尝试，不自动回滚；全部业务写入与进度清理成功前不删除被替换历史的原附件。无内容的本机进度记录仅用于重启后提示核对，不含备份正文、路径或密钥，不自动重放。安全存储超时不代表取消，底层操作真正结束前阻止冲突读写；stdio 审批仍不可由备份恢复。
 
 **字号五档（`SET-APPEARANCE`，已决）**：更小 · 较小 · **标准（默认）** · 较大 · 更大。
 
@@ -664,6 +669,8 @@ Flutter 落点：`packages/design_fluent` 与 `packages/design_material` 的 `Th
 | `toolPolicyOverrides`       | `toolName → 级别`（覆盖默认）                                                                      |
 | `toolsCache`                | 最近一次 `tools/list` 结果（名、描述、`sideEffect` 提示、输入 schema 摘要）                                    |
 | `lastProbeAt` / `lastError` | 连通性与错误摘要（无密钥）                                                                              |
+
+**探测实现**：双端设置共用 core `McpProbeService`，负责 probe、关闭临时会话与持久化；UI 退出不取消保存。仓库按 Server 分配探测票据，删除、配置/凭据变更及较新探测使旧票据失效；结果仅补写探测状态与 tools 缓存，不覆盖凭据、授权策略或本机命令确认。结果保存失败不得展示连接成功。
 
 **外部配置导入**（设置「导入 JSON」；core `parseMcpConfigJson`）：
 

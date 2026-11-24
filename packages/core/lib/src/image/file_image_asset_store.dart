@@ -3,17 +3,17 @@ import 'dart:typed_data';
 
 import 'package:path_provider/path_provider.dart';
 
+import '../settings/asset_reference_guard.dart';
+import '../settings/managed_asset_files.dart';
+
 import 'image_asset_store.dart';
 
 /// 桌面/移动：落到应用文档目录 `{subdir}/{id}.png`。
 ///
 /// 默认 [subdir] 为 `image_cache`（生图）；对话附图用 `chat_image_cache`。
 /// [overrideDir] 非空时忽略 [subdir]，直接使用该目录。
-class FileImageAssetStore implements ImageAssetStore {
-  FileImageAssetStore({
-    this.overrideDir,
-    this.subdir = 'image_cache',
-  });
+class FileImageAssetStore implements ImageAssetStore, SelectiveAssetClear {
+  FileImageAssetStore({this.overrideDir, this.subdir = 'image_cache'});
 
   final Directory? overrideDir;
 
@@ -74,26 +74,23 @@ class FileImageAssetStore implements ImageAssetStore {
 
   @override
   Future<void> delete(String pathOrId) async {
-    final file = File(pathOrId);
-    if (await file.exists()) {
-      await file.delete();
-      return;
-    }
-    final byId = await _fileFor(pathOrId);
-    if (await byId.exists()) {
-      await byId.delete();
+    final files = ManagedAssetFiles(await _ensureDir());
+    // Bare ids remain supported; paths must never be sanitized into another id.
+    if (!pathOrId.contains(RegExp(r'[/\\:]')) &&
+        pathOrId != '.' &&
+        pathOrId != '..') {
+      await files.delete((await _fileFor(pathOrId)).path);
+    } else {
+      await files.delete(pathOrId);
     }
   }
 
   @override
-  Future<void> clearAll() async {
-    final dir = await _ensureDir();
-    if (!await dir.exists()) return;
-    await for (final entity in dir.list()) {
-      try {
-        await entity.delete(recursive: true);
-      } catch (_) {}
-    }
+  Future<void> clearAll() => clearExcept({});
+
+  @override
+  Future<void> clearExcept(Set<String> retained) async {
+    await ManagedAssetFiles(await _ensureDir()).clearExcept(retained);
   }
 
   @override

@@ -8,6 +8,8 @@ import '../provider/provider_config.dart';
 import '../video/video_models.dart';
 import 'appearance_settings.dart';
 import 'chat_defaults.dart';
+import 'history_snapshot_store.dart';
+import '../security/url_safety.dart';
 
 /// 当前备份 JSON schema 版本。不兼容升级时递增并在导入处拒绝旧版。
 const int dataBackupSchemaVersion = 1;
@@ -180,6 +182,31 @@ class DataBackupImportResult {
   final int skillsAdded;
 }
 
+/// Content-free execution evidence. A failed stage may already have written data.
+class DataBackupImportFailure implements Exception {
+  const DataBackupImportFailure({required this.completed, required this.failedStage,
+    this.notAttempted = const [], this.businessWritesComplete = false});
+  final List<String> completed;
+  final String failedStage;
+  final List<String> notAttempted;
+  final bool businessWritesComplete;
+  @override
+  String toString() => businessWritesComplete
+      ? '所有业务写入已完成，但进度记录清理失败；旧媒体未清理。重启后仍可能显示待核对提示，不会自动重复导入。'
+      : '导入未全部完成：已完成 ${completed.isEmpty ? '无' : completed.join('、')}；'
+        '$failedStage。未尝试：${notAttempted.isEmpty ? '无' : notAttempted.join('、')}。旧媒体未清理；请重新选择备份并预览后重试，不会自动回滚。';
+}
+
+/// Immutable confirmation input. It deliberately has no diagnostic toString.
+class DataBackupImportPlan {
+  const DataBackupImportPlan({required this.payload, required this.options,
+    required this.baseline, required this.summary});
+  final DataBackupPayload payload;
+  final DataBackupImportOptions options;
+  final String baseline;
+  final String summary;
+}
+
 /// 清数据结果摘要。
 class ClearLocalDataResult {
   const ClearLocalDataResult({
@@ -235,10 +262,13 @@ class DataBackupMcpServer {
   final String? authToken;
 
   Map<String, dynamic> toJson({required bool includeSecrets}) {
-    return config.toJsonForBackup(
+    final json = config.toJsonForBackup(
       authToken: includeSecrets ? authToken : null,
       includeSecrets: includeSecrets,
     );
+    // 保留旧备份的字段缺失语义，避免预览冻结时将其变成显式清空。
+    if (!hasEnvironment) json.remove('env');
+    return json;
   }
 
   factory DataBackupMcpServer.fromJson(Map<String, dynamic> json) {
@@ -343,11 +373,17 @@ class DataBackupPayload {
     return map;
   }
 
+  /// 编码后按导入的字符上限检查；超限时拒绝返回不可导回的 JSON。
   String encodeJson({bool pretty = true}) {
-    if (pretty) {
-      return const JsonEncoder.withIndent('  ').convert(toJson());
+    final json = pretty
+        ? const JsonEncoder.withIndent('  ').convert(toJson())
+        : jsonEncode(toJson());
+    if (json.length > maxBackupJsonChars) {
+      throw DataBackupFormatException(
+        '备份超过 $maxBackupJsonChars 字符（UTF-16 代码单元）的导入上限，已停止导出',
+      );
     }
-    return jsonEncode(toJson());
+    return json;
   }
 
   /// 从 JSON map / 字符串解析；格式错误抛 [DataBackupFormatException]。
@@ -361,7 +397,7 @@ class DataBackupPayload {
         }
         if (trimmed.length > maxBackupJsonChars) {
           throw DataBackupFormatException(
-            '备份过大（超过 ${maxBackupJsonChars ~/ (1024 * 1024)}MB）',
+            '备份过大（超过 $maxBackupJsonChars 字符（UTF-16 代码单元））',
           );
         }
         final decoded = jsonDecode(trimmed);
@@ -376,17 +412,85 @@ class DataBackupPayload {
       }
     } on DataBackupFormatException {
       rethrow;
-    } on FormatException catch (e) {
-      throw DataBackupFormatException('JSON 解析失败：${e.message}');
-    } catch (e) {
-      throw DataBackupFormatException('无法读取备份：$e');
+    } on FormatException {
+      throw DataBackupFormatException('JSON 解析失败；未执行导入');
+    } catch (_) {
+      throw DataBackupFormatException('无法读取备份；未执行导入');
+    }
+
+    // Validate supplied blocks before permissive model decoders can discard rows.
+    try {
+      for (final scope in ['chat', 'image', 'video']) {
+        if (!map.containsKey(scope)) continue;
+        final block = map[scope];
+        if (block is! Map || block['sessions'] is! List) {
+          throw const FormatException();
+        }
+        decodeHistoryObject(jsonEncode(block), scope == 'chat' ? 'messages' : 'items');
+      }
+      for (final name in ['appearance', 'chatDefaults']) {
+        if (map.containsKey(name) && map[name] is! Map) {
+          throw const FormatException();
+        }
+      }
+      final providerBlock = map['providers'];
+      if (providerBlock is! Map || providerBlock['items'] is! List) {
+        throw const FormatException();
+      }
+      void validateShape(Map entry) {
+        for (final key in ['name', 'type', 'provider', 'baseUrl', 'apiKey', 'chatModel', 'imageModel', 'videoModel', 'displayName', 'transport', 'command', 'cwd', 'authKind', 'authToken', 'defaultToolPolicy']) {
+          if (entry[key] != null && entry[key] is! String) throw const FormatException();
+        }
+        for (final key in ['enabled', 'builtin', 'lastTestOk']) {
+          if (entry[key] != null && entry[key] is! bool) throw const FormatException();
+        }
+        for (final key in ['args']) {
+          final value = entry[key];
+          if (value != null && (value is! List || value.any((v) => v is! String))) throw const FormatException();
+        }
+        for (final key in ['env', 'toolPolicyOverrides']) {
+          final value = entry[key];
+          if (value != null && (value is! Map || value.entries.any((e) => e.key is! String || e.value is! String))) throw const FormatException();
+        }
+        final capabilities = entry['modelCapabilityOverrides'];
+        if (capabilities != null && (capabilities is! Map || capabilities.entries.any((e) => e.key is! String || e.value is! Map))) throw const FormatException();
+        final tools = entry['toolsCache'];
+        if (tools != null && (tools is! List || tools.any((e) => e is! Map || e['name'] is! String))) throw const FormatException();
+      }
+      void validateIds(List entries) {
+        final ids = <String>{};
+        for (final entry in entries) {
+          if (entry is! Map || entry['id'] is! String ||
+              (entry['id'] as String).trim().isEmpty ||
+              !ids.add((entry['id'] as String).trim())) {
+            throw const FormatException();
+          }
+          validateShape(entry);
+          final url = entry['baseUrl'];
+          if (url != null && url is! String) throw const FormatException();
+          if (url is String && url.trim().isNotEmpty &&
+              entry['transport'] != 'stdio') {
+            assertSafeFetchUrl(url.trim());
+          }
+        }
+      }
+      validateIds(providerBlock['items'] as List);
+      if (map.containsKey('mcp')) {
+        final block = map['mcp'];
+        if (block is! Map || block['servers'] is! List) {
+          throw const FormatException();
+        }
+        validateIds(block['servers'] as List);
+      }
+    } catch (_) {
+      throw DataBackupFormatException('备份结构、ID 或地址无效；未执行导入');
     }
 
     final versionRaw = map['schemaVersion'];
     final version = versionRaw is int
         ? versionRaw
         : (versionRaw is num
-              ? versionRaw.toInt()
+              ? (versionRaw == versionRaw.toInt() ? versionRaw.toInt() : null)
               : int.tryParse(versionRaw?.toString() ?? ''));
     if (version == null) {
       throw DataBackupFormatException('缺少 schemaVersion');
@@ -514,7 +618,8 @@ class DataBackupPayload {
   }
 }
 
-/// 备份 JSON 字符上限（防过大输入拖垮解析）。
+/// 备份 JSON 字符上限，按 [String.length]（UTF-16 代码单元）计，非 UTF-8 字节。
+/// 导入在 trim 后检查；编码输出无首尾空白，导出与导入共用此上限。
 const int maxBackupJsonChars = 32 * 1024 * 1024;
 
 List<ChatSession> _parseChatSessions(Object? raw) {
@@ -802,21 +907,33 @@ List<ProviderConfig> mergeProviders({
     final nextKey = applySecrets && src.apiKey.trim().isNotEmpty
         ? src.apiKey
         : existing.apiKey;
-    byId[src.id] = existing.copyWith(
-      name: src.name,
-      type: src.type,
-      baseUrl: src.baseUrl,
-      apiKey: nextKey,
-      chatModel: src.chatModel,
-      imageModel: src.imageModel,
-      videoModel: src.videoModel,
-      enabled: src.enabled,
-      // 内置标记以本地为准，避免导入抹掉
-      builtin: existing.builtin,
-      lastTestOk: src.lastTestOk,
-      lastTestDetail: src.lastTestDetail,
-      lastTestAtMs: src.lastTestAtMs,
-    );
+    byId[src.id] = existing
+        .copyWith(
+          name: src.name,
+          type: src.type,
+          baseUrl: src.baseUrl,
+          apiKey: nextKey,
+          chatModel: src.chatModel,
+          imageModel: src.imageModel,
+          videoModel: src.videoModel,
+          enabled: src.enabled,
+          // 内置标记以本地为准，避免导入抹掉
+          builtin: existing.builtin,
+          lastTestOk: src.lastTestOk,
+          lastTestDetail: src.lastTestDetail,
+          lastTestAtMs: src.lastTestAtMs,
+        )
+        .copyWith(
+          modelCapabilityOverrides: src.hasModelCapabilityOverrides
+              ? src.modelCapabilityOverrides
+              : (existing.baseUrl.trim() == src.baseUrl.trim() &&
+                        existing.type == src.type
+                    ? existing.modelCapabilityOverrides
+                    : const {}),
+          hasModelCapabilityOverrides:
+              src.hasModelCapabilityOverrides ||
+              existing.hasModelCapabilityOverrides,
+        );
   }
   // 保持本地顺序，新增的追加到末尾
   final result = <ProviderConfig>[];

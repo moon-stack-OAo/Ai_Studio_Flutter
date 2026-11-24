@@ -30,7 +30,7 @@ class BearerMcpAuth implements McpAuthProvider {
     required this.secretRef,
     this.headerName = 'Authorization',
     this.scheme = 'Bearer',
-  }) : _loadToken = (() => secretStore.read(secretRef));
+  }) : _loadToken = (() => GuardedSecretStore(secretStore).read(secretRef));
 
   /// 直接用回调取 token（测试或上层已解析好密钥时）。
   BearerMcpAuth.fromTokenLoader({

@@ -50,22 +50,26 @@ Future<void> main() async {
     processHost: const IoProcessHost(),
   );
 
+  final assetReferences = AssetReferenceGuard();
   final chatAttachmentStore = FileImageAssetStore(subdir: 'chat_image_cache');
   final sessions = ChatSessionRepository(
-    storage: PrefsChatSessionStorage(),
+    assetReferences: assetReferences,
+    storage: FileChatSessionStorage(),
     attachmentStore: chatAttachmentStore,
   );
   await sessions.load();
 
   final imageAssetStore = FileImageAssetStore();
   final imageSessions = ImageSessionRepository(
-    storage: PrefsImageSessionStorage(),
+    assetReferences: assetReferences,
+    storage: FileImageSessionStorage(),
     assetStore: imageAssetStore,
   );
   await imageSessions.load();
 
   final videoSessions = VideoSessionRepository(
-    storage: PrefsVideoSessionStorage(),
+    assetReferences: assetReferences,
+    storage: FileVideoSessionStorage(),
     assetStore: FileVideoAssetStore(),
     referenceImageStore: imageAssetStore,
   );

@@ -1,5 +1,8 @@
 import 'package:flutter/foundation.dart';
 
+import '../settings/history_snapshot_store.dart';
+import '../settings/asset_reference_guard.dart';
+
 import '../image/image_asset_store.dart';
 import '../image/image_models.dart';
 import '../prompt/custom_skills.dart';
@@ -12,11 +15,33 @@ import 'video_session_storage.dart';
 class VideoSessionRepository extends ChangeNotifier {
   VideoSessionRepository({
     required VideoSessionStorage storage,
+    AssetReferenceGuard? assetReferences,
     VideoAssetStore? assetStore,
     ImageAssetStore? referenceImageStore,
   }) : _storage = storage,
        _assetStore = assetStore ?? MemoryVideoAssetStore(),
-       _referenceImageStore = referenceImageStore ?? MemoryImageAssetStore();
+       _referenceImageStore = referenceImageStore ?? MemoryImageAssetStore(),
+       _assetReferences = assetReferences {
+    assetReferences?.register(this, () {
+      if (!_loaded || _loading || writesBlocked || _lastError != null) {
+        throw const HistoryStorageException();
+      }
+      return {
+        for (final s in _sessions)
+          for (final i in s.items)
+            for (final ref in i.referenceImages)
+              if (ref.type == ImageRefType.file) ref.src,
+        for (final s in _sessions)
+          for (final i in s.items) ...[
+            if (i.localPath != null) i.localPath!,
+            if (i.videoUrl != null) i.videoUrl!,
+            if (i.posterLocalPath != null) i.posterLocalPath!,
+          ],
+      };
+    });
+  }
+
+  final AssetReferenceGuard? _assetReferences;
 
   final VideoSessionStorage _storage;
   final VideoAssetStore _assetStore;
@@ -31,6 +56,104 @@ class VideoSessionRepository extends ChangeNotifier {
   bool _loaded = false;
   bool _loading = false;
   String? _lastError;
+
+  RecoverableHistoryStorage<VideoStoreSnapshot>? get _recovery =>
+      _storage is RecoverableHistoryStorage<VideoStoreSnapshot>
+      ? _storage as RecoverableHistoryStorage<VideoStoreSnapshot>
+      : null;
+  HistoryRecoveryState get recoveryState =>
+      _recovery?.recoveryState ?? HistoryRecoveryState.healthy;
+  bool get writesBlocked => _recovery?.writesBlocked ?? false;
+  bool _destructive = false;
+  void _assertWritable() {
+    if (_destructive || _loading || writesBlocked) {
+      throw const HistoryStorageException();
+    }
+  }
+
+  int _activeGenerations = 0;
+
+  /// A repository lease excludes recovery even after a completion changed the
+  /// visible status. Always release locally; never rewrite an authoritative journal.
+  Future<T> runGeneration<T>(
+    String sessionId,
+    Future<T> Function() action, {
+    String? itemId,
+    List<({String sessionId, String itemId})> items = const [],
+  }) async {
+    try {
+      _assertWritable();
+    } catch (_) {
+      if (itemId != null) _finishUnstarted(sessionId, itemId);
+      notifyListeners();
+      rethrow;
+    }
+    _activeGenerations++;
+    try {
+      return await action();
+    } finally {
+      _activeGenerations--;
+      if (itemId != null) _finishUnstarted(sessionId, itemId);
+      for (final item in items) {
+        _finishUnstarted(item.sessionId, item.itemId);
+      }
+      notifyListeners();
+    }
+  }
+
+  void _finishUnstarted(String sessionId, String? itemId) {
+    final index = _indexOf(sessionId);
+    if (index < 0) return;
+    final session = _sessions[index];
+    _replace(
+      index,
+      session.copyWith(
+        items: [
+          for (final item in session.items)
+            if ((itemId == null || item.id == itemId) &&
+                item.status == VideoItemStatus.loading)
+              item.copyWith(
+                status: VideoItemStatus.error,
+                errorMessage: '生成未完成；请恢复历史后重试。',
+              )
+            else
+              item,
+        ],
+      ),
+    );
+  }
+
+  Future<void> recoverHistory() async {
+    final recovery = _recovery;
+    if (recovery == null || !writesBlocked) return;
+    if (_loading ||
+        _activeGenerations > 0 ||
+        _destructive ||
+        _sessions.any(
+          (s) => s.items.any((i) => i.status == VideoItemStatus.loading),
+        )) {
+      throw const HistoryStorageException();
+    }
+    _loading = true;
+    notifyListeners();
+    try {
+      final snapshot = await recovery.recover();
+      _sessions = List<VideoSession>.from(snapshot.sessions);
+      _activeId = snapshot.activeId;
+      if (_sessions.isEmpty) {
+        final session = _newSession();
+        _sessions = [session];
+        _activeId = session.id;
+      }
+      _lastError = null;
+    } catch (_) {
+      _lastError = '历史恢复失败，原数据已保留。';
+      rethrow;
+    } finally {
+      _loading = false;
+      notifyListeners();
+    }
+  }
 
   bool get isLoaded => _loaded;
   bool get isLoading => _loading;
@@ -92,7 +215,7 @@ class VideoSessionRepository extends ChangeNotifier {
       }
       _loaded = true;
     } catch (e) {
-      _lastError = '加载生视频会话失败：$e';
+      _lastError = '历史读取失败，原数据已保留；请在设置中重试恢复。';
       if (_sessions.isEmpty) {
         final session = _newSession();
         _sessions = [session];
@@ -102,6 +225,21 @@ class VideoSessionRepository extends ChangeNotifier {
     } finally {
       _loading = false;
       notifyListeners();
+    }
+  }
+
+  Future<void> _persistRemoval() async {
+    _destructive = true;
+    try {
+      if (_recovery != null) {
+        await _recovery!.replaceHistory(
+          VideoStoreSnapshot(sessions: _sessions, activeId: _activeId),
+        );
+      } else {
+        await _persist();
+      }
+    } finally {
+      _destructive = false;
     }
   }
 
@@ -130,6 +268,7 @@ class VideoSessionRepository extends ChangeNotifier {
   }
 
   Future<VideoSession> createSession({String title = '新视频'}) async {
+    _assertWritable();
     final session = _newSession(title);
     _sessions = [session, ..._sessions];
     _activeId = session.id;
@@ -139,13 +278,15 @@ class VideoSessionRepository extends ChangeNotifier {
   }
 
   Future<void> setActive(String id) async {
-    if (!_sessions.any((s) => s.id == id)) return;
+    _assertWritable();
+    if (id == _activeId || !_sessions.any((s) => s.id == id)) return;
     _activeId = id;
     await _persist();
     notifyListeners();
   }
 
   Future<void> renameSession(String id, String title) async {
+    _assertWritable();
     final index = _indexOf(id);
     if (index < 0) return;
     final t = title.trim().isEmpty ? '新视频' : title.trim();
@@ -155,10 +296,10 @@ class VideoSessionRepository extends ChangeNotifier {
   }
 
   Future<void> removeSession(String id) async {
+    _assertWritable();
+    _assetReferences?.retainedByOthers(this);
     final target = _sessions.where((s) => s.id == id).firstOrNull;
-    if (target != null) {
-      await _deleteItemAssets(target.items);
-    }
+
     _sessions = _sessions.where((s) => s.id != id).toList();
     if (_sessions.isEmpty) {
       final session = _newSession();
@@ -167,25 +308,34 @@ class VideoSessionRepository extends ChangeNotifier {
     } else if (_activeId == id) {
       _activeId = _sessions.first.id;
     }
-    await _persist();
+    await _persistRemoval();
+    if (target != null) await _deleteItemAssets(target.items);
     notifyListeners();
   }
 
   Future<void> clearItems(String id) async {
+    _assertWritable();
+    _assetReferences?.retainedByOthers(this);
     final index = _indexOf(id);
     if (index < 0) return;
-    await _deleteItemAssets(_sessions[index].items);
+    final removedAssets = _sessions[index].items;
     _replace(
       index,
       _sessions[index].copyWith(items: const [], updatedAt: _now()),
     );
-    await _persist();
+    await _persistRemoval();
+    await _deleteItemAssets(removedAssets);
     notifyListeners();
   }
 
   /// 用快照整体替换（导入备份用）；不迁移媒体二进制。
-  Future<void> replaceAll(VideoStoreSnapshot snapshot) async {
-    await _deleteItemAssets(_sessions.expand((s) => s.items).toList());
+  Future<void> replaceAll(
+    VideoStoreSnapshot snapshot, {
+    bool deleteAssets = true,
+  }) async {
+    _assertWritable();
+    _assetReferences?.retainedByOthers(this);
+    final removedAssets = _sessions.expand((s) => s.items).toList();
     var sessions = List<VideoSession>.from(snapshot.sessions);
     var activeId = snapshot.activeId;
     if (sessions.isEmpty) {
@@ -198,25 +348,59 @@ class VideoSessionRepository extends ChangeNotifier {
     _sessions = sessions;
     _activeId = activeId;
     _loaded = true;
-    await _persist();
+    await _persistRemoval();
+    if (deleteAssets) await _deleteItemAssets(removedAssets);
     notifyListeners();
   }
 
+  /// Import cleanup runs only after all selected stores have committed.
+  Future<void> cleanupReplacedAssets(List<VideoSession> previous) =>
+      _deleteItemAssets(previous.expand((s) => s.items).toList());
+
   /// 清除全部生视频会话与关联本地媒体文件。幂等。
-  Future<void> clearAllSessions({bool clearMediaCache = true}) async {
-    await _deleteItemAssets(_sessions.expand((s) => s.items).toList());
-    if (clearMediaCache) {
-      try {
-        await _assetStore.clearAll();
-      } catch (_) {}
-      // 参考图可能与生图共用 ImageAssetStore；仅删本会话已知路径
-      //（见 _deleteItemAssets），勿 clearAll 以免清空生图缓存。
+  Future<void> clearAllSessions({
+    bool clearMediaCache = true,
+    bool deleteAssets = true,
+  }) async {
+    if (_loading || _destructive) throw const HistoryStorageException();
+    if (deleteAssets) _assetReferences?.retainedByOthers(this);
+    _destructive = true;
+    try {
+      final empty = VideoStoreSnapshot(sessions: const [], activeId: '');
+      if (_recovery != null) {
+        await _recovery!.clearHistory(empty);
+      } else {
+        await _storage.save(empty);
+      }
+      if (deleteAssets) {
+        await _deleteItemAssets(
+          _sessions.expand((s) => s.items).toList(),
+          retainCurrent: false,
+        );
+        if (clearMediaCache) {
+          try {
+            final retained =
+                _assetReferences?.retainedByOthers(this) ?? <String>{};
+            if (retained.isEmpty) {
+              await _assetStore.clearAll();
+            } else if (_assetStore is SelectiveAssetClear) {
+              await (_assetStore as SelectiveAssetClear).clearExcept(retained);
+            }
+          } catch (_) {}
+          // 参考图可能与生图共用 ImageAssetStore；仅删本会话已知路径
+          //（见 _deleteItemAssets），勿 clearAll 以免清空生图缓存。
+        }
+      }
+      final session = _newSession();
+      _sessions = [session];
+      _activeId = session.id;
+      await _persist();
+      _loaded = true;
+      _lastError = null;
+      notifyListeners();
+    } finally {
+      _destructive = false;
     }
-    final session = _newSession();
-    _sessions = [session];
-    _activeId = session.id;
-    await _persist();
-    notifyListeners();
   }
 
   /// 追加 loading 条目；首条非空 prompt 截 24 字作 title。
@@ -241,6 +425,7 @@ class VideoSessionRepository extends ChangeNotifier {
     String? id,
     int? createdAt,
   }) async {
+    _assertWritable();
     final index = _indexOf(sessionId);
     if (index < 0) return null;
     final session = _sessions[index];
@@ -280,7 +465,15 @@ class VideoSessionRepository extends ChangeNotifier {
         updatedAt: _now(),
       ),
     );
-    await _persist();
+    try {
+      await _persist();
+    } catch (_) {
+      // This append never handed a task to its caller. Only settle this ID in
+      // memory: save may already have published its authoritative journal.
+      _finishUnstarted(sessionId, item.id);
+      notifyListeners();
+      rethrow;
+    }
     notifyListeners();
     return item;
   }
@@ -309,6 +502,7 @@ class VideoSessionRepository extends ChangeNotifier {
     bool clearErrorMessage = false,
     bool persist = true,
   }) async {
+    _assertWritable();
     final index = _indexOf(sessionId);
     if (index < 0) return;
     final session = _sessions[index];
@@ -399,6 +593,7 @@ class VideoSessionRepository extends ChangeNotifier {
     double progress = 100,
     bool needsMaterialize = false,
   }) async {
+    _assertWritable();
     await updateItem(
       sessionId,
       itemId,
@@ -421,6 +616,7 @@ class VideoSessionRepository extends ChangeNotifier {
     String itemId,
     String path,
   ) async {
+    _assertWritable();
     final trimmed = path.trim();
     if (trimmed.isEmpty) return;
     await updateItem(sessionId, itemId, posterLocalPath: trimmed);
@@ -435,6 +631,7 @@ class VideoSessionRepository extends ChangeNotifier {
     String? remoteVideoUrl,
     VideoItemStatus status = VideoItemStatus.error,
   }) async {
+    _assertWritable();
     await updateItem(
       sessionId,
       itemId,
@@ -455,6 +652,7 @@ class VideoSessionRepository extends ChangeNotifier {
     String? videoUrl,
     String? jobId,
   }) async {
+    _assertWritable();
     await updateItem(
       sessionId,
       itemId,
@@ -471,6 +669,7 @@ class VideoSessionRepository extends ChangeNotifier {
 
   /// 放弃 pending_resume。
   Future<void> abandonItem(String sessionId, String itemId) async {
+    _assertWritable();
     final session = _sessions.where((s) => s.id == sessionId).firstOrNull;
     final item = session?.items.where((i) => i.id == itemId).firstOrNull;
     await updateItem(
@@ -490,6 +689,7 @@ class VideoSessionRepository extends ChangeNotifier {
     String itemId, {
     String? errorMessage,
   }) async {
+    _assertWritable();
     await updateItem(
       sessionId,
       itemId,
@@ -504,6 +704,7 @@ class VideoSessionRepository extends ChangeNotifier {
     String itemId,
     List<Uint8List> byteList,
   ) async {
+    _assertWritable();
     final out = <ImageRef>[];
     final limit = byteList.length > maxTurnReferenceImages
         ? maxTurnReferenceImages
@@ -532,11 +733,49 @@ class VideoSessionRepository extends ChangeNotifier {
     }
   }
 
-  Future<void> _deleteItemAssets(List<VideoItem> items) async {
+  Future<void> _deleteItemAssets(
+    List<VideoItem> items, {
+    bool retainCurrent = true,
+  }) async {
+    final retained = retainCurrent
+        ? _sessions
+              .expand((s) => s.items)
+              .map((i) => i.localPath ?? i.videoUrl)
+              .whereType<String>()
+              .map(assetReferenceKey)
+              .toSet()
+        : <String>{};
+    final retainedRefs = retainCurrent
+        ? _sessions
+              .expand((s) => s.items)
+              .expand((i) => i.referenceImages)
+              .where((i) => i.type == ImageRefType.file)
+              .map((i) => assetReferenceKey(i.src))
+              .toSet()
+        : <String>{};
+    final others = _assetReferences?.retainedByOthers(this) ?? <String>{};
+    if (retainCurrent) {
+      retained.addAll(retainedRefs);
+      retained.addAll(
+        _sessions
+            .expand((s) => s.items)
+            .expand(
+              (i) => [
+                if (i.videoUrl != null) assetReferenceKey(i.videoUrl!),
+                if (i.posterLocalPath != null)
+                  assetReferenceKey(i.posterLocalPath!),
+              ],
+            ),
+      );
+      retainedRefs.addAll(retained);
+    }
+    retained.addAll(others);
+    retainedRefs.addAll(others);
     for (final item in items) {
       final path = item.localPath ?? item.videoUrl;
       if (path != null &&
           path.isNotEmpty &&
+          !retained.contains(assetReferenceKey(path)) &&
           !path.startsWith('http') &&
           !path.startsWith('data:')) {
         try {
@@ -544,7 +783,9 @@ class VideoSessionRepository extends ChangeNotifier {
         } catch (_) {}
       }
       for (final img in item.referenceImages) {
-        if (img.type == ImageRefType.file && img.src.isNotEmpty) {
+        if (img.type == ImageRefType.file &&
+            img.src.isNotEmpty &&
+            !retainedRefs.contains(assetReferenceKey(img.src))) {
           try {
             await _referenceImageStore.delete(img.src);
           } catch (_) {}

@@ -10,11 +10,18 @@ class VideoController extends ChangeNotifier {
     required ProviderRepository providerRepository,
     required VideoSessionRepository sessionRepository,
     required this.generation,
+    Future<Uint8List?> Function(ImageRef)? readDraftReference,
     AppLogRepository? appLogRepository,
     OpenAiCompatibleVideoClient? videoClient,
     SkillRepository? skillRepository,
   }) : _providers = providerRepository,
        _sessions = sessionRepository {
+    _draftGuard = MediaDraftRestoreGuard([
+      providerRepository,
+      sessionRepository,
+      generation,
+    ]);
+    _readDraftReference = readDraftReference ?? readLocalMediaDraftReference;
     _facade = VideoJobFacade(
       skillRepository: skillRepository,
       providers: providerRepository,
@@ -37,6 +44,8 @@ class VideoController extends ChangeNotifier {
   String _refFileName = 'image.png';
   String? _selectedItemId;
   bool _disposed = false;
+  late final MediaDraftRestoreGuard _draftGuard;
+  late final Future<Uint8List?> Function(ImageRef) _readDraftReference;
 
   static const defaultDurationOptions = VideoJobFacade.defaultDurationOptions;
   static const defaultSizeOptions = VideoJobFacade.defaultSizeOptions;
@@ -106,10 +115,12 @@ class VideoController extends ChangeNotifier {
   String get promptAssistMode => _facade.promptAssistMode;
 
   void applyPromptPreset(String prompt) {
+    _draftGuard.invalidate();
     _facade.applyPromptPreset(prompt, onNotify: _notify);
   }
 
   void setPromptDraft(String value) {
+    _draftGuard.invalidate();
     _facade.setPromptDraft(value, onNotify: _notify);
   }
 
@@ -121,70 +132,27 @@ class VideoController extends ChangeNotifier {
       return;
     }
 
-    final prompt = item.prompt.trim();
-    _facade.setPromptDraft(prompt);
-
-    final duration = item.duration;
-    if (duration != null && duration > 0) {
-      _facade.setDuration(duration);
-    }
-    final size = item.size?.trim();
-    if (size != null && size.isNotEmpty) {
-      _facade.setSize(size);
-    }
-    final aspect = item.aspectRatio?.trim();
-    if (aspect != null && aspect.isNotEmpty) {
-      _facade.setAspectRatio(aspect);
-    }
-    final resolution = item.resolution?.trim();
-    if (resolution != null && resolution.isNotEmpty) {
-      _facade.setResolution(resolution);
-    }
-    _facade.syncParamsToActiveProvider();
-
-    final refs = item.referenceImages;
-    var restored = false;
-    if (refs.isNotEmpty) {
-      for (final ref in refs) {
-        if (ref.type != ImageRefType.file) continue;
-        final path = ref.src.trim();
-        if (path.isEmpty) continue;
-        final file = File(path);
-        if (!await file.exists()) continue;
-        try {
-          final bytes = await file.readAsBytes();
-          if (bytes.isEmpty) continue;
-          if (!_isAcceptedImagePath(path)) continue;
-          _refFileName = _fileNameFromPath(path);
-          _referenceImage = ImageRef(type: ImageRefType.file, src: path);
-          _facade.setHasReferenceImage(true);
-          restored = true;
-          break;
-        } catch (_) {
-          continue;
-        }
-      }
-    }
-
-    if (!restored) {
-      if (_referenceImage != null) {
-        _referenceImage = null;
-        _refFileName = 'image.png';
-        _facade.setHasReferenceImage(false);
-      }
-      if (refs.isNotEmpty) {
-        _setInfo('原参考图不可用，已仅回填提示词与参数');
-      } else {
-        clearBannerError();
-      }
-    } else {
-      clearBannerError();
-    }
-    _notify();
+    final ticket = _draftGuard.begin();
+    final reference = await selectMediaDraftReference(
+      item.referenceImages,
+      read: _readDraftReference,
+      isCurrent: () => _draftGuard.isCurrent(ticket) && !generation.busy,
+    );
+    if (!_draftGuard.isCurrent(ticket) || generation.busy || _disposed) return;
+    _facade.restoreDraftFromItem(item);
+    _referenceImage = reference?.ref;
+    _refFileName = reference?.fileName ?? 'image.png';
+    _facade.setHasReferenceImage(reference != null);
+    _bannerError = null;
+    _bannerInfo = reference == null && item.referenceImages.isNotEmpty
+        ? '原参考图不可用，已仅回填提示词与参数'
+        : null;
+    notifyListeners();
   }
 
   /// 通过系统文件选择器加入参考图（图生视频）。
   Future<void> pickReferenceImage() async {
+    _draftGuard.invalidate();
     try {
       final file = await openFile(acceptedTypeGroups: [_imageTypeGroup]);
       if (file == null) return;
@@ -200,6 +168,7 @@ class VideoController extends ChangeNotifier {
   }
 
   Future<void> setReferenceFromPath(String path, {String? displayName}) async {
+    _draftGuard.invalidate();
     try {
       final trimmed = path.trim();
       if (trimmed.isEmpty) {
@@ -232,6 +201,7 @@ class VideoController extends ChangeNotifier {
   }
 
   void clearReference() {
+    _draftGuard.invalidate();
     if (_referenceImage == null) return;
     _referenceImage = null;
     _refFileName = 'image.png';
@@ -270,23 +240,28 @@ class VideoController extends ChangeNotifier {
   }
 
   void setDuration(int value) {
+    _draftGuard.invalidate();
     _facade.setDuration(value, onNotify: _notify);
   }
 
   void setSize(String value) {
+    _draftGuard.invalidate();
     _facade.setSize(value, onNotify: _notify);
   }
 
   void setAspectRatio(String value) {
+    _draftGuard.invalidate();
     _facade.setAspectRatio(value, onNotify: _notify);
   }
 
   void setResolution(String value) {
+    _draftGuard.invalidate();
     _facade.setResolution(value, onNotify: _notify);
   }
 
   /// 切换提供商后校正参数落在可选范围内。
   void syncParamsToActiveProvider() {
+    _draftGuard.invalidate();
     _facade.syncParamsToActiveProvider(onNotify: _notify);
   }
 
@@ -313,11 +288,13 @@ class VideoController extends ChangeNotifier {
   }
 
   Future<void> createSession() async {
+    _draftGuard.invalidate();
     await _sessions.createSession();
     clearBannerError();
   }
 
   Future<void> setActiveSession(String id) async {
+    _draftGuard.invalidate();
     if (id == _sessions.activeId) return;
     await _sessions.setActive(id);
     clearBannerError();
@@ -325,12 +302,14 @@ class VideoController extends ChangeNotifier {
   }
 
   Future<void> removeSession(String id) async {
+    _draftGuard.invalidate();
     generation.abortIfSession(id);
     await _sessions.removeSession(id);
     clearBannerError();
   }
 
   Future<void> clearActiveItems() async {
+    _draftGuard.invalidate();
     final sid = _sessions.activeId;
     if (sid.isEmpty) return;
     if (generation.isCurrent(sid)) {
@@ -375,6 +354,7 @@ class VideoController extends ChangeNotifier {
   }
 
   Future<void> generate() async {
+    _draftGuard.invalidate();
     if (_disposed) return;
     final text = _facade.promptDraft.trim();
 
@@ -509,7 +489,7 @@ class VideoController extends ChangeNotifier {
         if (await f.exists()) return f.readAsBytes();
         return null;
       case ImageRefType.b64:
-        return null;
+        return readLocalMediaDraftReference(ref);
       case ImageRefType.url:
         final client = createSafeHttpClient();
         try {
@@ -526,9 +506,15 @@ class VideoController extends ChangeNotifier {
   }
 
   @override
+  void notifyListeners() {
+    if (!_disposed) super.notifyListeners();
+  }
+
+  @override
   void dispose() {
     if (_disposed) return;
     _disposed = true;
+    _draftGuard.dispose();
     _facade.dispose();
     super.dispose();
   }

@@ -111,11 +111,23 @@ void main() {
     facade.dispose();
   });
 
-  Future<void> verifyToolCalling(String chatModel) async {
+  Future<void> verifyToolCalling(
+    String chatModel, {
+    bool? toolsOverride,
+  }) async {
     await providers.updateProvider(
       providers.activeProviderId,
       chatModel: chatModel,
     );
+    if (toolsOverride != null) {
+      await providers.saveProvider(
+        providers.activeProvider!.copyWith(
+          modelCapabilityOverrides: {
+            chatModel: ModelCapabilityOverride(tools: toolsOverride),
+          },
+        ),
+      );
+    }
     final skills = SkillRepository(
       storage: MemorySkillStorage([
         const CustomSkill(
@@ -234,6 +246,68 @@ void main() {
       await verifyToolCalling(chatModel);
     });
   }
+
+  test(
+    'unknown model explicitly supporting tools uses normal authorized MCP flow',
+    () async {
+      await verifyToolCalling('private-model', toolsOverride: true);
+    },
+  );
+
+  test(
+    'explicit tool deny omits schema and ignores unsolicited tool calls',
+    () async {
+      await providers.saveProvider(
+        providers.activeProvider!.copyWith(
+          modelCapabilityOverrides: {
+            'gpt-4o': const ModelCapabilityOverride(tools: false),
+          },
+        ),
+      );
+      final mcpRepo = McpServerRepository(
+        storage: MemoryMcpServerStorage([
+          const McpServerConfig(
+            id: 'mcp_1',
+            displayName: 'Biz',
+            baseUrl: 'https://mcp.example.local/mcp',
+            toolsCache: [McpToolDescriptor(name: 'biz.query')],
+          ),
+        ]),
+      );
+      await mcpRepo.load();
+      final fakeSessions = <String, _FakeMcpSession>{};
+      var requests = 0;
+      final client = MockClient.streaming((request, stream) async {
+        final body = jsonDecode(await stream.bytesToString()) as Map;
+        expect(body.containsKey('tools'), isFalse);
+        requests++;
+        return http.StreamedResponse(
+          Stream.value(
+            utf8.encode(
+              'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"c1","type":"function","function":{"name":"biz.query","arguments":"{}"}}]},"finish_reason":"tool_calls"}]}\n\ndata: [DONE]\n\n',
+            ),
+          ),
+          200,
+        );
+      });
+      final facade = ChatSessionFacade(
+        providers: providers,
+        sessions: sessions,
+        chatDefaults: chatDefaults,
+        generation: generation,
+        chatClient: OpenAiCompatibleChatClient(client: client),
+        createHttpClient: () => createSafeHttpClient(inner: client),
+        mcpServers: mcpRepo,
+        mcpSessionFactory: _FakeFactory(fakeSessions),
+        toolAuthPrompter: allowAllToolAuthPrompter,
+      );
+      expect(facade.activeChatSupportsTools, isFalse);
+      await facade.send('hello', onNotify: () {});
+      expect(requests, 1);
+      expect(fakeSessions, isEmpty);
+      facade.dispose();
+    },
+  );
 
   test('用户拒绝授权：回灌拒绝且不 call Server', () async {
     var round = 0;

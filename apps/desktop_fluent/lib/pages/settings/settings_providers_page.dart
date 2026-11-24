@@ -35,6 +35,7 @@ class _SettingsProvidersPageState extends State<SettingsProvidersPage> {
   String? _statusText;
   bool _statusOk = false;
   List<ProviderModelInfo> _modelHints = const [];
+  Map<String, ModelCapabilityOverride> _capabilityDraft = {};
   bool _dirty = false;
   bool _syncingForm = false;
   String? _lastShownPersistError;
@@ -126,6 +127,7 @@ class _SettingsProvidersPageState extends State<SettingsProvidersPage> {
     final p = _selected;
     _formFingerprint = _fingerprint(p);
     _syncingForm = true;
+    _capabilityDraft = Map.of(p?.modelCapabilityOverrides ?? const {});
     if (p == null) {
       _nameCtrl.clear();
       _baseUrlCtrl.clear();
@@ -205,6 +207,69 @@ class _SettingsProvidersPageState extends State<SettingsProvidersPage> {
     _showInfoBar('已添加自定义提供商', InfoBarSeverity.success);
   }
 
+  Widget _capabilityEditor() => ValueListenableBuilder<TextEditingValue>(
+    valueListenable: _chatModelCtrl,
+    builder: (context, value, child) => _buildCapabilityEditor(),
+  );
+
+  Widget _buildCapabilityEditor() {
+    final id = _chatModelCtrl.text.trim();
+    final value = _capabilityDraft[id] ?? const ModelCapabilityOverride();
+    Widget choice(String label, String key, bool? selected, bool automatic) {
+      final index = selected == null ? 0 : (selected ? 1 : 2);
+      void changed(int? next) {
+        // Read the current draft even if a menu was opened before a model change.
+        final id = _chatModelCtrl.text.trim();
+        final value = _capabilityDraft[id] ?? const ModelCapabilityOverride();
+        if (next == null || id.isEmpty) return;
+        final flag = next == 0 ? null : next == 1;
+        setState(() {
+          final override = ModelCapabilityOverride(
+            vision: key == 'vision' ? flag : value.vision,
+            tools: key == 'tools' ? flag : value.tools,
+          );
+          if (override.isAutomatic) {
+            _capabilityDraft.remove(id);
+          } else {
+            _capabilityDraft[id] = override;
+          }
+          _dirty = true;
+        });
+      }
+
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        child: Row(
+          children: [
+            Expanded(child: Text(label)),
+            ComboBox<int>(
+              value: index,
+              items: [
+                ComboBoxItem(
+                  value: 0,
+                  child: Text('自动（${automatic ? "支持" : "不支持"}）'),
+                ),
+                const ComboBoxItem(value: 1, child: Text('支持')),
+                const ComboBoxItem(value: 2, child: Text('不支持')),
+              ],
+              onChanged: id.isEmpty ? null : changed,
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('当前模型能力：${id.isEmpty ? "请先填写对话模型" : id}'),
+        choice('图片输入', 'vision', value.vision, supportsChatVision(id)),
+        choice('工具调用', 'tools', value.tools, supportsChatTools(id)),
+        const Text('仅调整兼容性判断，不授予工具执行权限。'),
+      ],
+    );
+  }
+
   Future<bool> _save() async {
     if (_saving) return false;
     if (_hasConflict && !await confirmSettingsOverwrite(context)) return false;
@@ -219,6 +284,10 @@ class _SettingsProvidersPageState extends State<SettingsProvidersPage> {
     final baseUrl = _baseUrlCtrl.text.trim();
     final urlRisk = warnUnsafeUrl(baseUrl);
     final next = current.copyWith(
+      modelCapabilityOverrides:
+          current.baseUrl.trim() != baseUrl.trim() || current.type != _type
+          ? const {}
+          : Map.unmodifiable(_capabilityDraft),
       name: name,
       type: _type,
       baseUrl: baseUrl,
@@ -458,6 +527,7 @@ class _SettingsProvidersPageState extends State<SettingsProvidersPage> {
                     illustration: const FluentEmptyIllustration.noProviders(),
                   )
                 : _ProviderForm(
+                    capabilityEditor: _capabilityEditor(),
                     tokens: tokens,
                     nameCtrl: _nameCtrl,
                     baseUrlCtrl: _baseUrlCtrl,
@@ -622,6 +692,7 @@ class _ProviderForm extends StatelessWidget {
     required this.nameCtrl,
     required this.baseUrlCtrl,
     required this.apiKeyCtrl,
+    required this.capabilityEditor,
     required this.chatModelCtrl,
     required this.imageModelCtrl,
     required this.videoModelCtrl,
@@ -652,6 +723,7 @@ class _ProviderForm extends StatelessWidget {
   final TextEditingController nameCtrl;
   final TextEditingController baseUrlCtrl;
   final TextEditingController apiKeyCtrl;
+  final Widget capabilityEditor;
   final TextEditingController chatModelCtrl;
   final TextEditingController imageModelCtrl;
   final TextEditingController videoModelCtrl;
@@ -822,6 +894,8 @@ class _ProviderForm extends StatelessWidget {
                             onChanged: onFieldChanged,
                           ),
                         ),
+                        const SizedBox(height: 12),
+                        capabilityEditor,
                         const SizedBox(height: 12),
                         _LabeledField(
                           label: '生图模型',

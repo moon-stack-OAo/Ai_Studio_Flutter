@@ -4,7 +4,7 @@ import 'dart:io' show File, Platform;
 import 'package:core/core.dart';
 import 'package:design_material/design_material.dart';
 import 'package:file_selector/file_selector.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show kIsWeb, visibleForTesting;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:package_info_plus/package_info_plus.dart';
@@ -27,8 +27,12 @@ class SettingsAboutTab extends StatefulWidget {
     this.updateController,
     this.onUnlockHiddenPortal,
     this.skillRepository,
+    this.backupReader,
   });
 
+  /// 测试注入备份正文，生产默认使用系统文件选择器。
+  @visibleForTesting
+  final Future<String?> Function()? backupReader;
   final DataBackupService dataBackupService;
   final SkillRepository? skillRepository;
   final ThemeController? themeController;
@@ -122,6 +126,27 @@ class _SettingsAboutTabState extends State<SettingsAboutTab> {
     super.dispose();
   }
 
+  Future<void> _onRecoverHistory() async {
+    if (_busy) return;
+    if (widget.generation?.busy == true) {
+      final message = '请等待生成结束后再恢复历史。';
+      _snack(message);
+      return;
+    }
+    setState(() => _busy = true);
+    var message = '历史恢复检查完成。';
+    try {
+      await _backup.recoverHistory();
+    } catch (_) {
+      message = '历史恢复失败，原数据已保留。';
+    } finally {
+      if (mounted) {
+        setState(() => _busy = false);
+        _snack(message);
+      }
+    }
+  }
+
   Future<void> _loadPackageInfo() async {
     if (widget.packageInfo != null) {
       setState(() {
@@ -149,6 +174,9 @@ class _SettingsAboutTabState extends State<SettingsAboutTab> {
   Future<void> _loadUsage() async {
     setState(() => _usageLoading = true);
     try {
+      unawaited(_backup.loadImportStatus().then((_) {
+        if (mounted) setState(() {});
+      }).catchError((Object _) {}));
       final usage = await _backup.estimateStorageUsage();
       if (!mounted) return;
       setState(() {
@@ -399,12 +427,6 @@ class _SettingsAboutTabState extends State<SettingsAboutTab> {
     }
   }
 
-  void _stopGenerationIfBusy() {
-    final gen = widget.generation;
-    if (gen == null || !gen.busy) return;
-    gen.abort();
-  }
-
   Future<void> _onImportExport() async {
     if (_busy) return;
     final action = await showModalBottomSheet<_ImportExportAction>(
@@ -560,26 +582,41 @@ class _SettingsAboutTabState extends State<SettingsAboutTab> {
 
   Future<void> _onImport() async {
     if (_busy) return;
-    final XFile? picked;
+    setState(() => _busy = true);
     try {
-      picked = await openFile(
+      await _runImport();
+    } catch (_) {
+      if (mounted) _snack('无法导入，请检查文件与本机存储后重试。');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _runImport() async {
+    final XFile? picked;
+    final injected = widget.backupReader == null ? null : await widget.backupReader!();
+    try {
+      picked = widget.backupReader != null ? null : await openFile(
         acceptedTypeGroups: [
           const XTypeGroup(label: 'JSON', extensions: ['json']),
         ],
       );
-    } catch (e) {
+    } catch (_) {
       if (!mounted) return;
-      _snack('无法打开文件选择器：$e');
+      _snack('无法打开文件选择器，请稍后重试。');
       return;
     }
-    if (picked == null || !mounted) return;
+    if ((picked == null && injected == null) || !mounted) return;
 
     String raw;
     try {
-      raw = await picked.readAsString();
-    } catch (e) {
+      if (picked != null && await picked.length() > maxBackupJsonChars * 4) {
+        throw DataBackupFormatException('备份文件过大');
+      }
+      raw = injected ?? await picked!.readAsString();
+    } catch (_) {
       if (!mounted) return;
-      _snack('无法读取文件：$e');
+      _snack('无法读取备份文件，请检查大小与访问权限。');
       return;
     }
 
@@ -594,9 +631,9 @@ class _SettingsAboutTabState extends State<SettingsAboutTab> {
       if (!mounted) return;
       _snack(e.message);
       return;
-    } catch (e) {
+    } catch (_) {
       if (!mounted) return;
-      _snack('无法解析备份：$e');
+      _snack('无法解析备份，请检查文件格式。');
       return;
     }
 
@@ -619,7 +656,7 @@ class _SettingsAboutTabState extends State<SettingsAboutTab> {
                     Text(
                       '将合并提供商、业务 MCP 与外观，并用备份会话替换本地会话。'
                       '\n本地 stdio 配置不适用于移动端，将跳过。'
-                      '${widget.generation?.busy == true ? '\n\n检测到进行中的生成，导入前将尝试停止。' : ''}',
+                      '${widget.generation?.busy == true ? '\n\n检测到进行中的生成，请先停止生成再导入。' : ''}',
                     ),
                     if (payload.skills != null) ...[
                       const SizedBox(height: 8),
@@ -674,17 +711,27 @@ class _SettingsAboutTabState extends State<SettingsAboutTab> {
     );
     if (confirmed != true || !mounted) return;
 
-    _stopGenerationIfBusy();
-    setState(() => _busy = true);
+    if (widget.generation?.busy == true) {
+      _snack('请先停止生成，再重新预览导入。');
+      return;
+    }
     try {
-      final result = await _backup.importBackup(
-        raw,
-        options: DataBackupImportOptions(
-          importSecrets: importSecrets,
-          importSkills: importSkills,
-          allowStdio: false,
-        ),
-      );
+      final plan = await _backup.prepareImport(raw,
+        options: DataBackupImportOptions(importSecrets: importSecrets,
+          importSkills: importSkills, allowStdio: false));
+      if (!mounted) return;
+      final proceed = await showDialog<bool>(context: context, builder: (ctx) => AlertDialog(
+        title: const Text('导入预览'),
+        content: SingleChildScrollView(child: Text(plan.summary)),
+        actions: [TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('取消')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('确认导入'))],
+      ));
+      if (proceed != true || !mounted) return;
+      if (widget.generation?.busy == true) {
+        _snack('生成状态已变化，请停止后重新预览。');
+        return;
+      }
+      final result = await _backup.applyImport(plan);
       final appearance = widget.themeController?.appearanceRepository;
       if (appearance != null) {
         widget.themeController?.loadFrom(appearance.settings);
@@ -709,16 +756,24 @@ class _SettingsAboutTabState extends State<SettingsAboutTab> {
     } on DataBackupFormatException catch (e) {
       if (!mounted) return;
       _snack(e.message);
-    } catch (e) {
+    } on DataBackupImportFailure catch (e) {
+      final appearance = widget.themeController?.appearanceRepository;
+      if (appearance != null) widget.themeController?.loadFrom(appearance.settings);
       if (!mounted) return;
-      _snack('导入失败：$e');
-    } finally {
-      if (mounted) setState(() => _busy = false);
+      _snack(e.toString());
+      await _loadUsage();
+    } catch (_) {
+      if (!mounted) return;
+      _snack('导入未完成，请检查本机存储后重新预览。');
     }
   }
 
   Future<void> _onClearData() async {
     if (_busy) return;
+    if (widget.generation?.busy == true) {
+      _snack('请先停止生成，再清除本地历史及损坏原文。');
+      return;
+    }
     var choice = _ClearChoice.sessions;
     final confirmed = await showDialog<bool>(
       context: context,
@@ -734,8 +789,8 @@ class _SettingsAboutTabState extends State<SettingsAboutTab> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      '此操作不可撤销。'
-                      '${widget.generation?.busy == true ? ' 检测到进行中的生成，清除前将尝试停止。' : ' 若仍有生成任务，请先停止。'}',
+                      '此操作不可撤销。清除会话或全部数据也将永久销毁损坏历史原文及恢复副本；请先自行保留本机数据。'
+                      ' 若有进行中的生成任务，请先停止再清除。',
                     ),
                     const SizedBox(height: 8),
                     for (final opt in _ClearChoice.values)
@@ -778,7 +833,10 @@ class _SettingsAboutTabState extends State<SettingsAboutTab> {
     );
     if (confirmed != true || !mounted) return;
 
-    _stopGenerationIfBusy();
+    if (widget.generation?.busy == true) {
+      _snack('请先停止生成，再清除本地历史及损坏原文。');
+      return;
+    }
     setState(() => _busy = true);
     try {
       final result = await _backup.clearLocalData(choice.flags);
@@ -1138,6 +1196,12 @@ class _SettingsAboutTabState extends State<SettingsAboutTab> {
             clipBehavior: Clip.antiAlias,
             child: Column(
               children: [
+                ListTile(
+                  title: const Text('重试恢复历史'),
+                  subtitle: Text('${_backup.historyRecoverySummary}\n${_backup.importRecoverySummary}'),
+                  enabled: !_busy,
+                  onTap: _busy ? null : _onRecoverHistory,
+                ),
                 ListTile(
                   title: const Text('本地占用'),
                   subtitle: Text(_usageSummary()),

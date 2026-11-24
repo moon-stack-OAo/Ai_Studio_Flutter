@@ -14,6 +14,8 @@ class AppearanceRepository extends ChangeNotifier {
   bool _loaded = false;
   bool _loading = false;
   String? _lastError;
+  Future<void> _pendingOperation = Future<void>.value();
+  Future<void> waitForPersist() => _pendingOperation;
 
   bool get isLoaded => _loaded;
   bool get isLoading => _loading;
@@ -39,13 +41,19 @@ class AppearanceRepository extends ChangeNotifier {
     }
   }
 
-  Future<void> save(AppearanceSettings next) async {
+  Future<void> save(AppearanceSettings next) {
+    final operation = _pendingOperation.then((_) => _save(next));
+    _pendingOperation = operation.then<void>((_) {}, onError: (Object _, StackTrace _) {});
+    return operation;
+  }
+
+  Future<void> _save(AppearanceSettings next) async {
     final sanitized = next.sanitized();
-    _settings = sanitized;
-    notifyListeners();
     try {
       await _storage.save(sanitized);
+      _settings = sanitized;
       _lastError = null;
+      notifyListeners();
     } catch (e) {
       _lastError = e.toString();
       notifyListeners();

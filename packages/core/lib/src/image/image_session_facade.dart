@@ -191,6 +191,23 @@ class ImageSessionFacade {
     onNotify?.call();
   }
 
+  /// Restore historical parameters without submitting a generation.
+  void restoreDraftFromItem(ImageItem item) {
+    setPromptDraft(item.prompt.trim());
+    setN(item.n);
+    if (item.size?.trim().isNotEmpty == true) setSize(item.size!.trim());
+    if (item.aspectRatio?.trim().isNotEmpty == true) {
+      setAspectRatio(item.aspectRatio!.trim());
+    }
+    if (item.quality?.trim().isNotEmpty == true) {
+      setQuality(item.quality!.trim());
+    }
+    if (!qualityOptions.any((option) => option.value == _quality)) {
+      _quality = defaultImageQuality;
+    }
+    syncParamsToActiveProvider();
+  }
+
   /// 拉取生图模型列表（仅 [ProviderConfig.canImage]）。
   Future<List<ProviderModelInfo>> loadImageModels({
     bool force = false,
@@ -326,68 +343,70 @@ class ImageSessionFacade {
     );
     if (pending == null) return;
 
-    final httpClient = _createHttpClient();
-    final token = generation.begin(sessionId, httpClient.close);
-    onNotify();
+    await _sessions.runGeneration(sessionId, () async {
+      final httpClient = _createHttpClient();
+      final token = generation.begin(sessionId, httpClient.close);
+      onNotify();
 
-    try {
-      final List<ImageRef> refs;
-      if (isEdit) {
-        refs = await _imageClient.editImage(
-          baseUrl: creds.baseUrl,
-          apiKey: creds.apiKey,
-          model: creds.imageModel,
-          providerType: creds.type,
-          prompt: finalPrompt,
-          imageBytes: refBytes,
-          imageFileName: effectiveRefName,
-          n: useN,
-          size: passSize ? effectiveSize : null,
-          aspectRatio: passAspect ? effectiveAspect : null,
-          quality: qualityParam,
-          client: httpClient,
-        );
-      } else {
-        refs = await _imageClient.generateTextToImageWithCredentials(
-          creds,
-          prompt: finalPrompt,
-          n: useN,
-          size: passSize ? effectiveSize : null,
-          aspectRatio: passAspect ? effectiveAspect : null,
-          quality: qualityParam,
-          client: httpClient,
-        );
-      }
-      await _sessions.completeItem(sessionId, pending.id, refs);
-    } on ChatAbortException {
-      await _sessions.failItem(sessionId, pending.id, '已取消');
-    } catch (e) {
-      if (isAbortLike(e)) {
-        await _sessions.failItem(sessionId, pending.id, '已取消');
-      } else {
-        final msg = toChatErrorMessage(e, '生成失败');
-        await _sessions.failItem(sessionId, pending.id, msg);
-        if (bannerOnGenerateError) {
-          onBanner?.call(msg);
-        }
-        final logs = _appLogs;
-        if (logs != null) {
-          unawaited(
-            logs.append(
-              level: AppLogLevel.error,
-              source: AppLogSources.image,
-              message: msg,
-            ),
+      try {
+        final List<ImageRef> refs;
+        if (isEdit) {
+          refs = await _imageClient.editImage(
+            baseUrl: creds.baseUrl,
+            apiKey: creds.apiKey,
+            model: creds.imageModel,
+            providerType: creds.type,
+            prompt: finalPrompt,
+            imageBytes: refBytes,
+            imageFileName: effectiveRefName,
+            n: useN,
+            size: passSize ? effectiveSize : null,
+            aspectRatio: passAspect ? effectiveAspect : null,
+            quality: qualityParam,
+            client: httpClient,
+          );
+        } else {
+          refs = await _imageClient.generateTextToImageWithCredentials(
+            creds,
+            prompt: finalPrompt,
+            n: useN,
+            size: passSize ? effectiveSize : null,
+            aspectRatio: passAspect ? effectiveAspect : null,
+            quality: qualityParam,
+            client: httpClient,
           );
         }
+        await _sessions.completeItem(sessionId, pending.id, refs);
+      } on ChatAbortException {
+        await _sessions.failItem(sessionId, pending.id, '已取消');
+      } catch (e) {
+        if (isAbortLike(e)) {
+          await _sessions.failItem(sessionId, pending.id, '已取消');
+        } else {
+          final msg = toChatErrorMessage(e, '生成失败');
+          await _sessions.failItem(sessionId, pending.id, msg);
+          if (bannerOnGenerateError) {
+            onBanner?.call(msg);
+          }
+          final logs = _appLogs;
+          if (logs != null) {
+            unawaited(
+              logs.append(
+                level: AppLogLevel.error,
+                source: AppLogSources.image,
+                message: msg,
+              ),
+            );
+          }
+        }
+      } finally {
+        generation.end(sessionId, token);
+        try {
+          httpClient.close();
+        } catch (_) {}
+        onNotify();
       }
-    } finally {
-      generation.end(sessionId, token);
-      try {
-        httpClient.close();
-      } catch (_) {}
-      onNotify();
-    }
+    }, itemId: pending.id);
   }
 
   void dispose() {

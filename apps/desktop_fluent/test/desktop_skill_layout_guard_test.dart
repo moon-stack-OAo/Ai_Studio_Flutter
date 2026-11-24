@@ -1,4 +1,6 @@
 import 'dart:async';
+// ignore: depend_on_referenced_packages
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:core/core.dart';
 import 'package:desktop_fluent/app/theme_controller.dart';
@@ -188,6 +190,7 @@ Future<void> _openEditor(WidgetTester tester) async {
 }
 
 void main() {
+  setUp(() => SharedPreferences.setMockInitialValues({}));
   for (final dark in [false, true]) {
     for (final scale in [AppFontScale.smaller, AppFontScale.larger]) {
       testWidgets('960×640 设置分类在${dark ? '深色' : '浅色'} ${scale.label}字号下可用', (

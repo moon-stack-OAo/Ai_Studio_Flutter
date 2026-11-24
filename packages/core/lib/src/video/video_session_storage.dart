@@ -1,4 +1,9 @@
+import 'dart:io';
+
+import '../settings/file_history_snapshot_store.dart';
 import 'dart:convert';
+
+import '../settings/history_snapshot_store.dart';
 
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -114,10 +119,9 @@ List<VideoSession> hydrateVideoLoading(List<VideoSession> sessions) {
       return item.copyWith(
         status: VideoItemStatus.error,
         needsResume: false,
-        errorMessage:
-            (item.errorMessage == null || item.errorMessage!.isEmpty)
-                ? '上次异常中断'
-                : item.errorMessage,
+        errorMessage: (item.errorMessage == null || item.errorMessage!.isEmpty)
+            ? '上次异常中断'
+            : item.errorMessage,
       );
     }).toList();
     return session.copyWith(items: items);
@@ -173,7 +177,10 @@ abstract class VideoSessionStorage {
 }
 
 /// SharedPreferences：`core.video_sessions.v1` → `{sessions, activeId}`。
-class PrefsVideoSessionStorage implements VideoSessionStorage {
+class PrefsVideoSessionStorage
+    implements
+        VideoSessionStorage,
+        RecoverableHistoryStorage<VideoStoreSnapshot> {
   PrefsVideoSessionStorage({SharedPreferences? prefs}) : _prefsOverride = prefs;
 
   static const prefsKey = 'core.video_sessions.v1';
@@ -181,67 +188,135 @@ class PrefsVideoSessionStorage implements VideoSessionStorage {
   final SharedPreferences? _prefsOverride;
   SharedPreferences? _prefs;
 
+  late final HistorySnapshotStore<VideoStoreSnapshot> _history =
+      HistorySnapshotStore(
+        key: prefsKey,
+        prefs: _ensurePrefs,
+        decode: _decode,
+        empty: const VideoStoreSnapshot(sessions: [], activeId: ''),
+      );
+
+  @override
+  HistoryRecoveryState get recoveryState => _history.state;
+  @override
+  bool get writesBlocked => _history.blocked;
+  @override
+  Future<VideoStoreSnapshot> recover() => _history.recover();
+  @override
+  Future<void> replaceHistory(VideoStoreSnapshot snapshot) async {
+    final prepared = prepareVideoPersistPayload(snapshot);
+    await _history.replace(
+      jsonEncode({
+        'activeId': prepared.activeId,
+        'sessions': prepared.sessions.map((s) => s.toJson()).toList(),
+      }),
+    );
+  }
+
+  @override
+  Future<void> clearHistory(VideoStoreSnapshot empty) async {
+    await _history.clear();
+    await save(empty);
+  }
+
   Future<SharedPreferences> _ensurePrefs() async {
     return _prefs ??= _prefsOverride ?? await SharedPreferences.getInstance();
   }
 
   @override
-  Future<VideoStoreSnapshot> load() async {
-    final prefs = await _ensurePrefs();
-    final raw = prefs.getString(prefsKey);
-    if (raw == null || raw.isEmpty) {
-      return const VideoStoreSnapshot(sessions: [], activeId: '');
-    }
-    try {
-      final decoded = jsonDecode(raw);
-      if (decoded is! Map) {
-        return const VideoStoreSnapshot(sessions: [], activeId: '');
-      }
-      final listRaw = decoded['sessions'];
-      final sessions = <VideoSession>[];
-      if (listRaw is List) {
-        for (final e in listRaw) {
-          if (e is Map) {
-            sessions.add(VideoSession.fromJson(Map<String, dynamic>.from(e)));
-          }
-        }
-      }
-      final hydrated = hydrateVideoUrls(hydrateVideoLoading(sessions));
-      return prepareVideoPersistPayload(
-        VideoStoreSnapshot(
-          sessions: hydrated,
-          activeId: decoded['activeId']?.toString() ?? '',
+  Future<VideoStoreSnapshot> load() => _history.load();
+
+  static VideoStoreSnapshot _decode(String raw) {
+    final decoded = decodeHistoryObject(raw, 'items');
+    return prepareVideoPersistPayload(
+      VideoStoreSnapshot(
+        sessions: hydrateVideoUrls(
+          hydrateVideoLoading(
+            (decoded['sessions'] as List)
+                .map(
+                  (e) => VideoSession.fromJson(
+                    Map<String, dynamic>.from(e as Map),
+                  ),
+                )
+                .toList(),
+          ),
         ),
-      );
-    } catch (_) {
-      return const VideoStoreSnapshot(sessions: [], activeId: '');
-    }
+        activeId: decoded['activeId'] as String? ?? '',
+      ),
+    );
   }
 
   @override
   Future<void> save(VideoStoreSnapshot snapshot) async {
-    final prefs = await _ensurePrefs();
     final prepared = prepareVideoPersistPayload(snapshot);
     final payload = <String, dynamic>{
       'activeId': prepared.activeId,
       'sessions': prepared.sessions.map((s) => s.toJson()).toList(),
     };
-    await prefs.setString(prefsKey, jsonEncode(payload));
+    await _history.save(jsonEncode(payload));
+  }
+}
+
+/// Per-session file history; prefs implementation remains the legacy reader.
+class FileVideoSessionStorage
+    implements
+        VideoSessionStorage,
+        RecoverableHistoryStorage<VideoStoreSnapshot> {
+  FileVideoSessionStorage({
+    Future<Directory> Function()? root,
+    SharedPreferences? prefs,
+    HistoryFileAccess files = const HistoryFileAccess(),
+  }) {
+    final legacy = PrefsVideoSessionStorage(prefs: prefs);
+    _store = FileHistorySnapshotStore<VideoStoreSnapshot>(
+      scope: 'video',
+      legacyKey: PrefsVideoSessionStorage.prefsKey,
+      legacyLoad: legacy.load,
+      decode: PrefsVideoSessionStorage._decode,
+      encode: _encode,
+      empty: const VideoStoreSnapshot(sessions: [], activeId: ''),
+      root: root,
+      prefs: prefs == null ? null : () async => prefs,
+      files: files,
+    );
+  }
+  late final FileHistorySnapshotStore<VideoStoreSnapshot> _store;
+  @override
+  HistoryRecoveryState get recoveryState => _store.recoveryState;
+  @override
+  bool get writesBlocked => _store.writesBlocked;
+  @override
+  Future<VideoStoreSnapshot> load() => _store.load();
+  @override
+  Future<VideoStoreSnapshot> recover() => _store.recover();
+  @override
+  Future<void> save(VideoStoreSnapshot snapshot) => _store.save(snapshot);
+  @override
+  Future<void> replaceHistory(VideoStoreSnapshot snapshot) =>
+      _store.replaceHistory(snapshot);
+  @override
+  Future<void> clearHistory(VideoStoreSnapshot empty) =>
+      _store.clearHistory(empty);
+  static Future<String> _encode(VideoStoreSnapshot snapshot) async {
+    final prepared = prepareVideoPersistPayload(snapshot);
+    return jsonEncode({
+      'activeId': prepared.activeId,
+      'sessions': prepared.sessions.map((s) => s.toJson()).toList(),
+    });
   }
 }
 
 /// 内存存储（单元测试）。
 class MemoryVideoSessionStorage implements VideoSessionStorage {
   MemoryVideoSessionStorage([VideoStoreSnapshot? initial])
-      : _snapshot = initial ??
-            const VideoStoreSnapshot(sessions: [], activeId: '');
+    : _snapshot =
+          initial ?? const VideoStoreSnapshot(sessions: [], activeId: '');
 
   VideoStoreSnapshot _snapshot;
 
   @override
   Future<VideoStoreSnapshot> load() async {
-    final hydrated =
-        hydrateVideoUrls(hydrateVideoLoading(_snapshot.sessions));
+    final hydrated = hydrateVideoUrls(hydrateVideoLoading(_snapshot.sessions));
     final prepared = prepareVideoPersistPayload(
       VideoStoreSnapshot(sessions: hydrated, activeId: _snapshot.activeId),
     );

@@ -281,6 +281,20 @@ void main() {
       facade.dispose();
     });
 
+    test('explicit vision deny blocks known model without storing attachments', () async {
+      await providers.updateProvider(providers.activeProviderId,
+        baseUrl: 'https://api.example.local/v1', apiKey: 'sk-test', chatModel: 'gpt-4o');
+      await providers.saveProvider(providers.activeProvider!.copyWith(modelCapabilityOverrides: {
+        'gpt-4o': const ModelCapabilityOverride(vision: false),
+      }));
+      expect(facade.activeChatSupportsVision, isFalse);
+      String? banner;
+      await facade.send('image', onNotify: () {}, onBanner: (m) => banner = m, attachmentBytes: [_tinyPng]);
+      expect(banner, contains('不支持图片'));
+      expect(sessions.activeSession!.messages, isEmpty);
+      expect(store.entries, isEmpty);
+    });
+
     test('非 vision 模型带图发送失败且不落盘', () async {
       await providers.updateProvider(
         providers.activeProviderId,

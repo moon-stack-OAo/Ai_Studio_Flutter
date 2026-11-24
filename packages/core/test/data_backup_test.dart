@@ -1,8 +1,35 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:core/core.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+class _FailingAppearance extends MemoryAppearanceStorage {
+  @override
+  Future<void> save(AppearanceSettings settings) async => throw StateError('SENSITIVE_SENTINEL');
+}
+
+class _FailingSkills extends MemorySkillStorage {
+  bool damaged = false;
+  @override
+  Future<List<CustomSkill>> load() async {
+    if (damaged) throw SkillStorageFormatException('损坏', []);
+    return super.load();
+  }
+  @override
+  Future<void> save(List<CustomSkill> skills) async => throw StateError('SENSITIVE_SENTINEL');
+}
+
+class _PausedAppearance extends MemoryAppearanceStorage {
+  final gate = Completer<void>();
+  @override
+  Future<void> save(AppearanceSettings settings) async {
+    await gate.future;
+    await super.save(settings);
+  }
+}
 
 void main() {
   late ProviderRepository providers;
@@ -20,6 +47,7 @@ void main() {
   late SkillRepository skills;
 
   setUp(() async {
+    SharedPreferences.setMockInitialValues({});
     providers = ProviderRepository(
       storage: MemoryProviderStorage(),
       connectionTester: StubProviderConnectionTester(),
@@ -70,6 +98,134 @@ void main() {
     );
   });
 
+  test('preview is read-only, multiline, bound to baseline and single-use', () async {
+    final raw = await service.exportBackupJson();
+    final before = await service.exportBackupJson();
+    final plan = await service.prepareImport(raw);
+    expect(plan.summary, contains(String.fromCharCode(10)));
+    expect(plan.summary, contains('仅元数据'));
+    expect((await SharedPreferences.getInstance()).getKeys(), isEmpty);
+    expect(jsonDecode(await service.exportBackupJson())['providers'], jsonDecode(before)['providers']);
+    await appearance.update(themePreference: 'dark');
+    await expectLater(service.applyImport(plan), throwsA(isA<DataBackupFormatException>()));
+    final confirmed = await service.prepareImport(raw);
+    await service.applyImport(confirmed);
+    await expectLater(service.applyImport(confirmed), throwsA(isA<DataBackupFormatException>()));
+    expect((await SharedPreferences.getInstance()).getKeys(), isEmpty);
+  });
+
+  test('malformed known blocks and rows reject before any progress or writes', () async {
+    final original = jsonDecode(await service.exportBackupJson()) as Map<String, dynamic>;
+    for (final change in <Map<String, dynamic>>[
+      {'chat': {}}, {'image': {'sessions': [7]}}, {'video': null},
+      {'providers': {'items': [{'id': 'bad', 'baseUrl': 'https://a.test', 'enabled': 'yes'}]}},
+      {'mcp': {'servers': [{'id': 'bad', 'args': [12]}]}},
+      {'schemaVersion': 1.9},
+    ]) {
+      await expectLater(service.importBackup({...original, ...change}), throwsA(anyOf(isA<DataBackupFormatException>(), isA<DataBackupSchemaException>())));
+      expect((await SharedPreferences.getInstance()).getKeys(), isEmpty);
+    }
+  });
+
+  test('forged plan cannot write and payload mutation cannot replace prepared content', () async {
+    final raw = await service.exportBackupJson();
+    final plan = await service.prepareImport(raw);
+    final fake = DataBackupImportPlan(payload: plan.payload, options: plan.options, baseline: plan.baseline, summary: plan.summary);
+    await expectLater(service.applyImport(fake), throwsA(isA<DataBackupFormatException>()));
+    plan.payload.providers.clear();
+    await service.applyImport(plan);
+    expect(providers.providers, isNotEmpty);
+  });
+
+  test('credential-only changes invalidate preview and journal restart never replays', () async {
+    final id = await mcpServers.add(displayName: 'server', baseUrl: 'https://mcp.test', authKind: McpAuthKind.bearer, bearerToken: 'old');
+    final plan = await service.prepareImport(await service.exportBackupJson());
+    await mcpServers.writeBearerSecret(id, 'new');
+    await expectLater(service.applyImport(plan), throwsA(isA<DataBackupFormatException>()));
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('core.backup_import_progress.v1', '{"stage":"提供商"}');
+    await service.loadImportStatus();
+    expect(service.importRecoverySummary, contains('不会自动重放或回滚'));
+    expect(await mcpServers.readBearerSecret(id), 'new');
+  });
+
+  DataBackupService withAppearance(AppearanceRepository repository) => DataBackupService(
+    providers: providers, appearance: repository, chatDefaults: chatDefaults,
+    chatSessions: chatSessions, imageSessions: imageSessions, videoSessions: videoSessions,
+    logs: logs, imageAssetStore: imageStore, videoAssetStore: videoStore,
+    mcpServers: mcpServers, skillRepository: skills,
+  );
+
+  test('partial failure reports completed unknown unattempted without plugin details', () async {
+    final broken = AppearanceRepository(storage: _FailingAppearance());
+    await broken.load();
+    final importing = withAppearance(broken);
+    final raw = await service.exportBackupJson();
+    final plan = await importing.prepareImport(raw);
+    try {
+      await importing.applyImport(plan);
+      fail('expected partial failure');
+    } on DataBackupImportFailure catch (e) {
+      expect(e.completed, ['提供商']);
+      expect(e.failedStage, contains('外观 写入结果未知'));
+      expect(e.notAttempted, contains('对话历史'));
+      expect(e.businessWritesComplete, isFalse);
+      expect(e.toString(), isNot(contains('SENSITIVE_SENTINEL')));
+    }
+    final journal = (await SharedPreferences.getInstance()).getString('core.backup_import_progress.v1')!;
+    expect(journal, isNot(contains('SENSITIVE_SENTINEL')));
+    await importing.loadImportStatus();
+    expect(importing.importRecoverySummary, contains('不会自动重放'));
+  });
+
+  test('preview waits queued appearance before capturing baseline', () async {
+    final storage = _PausedAppearance();
+    final repository = AppearanceRepository(storage: storage);
+    await repository.load();
+    final importing = withAppearance(repository);
+    final saving = repository.save(repository.settings.copyWith(themePreference: 'dark'));
+    var done = false;
+    final preview = importing.prepareImport(await service.exportBackupJson()).then((p) { done = true; return p; });
+    await Future<void>.delayed(Duration.zero);
+    expect(done, isFalse);
+    storage.gate.complete();
+    await saving;
+    final plan = await preview;
+    expect(repository.settings.themePreference, 'dark');
+    await importing.applyImport(plan);
+  });
+
+  test('known damaged skills prevent prepare and later-stage failure preserves old assets', () async {
+    final storage = _FailingSkills()..damaged = true;
+    final repository = SkillRepository(storage: storage);
+    await repository.load();
+    final importing = DataBackupService(
+      providers: providers, appearance: appearance, chatDefaults: chatDefaults,
+      chatSessions: chatSessions, imageSessions: imageSessions, videoSessions: videoSessions,
+      logs: logs, imageAssetStore: imageStore, videoAssetStore: videoStore,
+      mcpServers: mcpServers, skillRepository: repository,
+    );
+    final empty = await service.exportBackupJson();
+    await expectLater(importing.prepareImport(empty), throwsA(isA<DataBackupFormatException>()));
+    expect((await SharedPreferences.getInstance()).getKeys(), isEmpty);
+    final cleanRepository = SkillRepository(storage: _FailingSkills());
+    await cleanRepository.load();
+    final partial = DataBackupService(
+      providers: providers, appearance: appearance, chatDefaults: chatDefaults,
+      chatSessions: chatSessions, imageSessions: imageSessions, videoSessions: videoSessions,
+      logs: logs, imageAssetStore: imageStore, videoAssetStore: videoStore,
+      mcpServers: mcpServers, skillRepository: cleanRepository,
+    );
+    final image = await imageSessions.createSession(title: 'old');
+    await imageSessions.appendLoadingItem(image.id, mode: ImageGenMode.text, prompt: 'old', model: 'm');
+    final path = await imageStore.savePng(Uint8List.fromList([1, 2]), 'old');
+    await imageSessions.completeItem(image.id, imageSessions.activeSession!.items.last.id, [ImageRef(type: ImageRefType.file, src: path)]);
+    final plan = await partial.prepareImport(empty);
+    await expectLater(partial.applyImport(plan), throwsA(isA<DataBackupImportFailure>().having((e) => e.failedStage, 'skills stage', contains('技能'))));
+    expect(imageSessions.sessions.any((s) => s.id == image.id), isFalse);
+    expect(await imageStore.read(path), isNotNull);
+  });
+
   Future<void> seedSampleData() async {
     await appearance.update(themePreference: 'dark', fontScale: 'large');
     await chatDefaults.update(temperature: 0.7, systemPrompt: 'hi');
@@ -114,6 +270,63 @@ void main() {
 
     await logs.append(level: AppLogLevel.info, source: 'test', message: 'seed');
   }
+
+  test('导出与导入共用真实字符边界，包含 pretty 开销且不按 UTF-8 字节限制', () async {
+    for (final pretty in [false, true]) {
+      await chatDefaults.update(systemPrompt: '');
+      final emptyJson = await service.exportBackupJson(
+        const DataBackupExportOptions(),
+        pretty,
+      );
+      final overhead = emptyJson.length;
+      final baseUtf8Extra = utf8.encode(emptyJson).length - overhead;
+      // 中占 1 个 UTF-16 代码单元，😀占 2 个；UTF-8 合计则是 7 字节。
+      final prompt = '中😀${'x' * (maxBackupJsonChars - overhead - 3)}';
+      await chatDefaults.update(systemPrompt: prompt);
+      final json = await service.exportBackupJson(
+        const DataBackupExportOptions(),
+        pretty,
+      );
+      expect(json.length, maxBackupJsonChars);
+      expect(utf8.encode(json).length, maxBackupJsonChars + baseUtf8Extra + 4);
+      expect(
+        DataBackupPayload.parse(' \n$json\n ').chatDefaults!.systemPrompt,
+        prompt,
+      );
+      if (!pretty) {
+        // 紧凑格式刚好可导回时，默认缩进格式可能已超限，不能静默改格式。
+        await expectLater(
+          service.exportBackupJson(),
+          throwsA(isA<DataBackupFormatException>()),
+        );
+      }
+      await chatDefaults.update(systemPrompt: '${prompt}x');
+      final payload = await service.exportBackup();
+      final uncheckedJson = pretty
+          ? const JsonEncoder.withIndent('  ').convert(payload.toJson())
+          : jsonEncode(payload.toJson());
+      expect(uncheckedJson.length, maxBackupJsonChars + 1);
+      expect(
+        () => DataBackupPayload.parse(uncheckedJson),
+        throwsA(isA<DataBackupFormatException>()),
+      );
+      expect(
+        () => payload.encodeJson(pretty: pretty),
+        throwsA(
+          isA<DataBackupFormatException>().having(
+            (e) => e.message,
+            '安全明确错误，不回显备份内容',
+            '备份超过 $maxBackupJsonChars 字符（UTF-16 代码单元）的导入上限，已停止导出',
+          ),
+        ),
+      );
+      await expectLater(
+        service.exportBackupJson(const DataBackupExportOptions(), pretty),
+        throwsA(isA<DataBackupFormatException>()),
+      );
+      expect(chatDefaults.defaults.systemPrompt, '${prompt}x');
+    }
+  });
 
   test('技能 backup roundtrip、原位合并、新 ID 按顺序追加、用量估算', () async {
     const a = CustomSkill(
@@ -340,7 +553,7 @@ void main() {
     'mergeProviders: same id overwrites meta; secrets only when allowed',
     () {
       final local = [
-        const ProviderConfig(
+        ProviderConfig(
           id: 'openai',
           name: 'OpenAI',
           type: ProviderType.openai,
@@ -351,7 +564,7 @@ void main() {
         ),
       ];
       final incoming = [
-        const ProviderConfig(
+        ProviderConfig(
           id: 'openai',
           name: 'OpenAI Cloud',
           type: ProviderType.openai,
@@ -360,7 +573,7 @@ void main() {
           chatModel: 'new-model',
           builtin: false,
         ),
-        const ProviderConfig(
+        ProviderConfig(
           id: 'custom_1',
           name: 'Custom',
           type: ProviderType.openaiCompatible,
@@ -675,6 +888,68 @@ void main() {
       expect(mcpServers.findById(id)!.transport, McpTransport.http);
     },
   );
+
+  for (final environment in <String, Map<String, String>?>{
+    'absent': null,
+    'empty': {},
+    'populated': {'TOKEN': 'backup-env'},
+  }.entries) {
+    for (final includeSecrets in [true, false]) {
+      for (final importSecrets in [true, false]) {
+        test(
+          'prepared MCP env ${environment.key}, includeSecrets=$includeSecrets, importSecrets=$importSecrets',
+          () async {
+            // No bearer token: isolate env semantics from bearer-write barriers.
+            final id = await mcpServers.add(
+              displayName: 'Local',
+              transport: McpTransport.stdio,
+              command: 'node',
+              env: {'TOKEN': 'local-env'},
+              stdioConfirmed: true,
+            );
+            final raw = {
+              'schemaVersion': dataBackupSchemaVersion,
+              'exportedAtMs': 1,
+              'includeSecrets': includeSecrets,
+              'providers': {'activeProviderId': '', 'items': []},
+              'mcp': {
+                'servers': [
+                  {
+                    'id': id,
+                    'displayName': 'Imported',
+                    'transport': 'stdio',
+                    'command': 'node',
+                    'enabled': true,
+                    if (environment.value != null) 'env': environment.value,
+                  },
+                ],
+              },
+            };
+            final plan = await service.prepareImport(
+              jsonEncode(raw),
+              options: DataBackupImportOptions(importSecrets: importSecrets),
+            );
+            expect(
+              plan.payload.mcpServers!.single.hasEnvironment,
+              environment.value != null,
+            );
+            final result = await service.applyImport(plan);
+            expect(result.mcpImported, isTrue);
+            final imported = mcpServers.findById(id)!;
+            expect(imported.displayName, 'Imported');
+            expect(
+              imported.env,
+              includeSecrets && importSecrets && environment.value != null
+                  ? environment.value
+                  : {'TOKEN': 'local-env'},
+            );
+            expect(imported.enabled, isFalse);
+            expect(imported.isStdioApproved, isFalse);
+          },
+        );
+      }
+    }
+  }
 
   test(
     'absent env preserves local values; explicit empty env clears only with opt-in',

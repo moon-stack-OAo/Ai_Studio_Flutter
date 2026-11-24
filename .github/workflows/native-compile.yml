@@ -1,0 +1,92 @@
+# Native compile checks only: no app launch, storage round-trip, signing or packaging.
+# One macOS runner compiles both Apple targets to avoid duplicate SDK setup cost.
+name: native-compile
+
+on:
+  pull_request:
+    paths:
+      - 'apps/**'
+      - 'packages/**'
+      - 'pubspec.yaml'
+      - 'pubspec.lock'
+      - '.github/workflows/native-compile.yml'
+      - '.github/scripts/native-compile.test.mjs'
+  push:
+    branches: [main, master, dev]
+    paths:
+      - 'apps/**'
+      - 'packages/**'
+      - 'pubspec.yaml'
+      - 'pubspec.lock'
+      - '.github/workflows/native-compile.yml'
+      - '.github/scripts/native-compile.test.mjs'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: native-compile-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: '3.44.5'
+          cache: true
+      - run: flutter --no-version-check pub get --enforce-lockfile
+      - name: Compile Windows debug (not runtime smoke)
+        working-directory: apps/desktop_fluent
+        run: flutter --no-version-check build windows --debug --no-pub
+
+  android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Check native CI guardrails
+        run: node --test .github/scripts/native-compile.test.mjs
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: '3.44.5'
+          cache: true
+      - run: flutter --no-version-check pub get --enforce-lockfile
+      # One ABI is sufficient for JNI/plugin compilation; no release key or emulator.
+      - name: Compile Android debug APK (not runtime smoke)
+        working-directory: apps/mobile_material
+        run: flutter --no-version-check build apk --debug --target-platform android-arm64 --no-pub
+
+  apple:
+    runs-on: macos-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: '3.44.5'
+          cache: true
+      - run: flutter --no-version-check pub get --enforce-lockfile
+      - name: Compile macOS debug (not runtime smoke)
+        working-directory: apps/desktop_fluent
+        run: flutter --no-version-check build macos --debug --no-pub
+      - name: Compile iOS simulator debug (no codesign, not runtime smoke)
+        working-directory: apps/mobile_material
+        run: flutter --no-version-check build ios --simulator --debug --no-codesign --no-pub

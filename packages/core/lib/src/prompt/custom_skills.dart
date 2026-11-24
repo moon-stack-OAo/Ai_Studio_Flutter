@@ -251,6 +251,7 @@ class SkillRepository extends ChangeNotifier {
   String? get lastError => _lastError;
   String? _lastError;
   Future<void> _tail = Future.value();
+  Future<void> waitForPersist() => _tail;
   bool _disposed = false;
 
   Future<void> _enqueue(Future<void> Function() action) {
