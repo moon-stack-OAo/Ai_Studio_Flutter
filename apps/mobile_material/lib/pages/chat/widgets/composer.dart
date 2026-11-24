@@ -47,7 +47,10 @@ class _ComposerState extends State<Composer> {
   void initState() {
     super.initState();
     _controller.addListener(_onTextChanged);
+    _focus.addListener(_onFocusChanged);
   }
+
+  void _onFocusChanged() => setState(() {});
 
   void _onTextChanged() {
     final next = _controller.text.trim().isNotEmpty;
@@ -58,6 +61,7 @@ class _ComposerState extends State<Composer> {
   void dispose() {
     _controller.removeListener(_onTextChanged);
     _controller.dispose();
+    _focus.removeListener(_onFocusChanged);
     _focus.dispose();
     super.dispose();
   }
@@ -86,8 +90,9 @@ class _ComposerState extends State<Composer> {
   @override
   Widget build(BuildContext context) {
     final tokens = materialTokensOf(context);
-    final density =
-        UiDensity.fromVisualDensity(Theme.of(context).visualDensity);
+    final density = UiDensity.fromVisualDensity(
+      Theme.of(context).visualDensity,
+    );
     final canType = widget.enabled && !widget.streaming;
     final isDark = tokens.brightness == Brightness.dark;
     final viewInsetsBottom = MediaQuery.viewInsetsOf(context).bottom;
@@ -105,9 +110,10 @@ class _ComposerState extends State<Composer> {
     final attachTooltip = !widget.visionSupported
         ? '当前模型不支持图片'
         : (widget.draftAttachments.length >= maxChatAttachments
-            ? '最多 $maxChatAttachments 张'
-            : '附加图片（最多 $maxChatAttachments 张）');
-    final canPick = widget.visionSupported &&
+              ? '最多 $maxChatAttachments 张'
+              : '附加图片（最多 $maxChatAttachments 张）');
+    final canPick =
+        widget.visionSupported &&
         canType &&
         widget.onPickAttachments != null &&
         widget.draftAttachments.length < maxChatAttachments;
@@ -125,9 +131,22 @@ class _ComposerState extends State<Composer> {
         basePad.right,
         padBottom,
       ),
+      margin: const EdgeInsets.fromLTRB(8, 6, 8, 4),
       decoration: BoxDecoration(
         color: tokens.surface,
-        border: Border(top: BorderSide(color: tokens.border)),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(
+          color: _focus.hasFocus
+              ? tokens.primary.withValues(alpha: 0.42)
+              : tokens.border,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: isDark ? 0.18 : 0.045),
+            blurRadius: 18,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -230,8 +249,9 @@ class _ComposerState extends State<Composer> {
                     decoration: InputDecoration(
                       hintText: hintText,
                       filled: true,
-                      fillColor:
-                          isDark ? tokens.surfaceElevated : tokens.canvas,
+                      fillColor: isDark
+                          ? tokens.surfaceElevated
+                          : tokens.canvas,
                       contentPadding: density.composerFieldPadding,
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(24),
@@ -380,12 +400,12 @@ class _DraftAttachmentStrip extends StatelessWidget {
                             fit: BoxFit.cover,
                             errorBuilder: (context, error, stackTrace) =>
                                 Center(
-                              child: Icon(
-                                Icons.broken_image_outlined,
-                                size: 20,
-                                color: tokens.inkMuted,
-                              ),
-                            ),
+                                  child: Icon(
+                                    Icons.broken_image_outlined,
+                                    size: 20,
+                                    color: tokens.inkMuted,
+                                  ),
+                                ),
                           ),
                         ),
                       ),

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../../app/theme_controller.dart';
 import '../../widgets/back_to_top_host.dart';
+import 'widgets/settings_section.dart';
 
 class SettingsAppearanceTab extends StatelessWidget {
   const SettingsAppearanceTab({super.key, required this.themeController});
@@ -27,20 +28,15 @@ class SettingsAppearanceTab extends StatelessWidget {
             keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
             padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
             children: [
-              Card(
+              SettingsSectionCard(
                 child: Padding(
                   padding: EdgeInsets.all(cardPad),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      Text(
-                        '主题',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                          color: tokens.ink,
-                          fontFamily: tokens.fontFamily,
-                        ),
+                      const SettingsSectionHeading(
+                        title: '主题',
+                        icon: Icons.palette_outlined,
                       ),
                       SizedBox(height: formGap),
                       SegmentedButton<ThemePreference>(
@@ -59,20 +55,15 @@ class SettingsAppearanceTab extends StatelessWidget {
                 ),
               ),
               SizedBox(height: formGap - 2),
-              Card(
+              SettingsSectionCard(
                 child: Padding(
                   padding: EdgeInsets.all(cardPad),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      Text(
-                        '字号与密度',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                          color: tokens.ink,
-                          fontFamily: tokens.fontFamily,
-                        ),
+                      const SettingsSectionHeading(
+                        title: '字号与密度',
+                        icon: Icons.text_fields_rounded,
                       ),
                       SizedBox(height: formGap),
                       DropdownButtonFormField<AppFontScale>(

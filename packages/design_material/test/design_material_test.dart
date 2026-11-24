@@ -29,6 +29,20 @@ void main() {
     expect(dark.scaffoldBackgroundColor, MaterialTokens.dark.canvas);
   });
 
+  test('surfaces use restrained depth without primary tint overlays', () {
+    for (final theme in [buildMaterialLightTheme(), buildMaterialDarkTheme()]) {
+      final tokens = theme.extension<MaterialTokens>()!;
+      expect(theme.cardTheme.elevation, 1);
+      expect(theme.cardTheme.color, tokens.surface);
+      expect(theme.cardTheme.surfaceTintColor, const Color(0x00000000));
+      expect(
+        theme.chipTheme.selectedColor,
+        tokens.primary.withValues(alpha: 0.12),
+      );
+      expect(theme.scaffoldBackgroundColor, tokens.canvas);
+    }
+  });
+
   test('ThemePreference maps to ThemeMode and toggles', () {
     expect(ThemePreference.light.themeMode, ThemeMode.light);
     expect(ThemePreference.dark.themeMode, ThemeMode.dark);
@@ -61,8 +75,10 @@ void main() {
     expect(UiDensity.comfortable.composerPadding.left, 14);
     expect(UiDensity.compact.composerFieldPadding.horizontal, 32);
     expect(UiDensity.compact.composerFieldPadding.vertical, 24);
-    expect(UiDensity.comfortable.composerFieldPadding,
-        UiDensity.compact.composerFieldPadding);
+    expect(
+      UiDensity.comfortable.composerFieldPadding,
+      UiDensity.compact.composerFieldPadding,
+    );
     expect(UiDensity.compact.settingsFormGap, 10);
     expect(UiDensity.comfortable.settingsFormGap, 14);
     expect(UiDensity.compact.settingsCardPadding, 12);
@@ -109,9 +125,10 @@ void main() {
 
   test('extreme density+fontScale spacing stays usable', () {
     // E9 抽检：compact+更大 / comfortable+更小 主路径间距仍为正且可区分。
-    expect(UiDensity.compact.sessionItemVerticalPadding, lessThan(
-      UiDensity.comfortable.sessionItemVerticalPadding,
-    ));
+    expect(
+      UiDensity.compact.sessionItemVerticalPadding,
+      lessThan(UiDensity.comfortable.sessionItemVerticalPadding),
+    );
     expect(UiDensity.compact.composerPadding.top, greaterThan(0));
     expect(UiDensity.comfortable.settingsFormGap, greaterThan(0));
     final tight = buildMaterialLightTheme(
@@ -137,18 +154,24 @@ void main() {
     expect(MaterialTokens.monoStackFamily, 'Roboto Mono');
     expect(MaterialTokens.light.fontFamily, 'Roboto');
     expect(MaterialTokens.light.monoFontFamily, 'Roboto Mono');
-    expect(kMaterialFontFamilyFallback, containsAll(<String>[
-      'Noto Sans SC',
-      '-apple-system',
-      'PingFang SC',
-      'Microsoft YaHei',
-    ]));
-    expect(kMaterialMonoFontFamilyFallback, containsAll(<String>[
-      'Noto Sans Mono',
-      'SF Mono',
-      'Consolas',
-      'monospace',
-    ]));
+    expect(
+      kMaterialFontFamilyFallback,
+      containsAll(<String>[
+        'Noto Sans SC',
+        '-apple-system',
+        'PingFang SC',
+        'Microsoft YaHei',
+      ]),
+    );
+    expect(
+      kMaterialMonoFontFamilyFallback,
+      containsAll(<String>[
+        'Noto Sans Mono',
+        'SF Mono',
+        'Consolas',
+        'monospace',
+      ]),
+    );
     final theme = buildMaterialLightTheme();
     expect(theme.textTheme.bodyMedium!.fontFamily, 'Roboto');
     expect(
@@ -158,8 +181,9 @@ void main() {
   });
 
   test('withMonoFont attaches mono family and fallback', () {
-    final style =
-        const TextStyle(fontSize: 12).withMonoFont(MaterialTokens.light);
+    final style = const TextStyle(
+      fontSize: 12,
+    ).withMonoFont(MaterialTokens.light);
     expect(style.fontFamily, 'Roboto Mono');
     expect(style.fontFamilyFallback, kMaterialMonoFontFamilyFallback);
   });
@@ -181,4 +205,3 @@ void main() {
     expect(find.byType(AppNavIcon), findsNWidgets(4));
   });
 }
-

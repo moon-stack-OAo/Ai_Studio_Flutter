@@ -27,9 +27,9 @@ const List<String> kMaterialMonoFontFamilyFallback = [
 /// 给 [TextStyle] 挂上 Material 等宽主族与回退栈。
 extension MaterialMonoTextStyle on TextStyle {
   TextStyle withMonoFont(MaterialTokens tokens) => copyWith(
-        fontFamily: tokens.monoFontFamily,
-        fontFamilyFallback: kMaterialMonoFontFamilyFallback,
-      );
+    fontFamily: tokens.monoFontFamily,
+    fontFamilyFallback: kMaterialMonoFontFamilyFallback,
+  );
 }
 
 TextStyle _scaleStyle(
@@ -190,6 +190,19 @@ ThemeData _buildTheme(
     scaffoldBackgroundColor: tokens.canvas,
     canvasColor: tokens.canvas,
     cardColor: tokens.surface,
+    cardTheme: CardThemeData(
+      color: tokens.surface,
+      surfaceTintColor: Colors.transparent,
+      shadowColor: Colors.black.withValues(
+        alpha: tokens.brightness == Brightness.dark ? 0.24 : 0.08,
+      ),
+      elevation: 1,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(20),
+        side: BorderSide(color: tokens.border),
+      ),
+      clipBehavior: Clip.antiAlias,
+    ),
     dividerColor: tokens.border,
     visualDensity: density.visualDensity,
     fontFamily: tokens.fontFamily,
@@ -232,6 +245,19 @@ ThemeData _buildTheme(
           color: selected ? tokens.primaryPressed : tokens.inkMuted,
         );
       }),
+    ),
+    chipTheme: ChipThemeData(
+      backgroundColor: tokens.surfaceMuted,
+      selectedColor: tokens.primary.withValues(alpha: 0.12),
+      secondarySelectedColor: tokens.primary.withValues(alpha: 0.12),
+      checkmarkColor: tokens.primaryPressed,
+      side: BorderSide(color: tokens.border),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      labelStyle: TextStyle(color: tokens.inkSecondary),
+      secondaryLabelStyle: TextStyle(
+        color: tokens.primaryPressed,
+        fontWeight: FontWeight.w600,
+      ),
     ),
     filledButtonTheme: FilledButtonThemeData(
       style: FilledButton.styleFrom(
@@ -325,23 +351,13 @@ ThemeData _buildTheme(
 ThemeData buildMaterialLightTheme({
   AppFontScale fontScale = AppFontScale.standard,
   UiDensity density = UiDensity.compact,
-}) =>
-    _buildTheme(
-      MaterialTokens.light,
-      fontScale: fontScale,
-      density: density,
-    );
+}) => _buildTheme(MaterialTokens.light, fontScale: fontScale, density: density);
 
 /// 暗色 Material ThemeData（Cursor 向近黑 + 冷蓝 primary）。
 ThemeData buildMaterialDarkTheme({
   AppFontScale fontScale = AppFontScale.standard,
   UiDensity density = UiDensity.compact,
-}) =>
-    _buildTheme(
-      MaterialTokens.dark,
-      fontScale: fontScale,
-      density: density,
-    );
+}) => _buildTheme(MaterialTokens.dark, fontScale: fontScale, density: density);
 
 /// 从 [Theme] 读取本包 token；若缺失则按亮度回退。
 MaterialTokens materialTokensOf(BuildContext context) {

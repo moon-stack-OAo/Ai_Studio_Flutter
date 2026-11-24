@@ -66,7 +66,8 @@ class _ChatPageState extends State<ChatPage> {
     _sessionChrome = ValueNotifier(_chromeSignature());
     widget.sessionRepository.addListener(_onSessionChanged);
     _skills =
-        widget.skillRepository ?? SkillRepository(storage: MemorySkillStorage());
+        widget.skillRepository ??
+        SkillRepository(storage: MemorySkillStorage());
     if (!_skills.isLoaded) unawaited(_skills.load().catchError((Object _) {}));
     _controller = ChatController(
       skillRepository: _skills,
@@ -145,10 +146,7 @@ class _ChatPageState extends State<ChatPage> {
   }
 
   Future<void> _openModelPicker() async {
-    await showChatModelPickerSheet(
-      context: context,
-      controller: _controller,
-    );
+    await showChatModelPickerSheet(context: context, controller: _controller);
   }
 
   Future<void> _openOverrides(ChatSession session) async {
@@ -164,10 +162,7 @@ class _ChatPageState extends State<ChatPage> {
   Widget build(BuildContext context) {
     final tokens = materialTokensOf(context);
     return ListenableBuilder(
-      listenable: Listenable.merge([
-        widget.providerRepository,
-        _sessionChrome,
-      ]),
+      listenable: Listenable.merge([widget.providerRepository, _sessionChrome]),
       builder: (context, _) {
         final ready = widget.providerRepository.hasConfiguredChatProvider;
         if (!ready) {
@@ -191,11 +186,7 @@ class _ChatPageState extends State<ChatPage> {
           backgroundColor: tokens.canvas,
           resizeToAvoidBottomInset: true,
           appBar: AppBar(
-            title: Text(
-              title,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
+            title: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis),
             leading: IconButton(
               tooltip: '会话列表',
               icon: const Icon(Icons.menu),
@@ -225,9 +216,18 @@ class _ChatPageState extends State<ChatPage> {
                             vertical: 5,
                           ),
                           decoration: BoxDecoration(
-                            color: tokens.surfaceMuted,
+                            color: Color.alphaBlend(
+                              tokens.primary.withValues(alpha: 0.07),
+                              tokens.surface,
+                            ),
                             borderRadius: BorderRadius.circular(999),
-                            border: Border.all(color: tokens.border),
+                            border: Border.all(
+                              color: Color.lerp(
+                                tokens.border,
+                                tokens.primary,
+                                0.22,
+                              )!,
+                            ),
                           ),
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
@@ -304,10 +304,7 @@ class _ChatPageState extends State<ChatPage> {
                 ),
               ),
               ListenableBuilder(
-                listenable: Listenable.merge([
-                  widget.generation,
-                  _controller,
-                ]),
+                listenable: Listenable.merge([widget.generation, _controller]),
                 builder: (context, _) {
                   final streamingHere = _controller.isStreamingActiveSession;
                   return Column(

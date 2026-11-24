@@ -16,6 +16,7 @@ import '../../update/update_prompt_dialog.dart';
 import '../../widgets/back_to_top_host.dart';
 import '../chat/widgets/markdown_host.dart';
 import 'widgets/changelog_section.dart';
+import 'widgets/settings_section.dart';
 
 class SettingsAboutTab extends StatefulWidget {
   const SettingsAboutTab({
@@ -174,9 +175,14 @@ class _SettingsAboutTabState extends State<SettingsAboutTab> {
   Future<void> _loadUsage() async {
     setState(() => _usageLoading = true);
     try {
-      unawaited(_backup.loadImportStatus().then((_) {
-        if (mounted) setState(() {});
-      }).catchError((Object _) {}));
+      unawaited(
+        _backup
+            .loadImportStatus()
+            .then((_) {
+              if (mounted) setState(() {});
+            })
+            .catchError((Object _) {}),
+      );
       final usage = await _backup.estimateStorageUsage();
       if (!mounted) return;
       setState(() {
@@ -594,18 +600,22 @@ class _SettingsAboutTabState extends State<SettingsAboutTab> {
 
   Future<void> _runImport() async {
     final XFile? picked;
-    final injected = widget.backupReader == null ? null : await widget.backupReader!();
+    final injected = widget.backupReader == null
+        ? null
+        : await widget.backupReader!();
     try {
-      picked = widget.backupReader != null ? null : await openFile(
-        acceptedTypeGroups: [
-          const XTypeGroup(
-            label: 'JSON',
-            extensions: ['json'],
-            mimeTypes: ['application/json'],
-            uniformTypeIdentifiers: ['public.json'],
-          ),
-        ],
-      );
+      picked = widget.backupReader != null
+          ? null
+          : await openFile(
+              acceptedTypeGroups: [
+                const XTypeGroup(
+                  label: 'JSON',
+                  extensions: ['json'],
+                  mimeTypes: ['application/json'],
+                  uniformTypeIdentifiers: ['public.json'],
+                ),
+              ],
+            );
     } on MissingPluginException {
       if (!mounted) return;
       _snack('文件选择器组件不可用，请完整重启或更新应用。');
@@ -733,16 +743,32 @@ class _SettingsAboutTabState extends State<SettingsAboutTab> {
       return;
     }
     try {
-      final plan = await _backup.prepareImport(raw,
-        options: DataBackupImportOptions(importSecrets: importSecrets,
-          importSkills: importSkills, allowStdio: false));
+      final plan = await _backup.prepareImport(
+        raw,
+        options: DataBackupImportOptions(
+          importSecrets: importSecrets,
+          importSkills: importSkills,
+          allowStdio: false,
+        ),
+      );
       if (!mounted) return;
-      final proceed = await showDialog<bool>(context: context, builder: (ctx) => AlertDialog(
-        title: const Text('导入预览'),
-        content: SingleChildScrollView(child: Text(plan.summary)),
-        actions: [TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('取消')),
-          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('确认导入'))],
-      ));
+      final proceed = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('导入预览'),
+          content: SingleChildScrollView(child: Text(plan.summary)),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('取消'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('确认导入'),
+            ),
+          ],
+        ),
+      );
       if (proceed != true || !mounted) return;
       if (widget.generation?.busy == true) {
         _snack('生成状态已变化，请停止后重新预览。');
@@ -775,7 +801,8 @@ class _SettingsAboutTabState extends State<SettingsAboutTab> {
       _snack(e.message);
     } on DataBackupImportFailure catch (e) {
       final appearance = widget.themeController?.appearanceRepository;
-      if (appearance != null) widget.themeController?.loadFrom(appearance.settings);
+      if (appearance != null)
+        widget.themeController?.loadFrom(appearance.settings);
       if (!mounted) return;
       _snack(e.toString());
       await _loadUsage();
@@ -956,19 +983,35 @@ class _SettingsAboutTabState extends State<SettingsAboutTab> {
         keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
         padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
         children: [
-          Card(
+          SettingsSectionCard(
             child: Padding(
               padding: const EdgeInsets.all(14),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    'AI Studio',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      color: tokens.ink,
-                    ),
+                  Row(
+                    children: [
+                      ExcludeSemantics(
+                        child: Image.asset(
+                          'assets/logo.png',
+                          width: 34,
+                          height: 34,
+                          filterQuality: FilterQuality.medium,
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          'AI Studio',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w600,
+                            letterSpacing: -0.3,
+                            color: tokens.ink,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 6),
                   GestureDetector(
@@ -1179,19 +1222,15 @@ class _SettingsAboutTabState extends State<SettingsAboutTab> {
             ),
           ),
           const SizedBox(height: 12),
-          Card(
+          SettingsSectionCard(
             child: Padding(
               padding: const EdgeInsets.all(14),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    '更新日志',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: tokens.ink,
-                    ),
+                  const SettingsSectionHeading(
+                    title: '更新日志',
+                    icon: Icons.history_rounded,
                   ),
                   const SizedBox(height: 8),
                   if (_changelogLoading)
@@ -1209,13 +1248,15 @@ class _SettingsAboutTabState extends State<SettingsAboutTab> {
             ),
           ),
           const SizedBox(height: 12),
-          Card(
+          SettingsSectionCard(
             clipBehavior: Clip.antiAlias,
             child: Column(
               children: [
                 ListTile(
                   title: const Text('重试恢复历史'),
-                  subtitle: Text('${_backup.historyRecoverySummary}\n${_backup.importRecoverySummary}'),
+                  subtitle: Text(
+                    '${_backup.historyRecoverySummary}\n${_backup.importRecoverySummary}',
+                  ),
                   enabled: !_busy,
                   onTap: _busy ? null : _onRecoverHistory,
                 ),

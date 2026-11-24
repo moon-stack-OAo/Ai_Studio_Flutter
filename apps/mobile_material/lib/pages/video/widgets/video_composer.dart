@@ -96,8 +96,9 @@ class _VideoComposerState extends State<VideoComposer> {
     if (widget.prompt != _promptCtrl.text &&
         widget.prompt != oldWidget.prompt) {
       _promptCtrl.text = widget.prompt;
-      _promptCtrl.selection =
-          TextSelection.collapsed(offset: _promptCtrl.text.length);
+      _promptCtrl.selection = TextSelection.collapsed(
+        offset: _promptCtrl.text.length,
+      );
     }
   }
 
@@ -124,15 +125,14 @@ class _VideoComposerState extends State<VideoComposer> {
   Widget build(BuildContext context) {
     final tokens = materialTokensOf(context);
     final hasRef = widget.refBytes != null && widget.refBytes!.isNotEmpty;
-    final canPickRef =
-        widget.supportsReferenceImage && !widget.generating;
+    final canPickRef = widget.supportsReferenceImage && !widget.generating;
     final canPickModel = _canPickModel;
 
     return Card(
       margin: EdgeInsets.zero,
       color: tokens.surface,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(20),
         side: BorderSide(color: tokens.border),
       ),
       child: Column(
@@ -237,7 +237,8 @@ class _VideoComposerState extends State<VideoComposer> {
                         child: _dropdown<int>(
                           tokens: tokens,
                           label: '时长',
-                          value: widget.durationOptions.contains(widget.duration)
+                          value:
+                              widget.durationOptions.contains(widget.duration)
                               ? widget.duration
                               : widget.durationOptions.first,
                           items: widget.durationOptions,
@@ -252,8 +253,10 @@ class _VideoComposerState extends State<VideoComposer> {
                           child: _dropdown(
                             tokens: tokens,
                             label: '比例',
-                            value: widget.aspectOptions
-                                    .contains(widget.aspectRatio)
+                            value:
+                                widget.aspectOptions.contains(
+                                  widget.aspectRatio,
+                                )
                                 ? widget.aspectRatio
                                 : widget.aspectOptions.first,
                             items: widget.aspectOptions,
@@ -285,8 +288,10 @@ class _VideoComposerState extends State<VideoComposer> {
                           child: _dropdown(
                             tokens: tokens,
                             label: '清晰度',
-                            value: widget.resolutionOptions
-                                    .contains(widget.resolution)
+                            value:
+                                widget.resolutionOptions.contains(
+                                  widget.resolution,
+                                )
                                 ? widget.resolution
                                 : widget.resolutionOptions.first,
                             items: widget.resolutionOptions,
@@ -339,8 +344,9 @@ class _VideoComposerState extends State<VideoComposer> {
                     child: TextField(
                       controller: _promptCtrl,
                       focusNode: _promptFocus,
-                      onChanged:
-                          widget.generating ? null : widget.onPromptChanged,
+                      onChanged: widget.generating
+                          ? null
+                          : widget.onPromptChanged,
                       enabled: !widget.generating,
                       maxLines: 3,
                       minLines: 2,
@@ -403,8 +409,10 @@ class _VideoComposerState extends State<VideoComposer> {
                         padding: const EdgeInsets.symmetric(horizontal: 12),
                       ),
                       onPressed: canPickRef ? widget.onPickRef : null,
-                      icon: const Icon(Icons.add_photo_alternate_outlined,
-                          size: 18),
+                      icon: const Icon(
+                        Icons.add_photo_alternate_outlined,
+                        size: 18,
+                      ),
                       label: const Text('从相册选择参考图'),
                     ),
                   const SizedBox(height: 8),
@@ -481,11 +489,11 @@ class _VideoComposerState extends State<VideoComposer> {
             isDense: true,
             filled: true,
             fillColor: tokens.surfaceMuted,
-            contentPadding:
-                const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(10),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 10,
+              vertical: 0,
             ),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
           ),
           child: DropdownButtonHideUnderline(
             child: DropdownButton<T>(

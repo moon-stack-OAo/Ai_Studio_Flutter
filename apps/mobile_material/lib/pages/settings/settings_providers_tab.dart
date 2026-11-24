@@ -7,6 +7,7 @@ import '../../widgets/empty_illustrations.dart';
 import '../../widgets/material_empty_states.dart';
 import 'provider_edit_sheet.dart';
 import 'settings_mcp_page.dart';
+import 'widgets/settings_section.dart';
 
 class SettingsProvidersTab extends StatefulWidget {
   const SettingsProvidersTab({
@@ -160,7 +161,7 @@ class _SettingsProvidersTabState extends State<SettingsProvidersTab> {
               illustration: const MaterialEmptyIllustration.noProviders(),
             )
           else
-            Card(
+            SettingsSectionCard(
               clipBehavior: Clip.antiAlias,
               child: Column(
                 children: [
@@ -212,13 +213,9 @@ class _SettingsProvidersTabState extends State<SettingsProvidersTab> {
           if (widget.mcpServerRepository != null &&
               widget.mcpSessionFactory != null) ...[
             const SizedBox(height: 20),
-            Text(
-              '业务 MCP',
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                color: tokens.ink,
-              ),
+            const SettingsSectionHeading(
+              title: '业务 MCP',
+              icon: Icons.hub_outlined,
             ),
             const SizedBox(height: 4),
             Text(

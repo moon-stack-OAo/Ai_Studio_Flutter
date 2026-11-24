@@ -93,8 +93,9 @@ class _ImageComposerState extends State<ImageComposer> {
     if (widget.prompt != _promptCtrl.text &&
         widget.prompt != oldWidget.prompt) {
       _promptCtrl.text = widget.prompt;
-      _promptCtrl.selection =
-          TextSelection.collapsed(offset: _promptCtrl.text.length);
+      _promptCtrl.selection = TextSelection.collapsed(
+        offset: _promptCtrl.text.length,
+      );
     }
   }
 
@@ -120,7 +121,7 @@ class _ImageComposerState extends State<ImageComposer> {
       margin: EdgeInsets.zero,
       color: tokens.surface,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(20),
         side: BorderSide(color: tokens.border),
       ),
       child: Column(
@@ -226,8 +227,10 @@ class _ImageComposerState extends State<ImageComposer> {
                           child: _dropdown(
                             tokens: tokens,
                             label: '比例',
-                            value: widget.aspectOptions
-                                    .contains(widget.aspectRatio)
+                            value:
+                                widget.aspectOptions.contains(
+                                  widget.aspectRatio,
+                                )
                                 ? widget.aspectRatio
                                 : widget.aspectOptions.first,
                             items: widget.aspectOptions,
@@ -270,8 +273,10 @@ class _ImageComposerState extends State<ImageComposer> {
                           child: _dropdown<String>(
                             tokens: tokens,
                             label: '质量',
-                            value: widget.qualityOptions
-                                    .any((o) => o.value == widget.quality)
+                            value:
+                                widget.qualityOptions.any(
+                                  (o) => o.value == widget.quality,
+                                )
                                 ? widget.quality
                                 : defaultImageQuality,
                             items: [
@@ -315,8 +320,9 @@ class _ImageComposerState extends State<ImageComposer> {
                     child: TextField(
                       controller: _promptCtrl,
                       focusNode: _promptFocus,
-                      onChanged:
-                          widget.generating ? null : widget.onPromptChanged,
+                      onChanged: widget.generating
+                          ? null
+                          : widget.onPromptChanged,
                       enabled: !widget.generating,
                       maxLines: 3,
                       minLines: 2,
@@ -358,10 +364,11 @@ class _ImageComposerState extends State<ImageComposer> {
                         minimumSize: const Size.fromHeight(40),
                         padding: const EdgeInsets.symmetric(horizontal: 12),
                       ),
-                      onPressed:
-                          widget.generating ? null : widget.onPickRef,
-                      icon: const Icon(Icons.add_photo_alternate_outlined,
-                          size: 18),
+                      onPressed: widget.generating ? null : widget.onPickRef,
+                      icon: const Icon(
+                        Icons.add_photo_alternate_outlined,
+                        size: 18,
+                      ),
                       label: const Text('从相册选择参考图'),
                     ),
                   const SizedBox(height: 8),
@@ -438,11 +445,11 @@ class _ImageComposerState extends State<ImageComposer> {
             isDense: true,
             filled: true,
             fillColor: tokens.surfaceMuted,
-            contentPadding:
-                const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(10),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 10,
+              vertical: 0,
             ),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
           ),
           child: DropdownButtonHideUnderline(
             child: DropdownButton<T>(

@@ -3,6 +3,7 @@ import 'package:design_material/design_material.dart';
 import 'package:flutter/material.dart';
 
 import '../../widgets/back_to_top_host.dart';
+import 'widgets/settings_section.dart';
 
 class SettingsChatDefaultsTab extends StatefulWidget {
   const SettingsChatDefaultsTab({super.key, required this.repository});
@@ -231,19 +232,15 @@ class _SettingsChatDefaultsTabState extends State<SettingsChatDefaultsTab>
         keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
         padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
         children: [
-          Card(
+          SettingsSectionCard(
             child: Padding(
               padding: const EdgeInsets.all(14),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Text(
-                    '对话默认',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: tokens.ink,
-                    ),
+                  const SettingsSectionHeading(
+                    title: '对话默认',
+                    icon: Icons.tune_rounded,
                   ),
                   const SizedBox(height: 6),
                   Text(
@@ -324,19 +321,15 @@ class _SettingsChatDefaultsTabState extends State<SettingsChatDefaultsTab>
             ),
           ),
           const SizedBox(height: 12),
-          Card(
+          SettingsSectionCard(
             child: Padding(
               padding: const EdgeInsets.all(14),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Text(
-                    '上下文裁剪',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: tokens.ink,
-                    ),
+                  const SettingsSectionHeading(
+                    title: '上下文裁剪',
+                    icon: Icons.short_text_rounded,
                   ),
                   SwitchListTile(
                     contentPadding: EdgeInsets.zero,
