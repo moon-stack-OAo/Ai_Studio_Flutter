@@ -15,7 +15,7 @@
 
 ### Fixed
 
-- **原生编译 CI lockfile**：用 Flutter 3.44.5 重新生成 `pubspec.lock`，使 `pub get --enforce-lockfile` 与钉死的 CI / 发版 SDK 一致；不改变依赖约束与应用版本。
+- **原生编译 CI lockfile**：用 Flutter 3.44.5 并对齐官方 `pub.dev` 重新生成 `pubspec.lock`，避免本机国内镜像源导致 `pub get --enforce-lockfile` 与 CI 解析结果不一致；不改变依赖约束与应用版本。
 
 ---
 
