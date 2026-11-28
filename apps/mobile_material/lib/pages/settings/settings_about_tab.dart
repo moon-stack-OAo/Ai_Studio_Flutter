@@ -951,7 +951,7 @@ class _SettingsAboutTabState extends State<SettingsAboutTab> {
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
         color: bg,
-        borderRadius: BorderRadius.circular(999),
+        borderRadius: BorderRadius.circular(4),
         border: Border.all(
           color: hasUpdate
               ? Color.lerp(tokens.primary, tokens.border, 0.45)!

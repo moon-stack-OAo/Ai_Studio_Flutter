@@ -70,7 +70,7 @@ class _MarkdownHostState extends State<MarkdownHost> {
       ),
       h1: base.copyWith(
         fontSize: widget.compact ? 15 : 22,
-        fontWeight: FontWeight.w700,
+        fontWeight: FontWeight.w600,
         height: 1.3,
         color: ink,
       ),
@@ -79,7 +79,7 @@ class _MarkdownHostState extends State<MarkdownHost> {
           : EdgeInsets.zero,
       h2: base.copyWith(
         fontSize: widget.compact ? 14 : 18,
-        fontWeight: widget.compact ? FontWeight.w600 : FontWeight.w700,
+        fontWeight: FontWeight.w600,
         height: 1.35,
         color: ink,
       ),

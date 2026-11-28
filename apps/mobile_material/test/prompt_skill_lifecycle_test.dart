@@ -143,7 +143,12 @@ class _PanelHarness {
   }) async {
     final count = client.requests.length;
     await tester.tap(
-      text(refine ? kPromptRefineInstructions.first : '✨ AI 润色'),
+      refine
+          ? text(kPromptRefineInstructions.first)
+          : find.descendant(
+              of: panel,
+              matching: find.widgetWithText(FilledButton, '润色'),
+            ),
     );
     await tester.pump();
     expect(client.requests.length, count + 1);

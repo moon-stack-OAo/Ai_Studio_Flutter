@@ -7,7 +7,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../widgets/collapsible_prompt.dart';
-import '../../../widgets/empty_illustrations.dart';
 import '../../../widgets/material_empty_states.dart';
 import '../../../widgets/skill_summary.dart';
 
@@ -31,12 +30,6 @@ class VideoQueue extends StatefulWidget {
     this.onPosterCached,
     this.loadReferenceBytes,
     this.onPreviewReference,
-    this.emptyHint = '还没有视频任务',
-    this.emptySubtitle = '填写上方参数后创建任务，队列将在此展示进度。',
-    this.emptyActionLabel,
-    this.onEmptyAction,
-    this.emptySecondaryActionLabel,
-    this.onEmptySecondaryAction,
   });
 
   final List<VideoItem> items;
@@ -57,12 +50,6 @@ class VideoQueue extends StatefulWidget {
   final Future<Uint8List?> Function(ImageRef ref)? loadReferenceBytes;
   final void Function(VideoItem item, int index, ImageRef ref)?
       onPreviewReference;
-  final String emptyHint;
-  final String? emptySubtitle;
-  final String? emptyActionLabel;
-  final VoidCallback? onEmptyAction;
-  final String? emptySecondaryActionLabel;
-  final VoidCallback? onEmptySecondaryAction;
 
   @override
   State<VideoQueue> createState() => _VideoQueueState();
@@ -85,14 +72,9 @@ class _VideoQueueState extends State<VideoQueue> {
   Widget build(BuildContext context) {
     final tokens = materialTokensOf(context);
     if (widget.items.isEmpty) {
-      return MaterialContentEmpty(
-        hint: widget.emptyHint,
-        subtitle: widget.emptySubtitle,
-        illustration: const MaterialEmptyIllustration.noVideos(),
-        actionLabel: widget.emptyActionLabel,
-        onAction: widget.onEmptyAction,
-        secondaryActionLabel: widget.emptySecondaryActionLabel,
-        onSecondaryAction: widget.onEmptySecondaryAction,
+      return const MaterialResultFrameEmpty(
+        aspectRatio: 16 / 9,
+        caption: '10 秒 · 1280×720 · 16:9',
       );
     }
 
@@ -145,10 +127,9 @@ class _VideoQueueState extends State<VideoQueue> {
         if (filtered.isEmpty)
           Padding(
             padding: const EdgeInsets.only(top: 16),
-            child: MaterialContentEmpty(
+            child: const MaterialContentEmpty(
               hint: '当前筛选无任务',
               subtitle: '试试切换其他状态，或选「全部」。',
-              illustration: const MaterialEmptyIllustration.noVideos(),
             ),
           )
         else

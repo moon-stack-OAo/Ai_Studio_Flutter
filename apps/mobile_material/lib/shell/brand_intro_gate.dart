@@ -146,22 +146,9 @@ class _BrandIntroGateState extends State<BrandIntroGate> {
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Container(
-                          width: 88,
-                          height: 88,
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: tokens.surface,
-                            borderRadius: BorderRadius.circular(22),
-                            border: Border.all(color: tokens.border),
-                            boxShadow: [
-                              BoxShadow(
-                                color: tokens.ink.withValues(alpha: 0.10),
-                                blurRadius: 28,
-                                offset: const Offset(0, 10),
-                              ),
-                            ],
-                          ),
+                        SizedBox(
+                          width: 48,
+                          height: 48,
                           child: Image.asset(
                             'assets/logo.png',
                             frameBuilder: _buildLogoFrame,
@@ -169,20 +156,19 @@ class _BrandIntroGateState extends State<BrandIntroGate> {
                             filterQuality: FilterQuality.medium,
                           ),
                         ),
-                        const SizedBox(height: 16),
+                        const SizedBox(height: 14),
                         Text(
                           'AI Studio',
                           textAlign: TextAlign.center,
                           style: TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.w600,
-                            letterSpacing: -0.01,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w500,
                             color: tokens.ink,
                             fontFamily: tokens.fontFamily,
                             decoration: TextDecoration.none,
                           ),
                         ),
-                        const SizedBox(height: 8),
+                        const SizedBox(height: 10),
                         Text(
                           '对话 · 生图 · 生视频',
                           textAlign: TextAlign.center,

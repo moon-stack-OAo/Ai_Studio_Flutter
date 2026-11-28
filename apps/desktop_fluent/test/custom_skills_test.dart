@@ -785,7 +785,7 @@ void main() {
           );
           await tester.pumpAndSettle();
         }
-        await tester.tap(find.text('✨ AI 润色'));
+        await tester.tap(find.widgetWithText(Button, '润色'));
         await tester.pump();
         expect(client.requests.single.first['content'], contains('保持原主体'));
         expect(

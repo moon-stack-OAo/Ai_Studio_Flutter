@@ -836,7 +836,7 @@ Flutter 落点：`packages/design_fluent` 与 `packages/design_material` 的 `Th
 - ~~设置导入导出、存储清理~~（已提前落地：`SET-DATA` / `DataBackupService`）
 - ~~空态 / 短动效~~（已落地：空态 E7；短动效 E8 主路径对齐 `design_*` motion）
 - ~~各系统主题、密度专项~~（部分落地：token 表面层级/`scrim`；InfoBar·Snackbar 吃 token；comfortable/compact 作用于会话行高、Composer 内边距、设置表单项间距；字号五档极端档 overflow 微调；空态 `illustration` 插槽）
-- ~~空态插画~~（已落地：双端 `CustomPainter` 简易线稿，跟随 token 亮暗；覆盖未配置提供商 / 无消息·无生图·无视频 / 会话列表空 / 设置提供商列表空；不引入 `flutter_svg`）
+- ~~空态插画~~（已落地：未配置用缩略卡片，其余空态用页面骨架，跟随 token 亮暗；覆盖未配置提供商 / 无消息·无生图·无视频 / 会话列表空 / 设置提供商列表空；不引入 `flutter_svg`）
 - ~~无障碍与键盘可达~~（已落地：双端全路径 Semantics/tooltip/触控≥48/liveRegion/焦点；Windows debug 可关语义树；**WCAG 2.2 AA 自证，非第三方认证**）
 - ~~**`SYS-SHARE`**：Material 图/视频系统分享入口（`share_plus`）~~（已落地）
 - ~~**`NAV-BACK`**：Material `M-BackHost` 统一托管全屏层返回~~（已落地）
@@ -1045,4 +1045,5 @@ packages/design_material/
 | 2026-09-17 | **P6-4 落地（mobile_material）**：设置提供商 Tab 内「业务 MCP」子页（CRUD/探测/策略）；对话轨迹卡 + 授权 AlertDialog；Facade DI 同构；降级横幅可跳转                                                                                                     |
 | 2026-09-17 | **P6-5 收口**：`DataBackupService` 导出/导入 MCP 元数据；默认 omit Bearer；`includeSecrets`/`importSecrets` 对齐提供商；清密钥清 MCP secret、清全部清 Server 列表；旧备份无 mcp 兼容；双端关于页文案明示；脱敏补测；`architecture`/`SECURITY`/`CHANGELOG` 同步         |
 | 2026-09-17 | **P6 OD 原型**：本机 OD `start_run`（Local OpenCode）生成 `*-settings-mcp` / `*-chat-mcp`（Fluent/Material×亮暗）；同步回仓库 `design/opendesign/`（含 index 与设置侧栏/提供商入口）；未同步 `*.artifact.json`                                     |
+| 2026-11-28 | 空态重做：未配置改为缩略卡片整屏，无消息改为一行提示，无图/无视频改为发丝线空网格加等宽参数小字，无会话/无提供商改为与真实行同高的一行；双端各自实现；§9 P3 空态插画措辞同步 |
 | 2026-09-17 | **P6-S 桌面 stdio 规格**：修订「不做 stdio」→ 移动端不做、桌面可选；§1.1–1.3 / §5.11 传输与配置模型（`transport`/`command`/`args`/`env`/`cwd`）；`StdioMcpSession`+`ProcessHost` 桌面注入；OpenCode/Cursor 映射意图；§8 / §9 P6-S / `SECURITY`；**实现未开始** |

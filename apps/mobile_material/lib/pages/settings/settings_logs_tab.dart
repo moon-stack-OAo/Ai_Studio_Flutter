@@ -288,7 +288,7 @@ class _SettingsLogsTabState extends State<SettingsLogsTab> {
                                           text: e.level.label,
                                           style: TextStyle(
                                             color: lvColor,
-                                            fontWeight: FontWeight.w700,
+                                            fontWeight: FontWeight.w600,
                                           ),
                                         ),
                                         TextSpan(

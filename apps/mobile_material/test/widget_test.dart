@@ -113,8 +113,8 @@ void main() {
   testWidgets('unconfigured provider shows chat empty CTA', (tester) async {
     await _pumpApp(tester);
 
-    expect(find.text('尚未配置提供商'), findsOneWidget);
-    expect(find.text('去设置'), findsOneWidget);
+    expect(find.text('还没有可用的模型'), findsOneWidget);
+    expect(find.text('添加提供商'), findsOneWidget);
   });
 
   testWidgets('configured provider shows composer', (tester) async {
@@ -146,13 +146,12 @@ void main() {
 
     await _pumpApp(tester, providers: providers, sessions: sessions);
 
-    expect(find.text('尚未配置提供商'), findsNothing);
-    expect(find.text('去设置'), findsNothing);
-    expect(find.text('开始第一条对话'), findsOneWidget);
-    expect(find.text('当前会话还没有消息，在下方输入即可开始。'), findsOneWidget);
-    // 仓库默认已有会话；主区空态不再推「新建会话」，仅保留打开列表。
+    expect(find.text('还没有可用的模型'), findsNothing);
+    expect(find.text('添加提供商'), findsNothing);
+    // 无消息只留一行，不再带标题、说明或打开列表的按钮。
+    expect(find.text('从下面输入开始'), findsOneWidget);
     expect(find.text('新建会话'), findsNothing);
-    expect(find.text('打开会话列表'), findsOneWidget);
+    expect(find.text('打开会话列表'), findsNothing);
     expect(find.byIcon(Icons.send_rounded), findsOneWidget);
     expect(find.textContaining('gpt-test'), findsWidgets);
   });
@@ -203,12 +202,12 @@ void main() {
     await tester.tap(find.text('生图'));
     await tester.pumpAndSettle();
 
-    expect(find.text('尚未配置生图模型'), findsOneWidget);
+    expect(find.text('还没有可用的生图模型'), findsOneWidget);
     expect(
-      find.text('前往设置添加可用生图模型与密钥后，即可开始生成。'),
+      find.text('添加提供商并选择生图模型后，才能开始生成。'),
       findsOneWidget,
     );
-    expect(find.text('去设置'), findsOneWidget);
+    expect(find.text('添加提供商'), findsOneWidget);
   });
 
   testWidgets('configured image provider shows params composer',
@@ -240,7 +239,7 @@ void main() {
     await tester.tap(find.text('生图'));
     await tester.pumpAndSettle();
 
-    expect(find.text('尚未配置生图模型'), findsNothing);
+    expect(find.text('还没有可用的生图模型'), findsNothing);
     expect(find.text('参数'), findsOneWidget);
     expect(find.text('生成'), findsOneWidget);
     expect(find.text('从相册选择参考图'), findsOneWidget);
@@ -253,12 +252,12 @@ void main() {
     await tester.tap(find.text('生视频'));
     await tester.pumpAndSettle();
 
-    expect(find.text('尚未配置视频模型'), findsOneWidget);
+    expect(find.text('还没有可用的视频模型'), findsOneWidget);
     expect(
-      find.text('前往设置添加视频模型与密钥后，即可创建生成任务。'),
+      find.text('添加提供商并选择视频模型后，才能创建生成任务。'),
       findsOneWidget,
     );
-    expect(find.text('去设置'), findsOneWidget);
+    expect(find.text('添加提供商'), findsOneWidget);
   });
 
   testWidgets('configured video provider shows params composer',
@@ -290,11 +289,11 @@ void main() {
     await tester.tap(find.text('生视频'));
     await tester.pumpAndSettle();
 
-    expect(find.text('尚未配置视频模型'), findsNothing);
+    expect(find.text('还没有可用的视频模型'), findsNothing);
     expect(find.text('参数'), findsOneWidget);
-    // Composer 主按钮 + 队列空态 CTA 同文案。
-    expect(find.text('创建任务'), findsWidgets);
-    expect(find.text('还没有视频任务'), findsOneWidget);
+    // 队列空态不再放按钮，只剩 composer 的主按钮。
+    expect(find.text('创建任务'), findsOneWidget);
+    expect(find.text('10 秒 · 1280×720 · 16:9'), findsOneWidget);
     expect(find.textContaining('sora-2'), findsWidgets);
   });
 
@@ -334,7 +333,7 @@ void main() {
     await tester.pump();
 
     expect(find.text('暂无提供商'), findsOneWidget);
-    expect(find.text('添加 OpenAI / xAI 或兼容源后即可对话与生成。'), findsOneWidget);
+    expect(find.text('添加 OpenAI / xAI 或兼容源后即可对话与生成。'), findsNothing);
     expect(find.text('添加提供商'), findsWidgets);
     expect(find.byIcon(Icons.add), findsWidgets);
 
@@ -642,16 +641,16 @@ void main() {
   testWidgets('section switch keeps chat state via IndexedStack', (tester) async {
     await _pumpApp(tester);
 
-    expect(find.text('尚未配置提供商'), findsOneWidget);
+    expect(find.text('还没有可用的模型'), findsOneWidget);
     await tester.tap(find.text('生图'));
     await tester.pump(const Duration(milliseconds: 200));
     await tester.pumpAndSettle();
-    expect(find.text('尚未配置生图模型'), findsOneWidget);
+    expect(find.text('还没有可用的生图模型'), findsOneWidget);
 
     await tester.tap(find.text('对话'));
     await tester.pump(const Duration(milliseconds: 200));
     await tester.pumpAndSettle();
-    expect(find.text('尚未配置提供商'), findsOneWidget);
+    expect(find.text('还没有可用的模型'), findsOneWidget);
   });
 
   testWidgets('root back shows exit confirm snackbar', (tester) async {

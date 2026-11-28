@@ -105,19 +105,19 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(IndexedStack), findsOneWidget);
-    expect(find.text('尚未配置提供商'), findsOneWidget);
+    expect(find.text('还没有可用的模型'), findsOneWidget);
 
     // compact 侧栏只显示图标，title 作为 tooltip / semantics。
     await tester.tap(find.byTooltip('生图'));
     await tester.pump(const Duration(milliseconds: 200));
     await tester.pumpAndSettle();
-    expect(find.text('尚未配置生图模型'), findsOneWidget);
+    expect(find.text('还没有可用的生图模型'), findsOneWidget);
     expect(find.byType(IndexedStack), findsOneWidget);
 
     await tester.tap(find.byTooltip('对话'));
     await tester.pump(const Duration(milliseconds: 200));
     await tester.pumpAndSettle();
-    expect(find.text('尚未配置提供商'), findsOneWidget);
+    expect(find.text('还没有可用的模型'), findsOneWidget);
   });
 
   testWidgets('shell shows chat empty state', (tester) async {
@@ -169,8 +169,8 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('尚未配置提供商'), findsWidgets);
-    expect(find.text('去设置'), findsOneWidget);
+    expect(find.text('还没有可用的模型'), findsWidgets);
+    expect(find.text('添加提供商'), findsOneWidget);
   });
 
   testWidgets('configured provider shows session list and composer',
@@ -238,12 +238,11 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('尚未配置提供商'), findsNothing);
-    expect(find.text('去设置'), findsNothing);
+    expect(find.text('还没有可用的模型'), findsNothing);
+    expect(find.text('添加提供商'), findsNothing);
     expect(find.text('会话'), findsOneWidget);
     expect(find.text('新对话'), findsWidgets);
-    expect(find.text('开始第一条对话'), findsOneWidget);
-    expect(find.text('当前会话还没有消息，在下方输入即可开始。'), findsOneWidget);
+    expect(find.text('从下面输入开始'), findsOneWidget);
     // 新建入口在左窗格顶栏；主区空态不再重复「新建会话」CTA（仓库默认已有会话）。
     expect(find.text('新建会话'), findsNothing);
     expect(find.text('发送'), findsOneWidget);

@@ -2,7 +2,6 @@ import 'package:core/core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show ScrollDirection;
 
-import '../../../widgets/empty_illustrations.dart';
 import '../../../widgets/material_empty_states.dart';
 import 'message_bubble.dart';
 import 'tool_call_trace_card.dart';
@@ -14,11 +13,6 @@ class MessageList extends StatefulWidget {
     this.onRecallUser,
     this.recallEnabled = false,
     this.emptyHint,
-    this.emptySubtitle,
-    this.emptyActionLabel,
-    this.onEmptyAction,
-    this.emptySecondaryActionLabel,
-    this.onEmptySecondaryAction,
     this.liveToolTraces = const [],
   });
 
@@ -26,11 +20,6 @@ class MessageList extends StatefulWidget {
   final ValueChanged<String>? onRecallUser;
   final bool recallEnabled;
   final String? emptyHint;
-  final String? emptySubtitle;
-  final String? emptyActionLabel;
-  final VoidCallback? onEmptyAction;
-  final String? emptySecondaryActionLabel;
-  final VoidCallback? onEmptySecondaryAction;
   final List<ChatToolCallTrace> liveToolTraces;
 
   @override
@@ -127,13 +116,7 @@ class _MessageListState extends State<MessageList> {
   Widget build(BuildContext context) {
     if (widget.messages.isEmpty && widget.liveToolTraces.isEmpty) {
       return MaterialContentEmpty(
-        hint: widget.emptyHint ?? '开始第一条对话',
-        subtitle: widget.emptySubtitle,
-        illustration: const MaterialEmptyIllustration.noMessages(),
-        actionLabel: widget.emptyActionLabel,
-        onAction: widget.onEmptyAction,
-        secondaryActionLabel: widget.emptySecondaryActionLabel,
-        onSecondaryAction: widget.onEmptySecondaryAction,
+        hint: widget.emptyHint ?? '从下面输入开始',
       );
     }
 

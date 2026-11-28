@@ -3,7 +3,6 @@ import 'package:design_material/design_material.dart';
 import 'package:flutter/material.dart';
 
 import '../../shell/back_host.dart';
-import '../../widgets/empty_illustrations.dart';
 import '../../widgets/material_empty_states.dart';
 
 /// M-SessionList：全屏会话列表层；系统返回先 pop。
@@ -151,7 +150,8 @@ class SessionListPage extends StatelessWidget {
                   onCreate();
                   BackHost.pop(context);
                 },
-                illustration: const MaterialEmptyIllustration.noSessions(),
+                dense: true,
+                verticalPadding: itemVPad,
               )
             : ListView.separated(
                 keyboardDismissBehavior:

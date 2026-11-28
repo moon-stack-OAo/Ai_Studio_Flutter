@@ -134,19 +134,12 @@ class _ComposerState extends State<Composer> {
       margin: const EdgeInsets.fromLTRB(8, 6, 8, 4),
       decoration: BoxDecoration(
         color: tokens.surface,
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(
           color: _focus.hasFocus
               ? tokens.primary.withValues(alpha: 0.42)
               : tokens.border,
         ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: isDark ? 0.18 : 0.045),
-            blurRadius: 18,
-            offset: const Offset(0, 4),
-          ),
-        ],
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,

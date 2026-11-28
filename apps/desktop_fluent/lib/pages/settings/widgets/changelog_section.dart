@@ -404,7 +404,7 @@ class _StatusPill extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
       decoration: BoxDecoration(
         color: bg,
-        borderRadius: BorderRadius.circular(999),
+        borderRadius: BorderRadius.circular(4),
         border: Border.all(color: border),
       ),
       child: Text(label, style: context.settingsText.badge.copyWith(color: fg)),

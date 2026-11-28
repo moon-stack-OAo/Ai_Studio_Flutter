@@ -647,7 +647,7 @@ void main() {
             );
             await tester.pump();
           }
-          await tester.tap(find.text('✨ AI 润色').first);
+          await tester.tap(find.widgetWithText(FilledButton, '润色').first);
           await tester.pump();
           expect(client.requests.length, 1);
           final system = client.requests.first.first['content'] as String;

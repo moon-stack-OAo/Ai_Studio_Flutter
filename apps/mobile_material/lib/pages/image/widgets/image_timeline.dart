@@ -6,7 +6,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../widgets/collapsible_prompt.dart';
-import '../../../widgets/empty_illustrations.dart';
 import '../../../widgets/material_empty_states.dart';
 import '../../../widgets/skill_summary.dart';
 
@@ -23,10 +22,6 @@ class ImageTimeline extends StatefulWidget {
     this.onPreviewReference,
     this.onRerun,
     this.rerunEnabled = true,
-    this.emptyHint = '还没有生成记录',
-    this.emptySubtitle = '在上方填写提示词后生成。',
-    this.emptyActionLabel,
-    this.onEmptyAction,
   });
 
   final List<ImageItem> items;
@@ -44,10 +39,6 @@ class ImageTimeline extends StatefulWidget {
   /// `IMG-RERUN`：重新填写（回填 Composer）。
   final void Function(ImageItem item)? onRerun;
   final bool rerunEnabled;
-  final String emptyHint;
-  final String? emptySubtitle;
-  final String? emptyActionLabel;
-  final VoidCallback? onEmptyAction;
 
   @override
   State<ImageTimeline> createState() => _ImageTimelineState();
@@ -102,12 +93,9 @@ class _ImageTimelineState extends State<ImageTimeline> {
   @override
   Widget build(BuildContext context) {
     if (widget.items.isEmpty) {
-      return MaterialContentEmpty(
-        hint: widget.emptyHint,
-        subtitle: widget.emptySubtitle,
-        illustration: const MaterialEmptyIllustration.noImages(),
-        secondaryActionLabel: widget.emptyActionLabel,
-        onSecondaryAction: widget.onEmptyAction,
+      return const MaterialResultFrameEmpty(
+        aspectRatio: 4 / 3,
+        caption: '1 张 · 1024×1024 · 1:1 · 标准',
       );
     }
 
@@ -303,54 +291,20 @@ class _TimeSplit extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(0, 4, 0, 10),
       child: Row(
         children: [
-          Expanded(
-            child: Container(
-              height: 1,
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    tokens.border.withValues(alpha: 0),
-                    tokens.border,
-                    tokens.border.withValues(alpha: 0),
-                  ],
-                ),
-              ),
-            ),
-          ),
+          Expanded(child: Container(height: 1, color: tokens.border)),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-              decoration: BoxDecoration(
-                color: tokens.surface,
-                borderRadius: BorderRadius.circular(999),
-                border: Border.all(color: tokens.border),
-              ),
-              child: Text(
-                label,
-                style: TextStyle(
-                  fontSize: 11,
-                  color: tokens.inkMuted,
-                  fontFamily: tokens.fontFamily,
-                  fontFeatures: const [FontFeature.tabularFigures()],
-                ),
+            child: Text(
+              label,
+              style: TextStyle(
+                fontSize: 11,
+                color: tokens.inkMuted,
+                fontFamily: tokens.monoFontFamily,
+                fontFeatures: const [FontFeature.tabularFigures()],
               ),
             ),
           ),
-          Expanded(
-            child: Container(
-              height: 1,
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    tokens.border.withValues(alpha: 0),
-                    tokens.border,
-                    tokens.border.withValues(alpha: 0),
-                  ],
-                ),
-              ),
-            ),
-          ),
+          Expanded(child: Container(height: 1, color: tokens.border)),
         ],
       ),
     );

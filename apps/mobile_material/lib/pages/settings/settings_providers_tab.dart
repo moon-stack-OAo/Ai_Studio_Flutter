@@ -3,7 +3,6 @@ import 'package:design_material/design_material.dart';
 import 'package:flutter/material.dart';
 
 import '../../widgets/back_to_top_host.dart';
-import '../../widgets/empty_illustrations.dart';
 import '../../widgets/material_empty_states.dart';
 import 'provider_edit_sheet.dart';
 import 'settings_mcp_page.dart';
@@ -156,10 +155,7 @@ class _SettingsProvidersTabState extends State<SettingsProvidersTab> {
           ),
           const SizedBox(height: 8),
           if (providers.isEmpty)
-            MaterialProvidersListEmpty(
-              onAdd: _addProvider,
-              illustration: const MaterialEmptyIllustration.noProviders(),
-            )
+            MaterialProvidersListEmpty(onAdd: _addProvider)
           else
             SettingsSectionCard(
               clipBehavior: Clip.antiAlias,
@@ -310,7 +306,7 @@ class _ProviderListTile extends StatelessWidget {
                       initial,
                       style: TextStyle(
                         fontSize: 11,
-                        fontWeight: FontWeight.w700,
+                        fontWeight: FontWeight.w600,
                         color: tokens.primaryPressed,
                       ),
                     ),
@@ -336,7 +332,7 @@ class _ProviderListTile extends StatelessWidget {
                     ),
                     decoration: BoxDecoration(
                       color: pillBg,
-                      borderRadius: BorderRadius.circular(999),
+                      borderRadius: BorderRadius.circular(4),
                       border: Border.all(
                         color: Color.lerp(pillFg, tokens.border, 0.55)!,
                       ),

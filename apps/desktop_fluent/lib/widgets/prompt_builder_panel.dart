@@ -419,7 +419,7 @@ class _PromptBuilderPanelState extends State<PromptBuilderPanel> {
     final polishEmpty = _enhancedPreview == null;
     final previewBody = _showingPolish
         ? (polishEmpty
-              ? (_enhancing ? '正在润色…' : '暂无润色结果，可先在「草稿」点 AI 润色')
+              ? (_enhancing ? '正在润色…' : '暂无润色结果，可先在「草稿」点润色')
               : _enhancedPreview!)
         : (_hasPreview ? _state.preview : '选择下方标签生成草稿');
     final previewEmpty = _showingPolish ? polishEmpty : !_hasPreview;
@@ -889,7 +889,7 @@ class _EnhanceButton extends StatelessWidget {
           }),
         ),
         child: Text(
-          enhancing ? '取消' : '✨ AI 润色',
+          enhancing ? '取消' : '润色',
           style: TextStyle(fontSize: 12, fontFamily: tokens.fontFamily),
         ),
       ),

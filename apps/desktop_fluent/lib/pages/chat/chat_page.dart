@@ -2,7 +2,6 @@ import 'package:core/core.dart';
 import 'package:design_fluent/design_fluent.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 
-import '../../widgets/empty_illustrations.dart';
 import '../../widgets/fluent_empty_states.dart';
 import '../../widgets/session_list_pane.dart';
 import '../../widgets/skill_summary.dart';
@@ -143,12 +142,9 @@ class _ChatPageState extends State<ChatPage> {
       builder: (context, _) {
         final ready = widget.providerRepository.hasConfiguredChatProvider;
         if (!ready) {
-          return FluentFeatureEmpty(
-            title: '尚未配置提供商',
-            message: '前往设置添加 API Key 后，即可开始流式对话。',
-            actionLabel: '去设置',
+          return FluentUnconfiguredEmpty(
+            kind: ModelKind.chat,
             onAction: widget.onOpenProviders,
-            illustration: const FluentEmptyIllustration.noProvider(),
           );
         }
 
@@ -203,8 +199,6 @@ class _ChatPageState extends State<ChatPage> {
                               recallEnabled: !streamingHere,
                               onRecallUser: (id) =>
                                   _controller.recallUserMessage(id),
-                              emptyHint: '开始第一条对话',
-                              emptySubtitle: '当前会话还没有消息，在下方输入即可开始。',
                               liveToolTraces: _controller.liveToolTraces,
                             );
                           },

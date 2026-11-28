@@ -1,7 +1,6 @@
 import 'package:design_fluent/design_fluent.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 
-import 'empty_illustrations.dart';
 import 'fluent_empty_states.dart';
 
 class SessionListItem {
@@ -91,7 +90,7 @@ class SessionListPane extends StatelessWidget {
             child: sessions.isEmpty
                 ? FluentSessionListEmpty(
                     onCreate: onCreate,
-                    illustration: const FluentEmptyIllustration.noSessions(),
+                    verticalPadding: itemVPad,
                   )
                 : ListView.builder(
                     padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),

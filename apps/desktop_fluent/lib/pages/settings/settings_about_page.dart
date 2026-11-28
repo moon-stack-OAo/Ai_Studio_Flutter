@@ -817,7 +817,7 @@ class _SettingsAboutPageState extends State<SettingsAboutPage> {
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       decoration: BoxDecoration(
         color: bg,
-        borderRadius: BorderRadius.circular(999),
+        borderRadius: BorderRadius.circular(4),
       ),
       child: Text(label, style: context.settingsText.badge.copyWith(color: fg)),
     );

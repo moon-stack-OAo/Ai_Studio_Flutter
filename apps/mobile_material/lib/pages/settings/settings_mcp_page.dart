@@ -381,7 +381,7 @@ class _McpListTile extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
             decoration: BoxDecoration(
               color: pillBg,
-              borderRadius: BorderRadius.circular(999),
+              borderRadius: BorderRadius.circular(4),
               border: Border.all(
                 color: Color.lerp(pillFg, tokens.border, 0.55)!,
               ),

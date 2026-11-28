@@ -4,7 +4,6 @@ import 'package:core/core.dart';
 import 'package:design_fluent/design_fluent.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 
-import '../../widgets/empty_illustrations.dart';
 import '../../widgets/fluent_empty_states.dart';
 import '../../widgets/prompt_assist_panel.dart';
 import '../image/widgets/image_lightbox.dart';
@@ -142,12 +141,9 @@ class _VideoPageState extends State<VideoPage> {
       builder: (context, _) {
         final ready = widget.providerRepository.hasConfiguredVideoProvider;
         if (!ready) {
-          return FluentFeatureEmpty(
-            title: '尚未配置视频模型',
-            message: '前往设置添加 API Key 并选择视频模型后，即可创建文生视频任务。',
-            actionLabel: '去设置',
+          return FluentUnconfiguredEmpty(
+            kind: ModelKind.video,
             onAction: widget.onOpenProviders,
-            illustration: const FluentEmptyIllustration.noProvider(),
           );
         }
 

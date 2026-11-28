@@ -9,3 +9,9 @@ workspace:
   - packages/core
   - packages/design_fluent
   - packages/design_material
+
+# 本机 Flutter 3.47 会把 ^4.16.1 解到 4.18.1，而 4.18.1 改用 material_ui 导出
+# VisualDensity/ThemeMode，与 Flutter SDK 的同名类型冲突，且 FluentThemeData 不再有
+# extensions。CI 锁定的是 4.16.1，这里钉死，避免 flutter run 触发的 pub get 再次上浮。
+dependency_overrides:
+  fluent_ui: 4.16.1

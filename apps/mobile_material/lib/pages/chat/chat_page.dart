@@ -4,7 +4,6 @@ import 'package:core/core.dart';
 import 'package:design_material/design_material.dart';
 import 'package:flutter/material.dart';
 
-import '../../widgets/empty_illustrations.dart';
 import '../../widgets/material_empty_states.dart';
 import '../../widgets/skill_summary.dart';
 import 'chat_controller.dart';
@@ -168,11 +167,10 @@ class _ChatPageState extends State<ChatPage> {
         if (!ready) {
           return MaterialFeatureEmpty(
             appBarTitle: '对话',
-            title: '尚未配置提供商',
-            message: '前往设置添加 API Key 后，即可开始流式对话。',
-            actionLabel: '去设置',
-            onAction: widget.onOpenProviders,
-            illustration: const MaterialEmptyIllustration.noProvider(),
+            kind: ModelKind.chat,
+            title: '还没有可用的模型',
+            message: '添加提供商并填写密钥后，才能选择对话模型。',
+            onOpenProviders: widget.onOpenProviders,
           );
         }
 
@@ -294,10 +292,7 @@ class _ChatPageState extends State<ChatPage> {
                       messages: active?.messages ?? const <ChatMessage>[],
                       recallEnabled: !_controller.isStreamingActiveSession,
                       onRecallUser: (id) => _controller.recallUserMessage(id),
-                      emptyHint: '开始第一条对话',
-                      emptySubtitle: '当前会话还没有消息，在下方输入即可开始。',
-                      emptySecondaryActionLabel: '打开会话列表',
-                      onEmptySecondaryAction: _openSessions,
+                      emptyHint: '从下面输入开始',
                       liveToolTraces: _controller.liveToolTraces,
                     );
                   },

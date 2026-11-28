@@ -7,7 +7,6 @@ import 'package:fluent_ui/fluent_ui.dart';
 import 'package:flutter/services.dart';
 
 import '../../../widgets/collapsible_prompt.dart';
-import '../../../widgets/empty_illustrations.dart';
 import '../../../widgets/fluent_empty_states.dart';
 import '../../../widgets/skill_summary.dart';
 
@@ -31,8 +30,6 @@ class VideoQueue extends StatefulWidget {
     this.onPosterCached,
     this.loadReferenceBytes,
     this.onPreviewReference,
-    this.emptyHint = '还没有视频任务',
-    this.emptySubtitle = '在右侧填写提示词并创建任务后，将出现在此队列。',
   });
 
   final List<VideoItem> items;
@@ -56,8 +53,6 @@ class VideoQueue extends StatefulWidget {
   final Future<Uint8List?> Function(ImageRef ref)? loadReferenceBytes;
   final void Function(VideoItem item, int index, ImageRef ref)?
   onPreviewReference;
-  final String emptyHint;
-  final String? emptySubtitle;
 
   @override
   State<VideoQueue> createState() => _VideoQueueState();
@@ -80,10 +75,10 @@ class _VideoQueueState extends State<VideoQueue> {
   Widget build(BuildContext context) {
     final tokens = fluentTokensOf(context);
     if (widget.items.isEmpty) {
-      return FluentContentEmpty(
-        hint: widget.emptyHint,
-        subtitle: widget.emptySubtitle,
-        illustration: const FluentEmptyIllustration.noVideos(),
+      // 画幅与文案取自生视频页的真实默认参数（10 秒 · 1280×720 · 16:9）。
+      return const FluentResultFrameEmpty(
+        aspectRatio: 16 / 9,
+        caption: '10 秒 · 1280×720 · 16:9',
       );
     }
 
@@ -114,7 +109,6 @@ class _VideoQueueState extends State<VideoQueue> {
           child: FluentContentEmpty(
             hint: '当前筛选无任务',
             subtitle: '试试切换其他状态，或选「全部」。',
-            illustration: const FluentEmptyIllustration.noVideos(),
           ),
         ),
       );
@@ -282,54 +276,20 @@ class _TimeSplit extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(2, 6, 2, 4),
       child: Row(
         children: [
-          Expanded(
-            child: Container(
-              height: 1,
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    tokens.border.withValues(alpha: 0),
-                    tokens.border,
-                    tokens.border.withValues(alpha: 0),
-                  ],
-                ),
-              ),
-            ),
-          ),
+          Expanded(child: Container(height: 1, color: tokens.border)),
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 10),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-              decoration: BoxDecoration(
-                color: tokens.surface,
-                borderRadius: BorderRadius.circular(999),
-                border: Border.all(color: tokens.border),
-              ),
-              child: Text(
-                label,
-                style: TextStyle(
-                  fontSize: 11,
-                  color: tokens.inkMuted,
-                  fontFamily: tokens.fontFamily,
-                  fontFeatures: const [FontFeature.tabularFigures()],
-                ),
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: Text(
+              label,
+              style: TextStyle(
+                fontSize: 11,
+                color: tokens.inkMuted,
+                fontFamily: tokens.monoFontFamily,
+                fontFeatures: const [FontFeature.tabularFigures()],
               ),
             ),
           ),
-          Expanded(
-            child: Container(
-              height: 1,
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    tokens.border.withValues(alpha: 0),
-                    tokens.border,
-                    tokens.border.withValues(alpha: 0),
-                  ],
-                ),
-              ),
-            ),
-          ),
+          Expanded(child: Container(height: 1, color: tokens.border)),
         ],
       ),
     );

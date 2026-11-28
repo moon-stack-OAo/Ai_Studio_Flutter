@@ -534,7 +534,7 @@ class _PromptAssistPanelState extends State<PromptAssistPanel> {
                     )
                   : _enhanceBtnStyle(tokens),
               child: Text(
-                _enhancing ? '取消' : '✨ AI 润色',
+                _enhancing ? '取消' : '润色',
                 style: TextStyle(fontSize: 12, fontFamily: tokens.fontFamily),
               ),
             ),
@@ -564,7 +564,7 @@ class _PromptAssistPanelState extends State<PromptAssistPanel> {
     final showingPolish = _previewTab == 1;
     final polishEmpty = _enhancedPreview == null;
     final polishBody = polishEmpty
-        ? (_enhancing ? '正在润色…' : '暂无润色结果，可先在「草稿」点 AI 润色')
+        ? (_enhancing ? '正在润色…' : '暂无润色结果，可先在「草稿」点润色')
         : _enhancedPreview!;
 
     // 上区非 flex（预览/风格/迭代）；模板列表 Expanded 吃剩余高度。

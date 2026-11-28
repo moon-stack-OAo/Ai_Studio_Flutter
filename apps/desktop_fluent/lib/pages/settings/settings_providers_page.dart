@@ -8,7 +8,6 @@ import '../../widgets/back_to_top_host.dart';
 import 'widgets/settings_typography.dart';
 import 'widgets/settings_conflict_notice.dart';
 import '../../widgets/filterable_model_picker.dart';
-import '../../widgets/empty_illustrations.dart';
 import '../../widgets/fluent_empty_states.dart';
 
 class SettingsProvidersPage extends StatefulWidget {
@@ -487,13 +486,7 @@ class _SettingsProvidersPageState extends State<SettingsProvidersPage> {
                   ),
                   Expanded(
                     child: providers.isEmpty
-                        ? FluentProvidersListEmpty(
-                            titleStyle: context.settingsText.label,
-                            messageStyle: context.settingsText.caption,
-                            onAdd: _addProvider,
-                            illustration:
-                                const FluentEmptyIllustration.noProviders(),
-                          )
+                        ? FluentProvidersListEmpty(onAdd: _addProvider)
                         : BackToTopHost(
                             builder: (context, scroll) => ListView.separated(
                               controller: scroll,
@@ -524,7 +517,6 @@ class _SettingsProvidersPageState extends State<SettingsProvidersPage> {
                     subtitleStyle: context.settingsText.caption,
                     hint: '选择或添加一个提供商',
                     subtitle: '左侧列表点选后编辑；也可点「添加提供商」。',
-                    illustration: const FluentEmptyIllustration.noProviders(),
                   )
                 : _ProviderForm(
                     capabilityEditor: _capabilityEditor(),
@@ -661,7 +653,7 @@ class _ProviderListTile extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                 decoration: BoxDecoration(
                   color: pillBg,
-                  borderRadius: BorderRadius.circular(999),
+                  borderRadius: BorderRadius.circular(4),
                   border: Border.all(
                     color: Color.lerp(pillFg, tokens.border, 0.55)!,
                   ),

@@ -68,8 +68,8 @@ void main() {
       final idle =
           tester.widget<AnimatedContainer>(surface).decoration!
               as BoxDecoration;
-      expect(idle.boxShadow, isNotEmpty);
-      expect(idle.borderRadius, BorderRadius.circular(24));
+      expect(idle.boxShadow, isNull);
+      expect(idle.borderRadius, BorderRadius.circular(12));
       await tester.enterText(find.byType(TextField), '测试消息');
       await tester.pumpAndSettle();
       final focused =

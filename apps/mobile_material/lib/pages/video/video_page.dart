@@ -8,7 +8,6 @@ import 'package:flutter/material.dart';
 import '../../platform/gallery_saver.dart';
 import '../../platform/share_helper.dart';
 import '../../shell/back_host.dart';
-import '../../widgets/empty_illustrations.dart';
 import '../../widgets/history_scroll_controller.dart';
 import '../../widgets/material_empty_states.dart';
 import '../../widgets/media_model_picker_sheet.dart';
@@ -84,22 +83,6 @@ class _VideoPageState extends State<VideoPage> {
       if (!mounted) return;
       _controller.startAutoResumeIfNeeded();
       _maybeScrollToBottom();
-    });
-  }
-
-  void _focusPrompt() {
-    _scroll.cancelPendingScroll();
-    if (!_scroll.hasClients) {
-      _promptFocus.requestFocus();
-      return;
-    }
-    _scroll.animateTo(
-      0,
-      duration: MaterialMotion.micro,
-      curve: MaterialMotion.standard,
-    );
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _promptFocus.requestFocus();
     });
   }
 
@@ -360,11 +343,10 @@ class _VideoPageState extends State<VideoPage> {
         if (!ready) {
           return MaterialFeatureEmpty(
             appBarTitle: '生视频',
-            title: '尚未配置视频模型',
-            message: '前往设置添加视频模型与密钥后，即可创建生成任务。',
-            actionLabel: '去设置',
-            onAction: widget.onOpenProviders,
-            illustration: const MaterialEmptyIllustration.noProvider(),
+            kind: ModelKind.video,
+            title: '还没有可用的视频模型',
+            message: '添加提供商并选择视频模型后，才能创建生成任务。',
+            onOpenProviders: widget.onOpenProviders,
           );
         }
 
@@ -516,16 +498,6 @@ class _VideoPageState extends State<VideoPage> {
                         sliver: SliverToBoxAdapter(
                           child: VideoQueue(
                             items: items,
-                            emptyActionLabel: '创建任务',
-                            onEmptyAction: () {
-                              if (_controller.canGenerate) {
-                                _controller.generate();
-                              } else {
-                                _focusPrompt();
-                              }
-                            },
-                            emptySecondaryActionLabel: '先写提示词',
-                            onEmptySecondaryAction: _focusPrompt,
                             posterService: widget.videoPosterService,
                             loadReferenceBytes: widget
                                 .sessionRepository
@@ -669,12 +641,10 @@ class _VideoSessionListPage extends StatelessWidget {
         ),
         body: sessions.isEmpty
             ? MaterialSessionListEmpty(
-                message: '还没有生视频会话，新建一条开始。',
                 onCreate: () {
                   onCreate();
                   BackHost.pop(context);
                 },
-                illustration: const MaterialEmptyIllustration.noSessions(),
               )
             : ListView.separated(
                 keyboardDismissBehavior:

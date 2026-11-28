@@ -10,7 +10,6 @@ import 'package:path_provider/path_provider.dart';
 import '../../platform/gallery_saver.dart';
 import '../../platform/share_helper.dart';
 import '../../shell/back_host.dart';
-import '../../widgets/empty_illustrations.dart';
 import '../../widgets/history_scroll_controller.dart';
 import '../../widgets/material_empty_states.dart';
 import '../../widgets/media_model_picker_sheet.dart';
@@ -77,22 +76,6 @@ class _ImagePageState extends State<ImagePage> {
     _controller.addListener(_onControllerChanged);
     widget.sessionRepository.addListener(_onSessionChanged);
     WidgetsBinding.instance.addPostFrameCallback((_) => _maybeScrollToBottom());
-  }
-
-  void _focusPrompt() {
-    _scroll.cancelPendingScroll();
-    if (!_scroll.hasClients) {
-      _promptFocus.requestFocus();
-      return;
-    }
-    _scroll.animateTo(
-      0,
-      duration: MaterialMotion.micro,
-      curve: MaterialMotion.standard,
-    );
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _promptFocus.requestFocus();
-    });
   }
 
   void _onSessionChanged() => _maybeScrollToBottom();
@@ -397,11 +380,10 @@ class _ImagePageState extends State<ImagePage> {
         if (!ready) {
           return MaterialFeatureEmpty(
             appBarTitle: '生图',
-            title: '尚未配置生图模型',
-            message: '前往设置添加可用生图模型与密钥后，即可开始生成。',
-            actionLabel: '去设置',
-            onAction: widget.onOpenProviders,
-            illustration: const MaterialEmptyIllustration.noProvider(),
+            kind: ModelKind.image,
+            title: '还没有可用的生图模型',
+            message: '添加提供商并选择生图模型后，才能开始生成。',
+            onOpenProviders: widget.onOpenProviders,
           );
         }
 
@@ -553,7 +535,6 @@ class _ImagePageState extends State<ImagePage> {
                             unawaited(_controller.rerunFromItem(item));
                           },
                           rerunEnabled: !widget.generation.busy,
-                          onFocusPrompt: _focusPrompt,
                         ),
                       ),
                     ],
@@ -579,7 +560,6 @@ class _TimelineSliver extends StatelessWidget {
     this.onPreviewReference,
     this.onRerun,
     this.rerunEnabled = true,
-    this.onFocusPrompt,
   });
 
   final List<ImageItem> items;
@@ -593,18 +573,14 @@ class _TimelineSliver extends StatelessWidget {
   onPreviewReference;
   final void Function(ImageItem item)? onRerun;
   final bool rerunEnabled;
-  final VoidCallback? onFocusPrompt;
 
   @override
   Widget build(BuildContext context) {
     if (items.isEmpty) {
       return SliverToBoxAdapter(
-        child: MaterialContentEmpty(
-          hint: '还没有生成记录',
-          subtitle: '在上方填写提示词后生成。',
-          illustration: const MaterialEmptyIllustration.noImages(),
-          secondaryActionLabel: onFocusPrompt == null ? null : '填写提示词',
-          onSecondaryAction: onFocusPrompt,
+        child: const MaterialResultFrameEmpty(
+          aspectRatio: 4 / 3,
+          caption: '1 张 · 1024×1024 · 1:1 · 标准',
         ),
       );
     }
@@ -687,12 +663,10 @@ class _ImageSessionListPage extends StatelessWidget {
         ),
         body: sessions.isEmpty
             ? MaterialSessionListEmpty(
-                message: '还没有生图会话，新建一条开始。',
                 onCreate: () {
                   onCreate();
                   BackHost.pop(context);
                 },
-                illustration: const MaterialEmptyIllustration.noSessions(),
               )
             : ListView.separated(
                 keyboardDismissBehavior:

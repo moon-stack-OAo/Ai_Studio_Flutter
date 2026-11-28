@@ -4,7 +4,6 @@ import 'package:core/core.dart';
 import 'package:design_fluent/design_fluent.dart';
 import 'package:fluent_ui/fluent_ui.dart';
 
-import '../../widgets/empty_illustrations.dart';
 import '../../widgets/fluent_empty_states.dart';
 import '../../widgets/prompt_assist_panel.dart';
 import 'image_controller.dart';
@@ -147,12 +146,9 @@ class _ImagePageState extends State<ImagePage> {
       builder: (context, _) {
         final ready = widget.providerRepository.hasConfiguredImageProvider;
         if (!ready) {
-          return FluentFeatureEmpty(
-            title: '尚未配置生图模型',
-            message: '前往设置添加 API Key 并选择生图模型后，即可开始文生图。',
-            actionLabel: '去设置',
+          return FluentUnconfiguredEmpty(
+            kind: ModelKind.image,
             onAction: widget.onOpenProviders,
-            illustration: const FluentEmptyIllustration.noProvider(),
           );
         }
 

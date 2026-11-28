@@ -522,7 +522,7 @@ class _PromptAssistSheetState extends State<PromptAssistSheet> {
                 ? null
                 : _runEnhance,
             style: kPromptToolRowBtnStyle,
-            child: Text(_enhancing ? '取消' : '✨ AI 润色'),
+            child: Text(_enhancing ? '取消' : '润色'),
           ),
         if (canEnhance && !_enhancing) ...[
           const SizedBox(width: 8),
@@ -545,7 +545,7 @@ class _PromptAssistSheetState extends State<PromptAssistSheet> {
     final showingPolish = _previewTab == 1;
     final polishEmpty = _enhancedPreview == null;
     final polishBody = polishEmpty
-        ? (_enhancing ? '正在润色…' : '暂无润色结果，可先在「草稿」点 AI 润色')
+        ? (_enhancing ? '正在润色…' : '暂无润色结果，可先在「草稿」点润色')
         : _enhancedPreview!;
 
     // 上区非 flex；模板 ListView Expanded 吃剩余高度（对齐 OD tpl-list）。

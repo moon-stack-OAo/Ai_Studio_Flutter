@@ -1051,7 +1051,7 @@ class _McpListTile extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                 decoration: BoxDecoration(
                   color: tokens.surfaceMuted,
-                  borderRadius: BorderRadius.circular(999),
+                  borderRadius: BorderRadius.circular(4),
                   border: Border.all(color: tokens.border),
                 ),
                 child: Text(
@@ -1063,7 +1063,7 @@ class _McpListTile extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                 decoration: BoxDecoration(
                   color: pillBg,
-                  borderRadius: BorderRadius.circular(999),
+                  borderRadius: BorderRadius.circular(4),
                   border: Border.all(
                     color: Color.lerp(pillFg, tokens.border, 0.55)!,
                   ),
